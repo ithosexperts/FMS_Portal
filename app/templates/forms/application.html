@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}Application Form · {{ task_id }}{% endblock %}
+{% block page_title %}Application Form &mdash; {{ context.fms.fms_name }}{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h3 class="card__title" style="display: flex; align-items: center;">
+    <img src="/static/logo.png" alt="Logo" style="height: 24px; margin-right: 10px;">
+    {{ task_id }} 
+    <span class="badge badge-grey" style="margin-left: 8px;">Read Only</span>
+    {% if custom_form_template %}<span class="badge badge-blue" style="margin-left: auto;">Custom View</span>{% endif %}
+  </h3>
+  
+  {% if custom_form_template %}
+    {% include custom_form_template %}
+  {% else %}
+    <div class="form-grid-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span style="font-size:13px; color:var(--text-secondary);">Drag cards to reorder this view.</span>
+      <div style="display:flex; gap:8px;">
+        {% if current_role_id in [1, 2, 3] %}
+        <button type="button" class="btn btn-sm btn-eye-toggle" onclick="toggleHiddenFields(this)" title="Toggle Hidden Fields">
+          <span class="icon">👁️</span><span class="text">Show Hidden</span>
+        </button>
+        {% endif %}
+        <button type="button" class="btn btn-sm" data-reset-order>Reset Order</button>
+      </div>
+    </div>
+    <div class="question-grid" data-reorderable="true">
+      {% for q in fields %}
+        {{ macros.question_control(q) }}
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

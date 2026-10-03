@@ -1,0 +1,137 @@
+{% import "components/macros.html" as macros %}
+{% set table_tasks = section_tasks if section_tasks is defined else tasks %}
+{% set table_stage_headers = section_stage_headers if section_stage_headers is defined else stage_headers %}
+
+<div class="table-wrapper">
+  <table class="data-table matrix-table">
+    <thead>
+      <tr>
+        <th class="sticky-col task-id-head" style="left:0;">Task Id</th>
+        {% for stage in table_stage_headers %}
+        <th class="stage-head" title="{{ stage.stage_no }} - {{ stage.stage_name }}">
+          <span class="stage-head__no">{{ stage.stage_no }}</span>
+          <span class="stage-head__name">{{ stage.stage_name }}</span>
+        </th>
+        {% endfor %}
+        <th style="min-width:190px;">Current Stage / Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in table_tasks %}
+      <tr>
+        <td class="sticky-col matrix-id task-id-cell" style="left:0;">
+          <div>Task Id</div>
+          <div>
+            {% if task.row_id_value or task.task_id %}
+            <a
+              class="task-id-link"
+              href="#"
+              hx-get="/dashboard/modal/{{ (task.task_id or task.row_id_value) | urlencode }}?table_name={{ (task.table_name or "") | urlencode }}&app_id={{ (task.app_id or "") | urlencode }}&primary_key={{ (task.primary_key_name or "") | urlencode }}"
+              data-app-id="{{ task.app_id or '' }}"
+              hx-target="#row-details-modal"
+              hx-swap="outerHTML"
+            >{{ task.row_id_value or task.task_id or '-' }}</a>
+            {% else %}
+            <span class="task-id-link">-</span>
+            {% endif %}
+          </div>
+        </td>
+
+        {% for stage in table_stage_headers %}
+          {% set stage_cell = (task.timeline | selectattr('stage_no', 'equalto', stage.stage_no) | list | first) %}
+          {% if stage_cell %}
+          <td class="stage-cell stage-{{ stage_cell.color }} {{ 'stage-current' if stage_cell.is_current else '' }}">
+            
+            <!-- Robust check for NULL, None, or empty string values -->
+            {% set has_planned = stage_cell.planned is not none
+    and stage_cell.planned|string|trim != ''
+    and stage_cell.planned|string|lower not in ('none', 'null') %}
+
+{% if has_planned %}
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+        {% set row_task_id = (task.task_id or task.row_id_value or '') %}
+
+        {% if row_task_id %}
+        <button type="button" 
+           onclick="openStageModal(
+               '{{ routes.stage_form_route(row_task_id, stage.stage_no, task.table_name, task.primary_key_name) }}',
+               'Stage {{ stage.stage_no }}'
+           )"
+           class="btn btn-sm" 
+           style="padding: 2px 12px; font-size: 11px; font-weight: 800; border-radius: 50px; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer;"
+           title="Open {{ stage.stage_no }} Form">
+            {{ stage.stage_no }}
+        </button>
+        {% endif %}
+
+        <span style="opacity: 0.3; font-size: 14px; margin-bottom: 2px;">|</span>
+
+        <span class="stage-status">
+          {%- if stage_cell.status == 'In Progress' %}
+            Planned
+          {%- elif stage_cell.status == 'Delayed' %}
+            Pending
+            {%- else %}
+            {{ stage_cell.status or '-' }}
+            {%- endif %}
+        </span>
+    </div>
+
+    {% if stage_cell.status == 'In Progress' %}
+        <div class="stage-time">{{ stage_cell.delay_minutes | duration }}</div>
+    {% elif stage_cell.status == 'Delayed' %}
+        <div class="stage-time">Delay: {{ stage_cell.delay_minutes | duration }}</div>
+    {% elif stage_cell.status == 'Completed' and stage_cell.delay_minutes > 0 %}
+        <div class="stage-time">Delay: {{ stage_cell.delay_minutes | duration }}</div>
+    {% endif %}
+
+{% else %}
+
+    <div style="text-align: center; color: var(--text-secondary); font-size: 16px;">
+        -
+    </div>
+
+{% endif %}
+          </td>
+          {% else %}
+          <td class="stage-cell stage-grey"></td>
+          {% endif %}
+        {% endfor %}
+
+        <td>
+          <div>{% if task.current_stage_no %}{{ task.current_stage_no }} - {{ task.current_stage_name }}{% else %}-{% endif %}</div>
+          <div style="margin-top:4px;">{{ macros.status_badge(task.status) }}</div>
+          <div style="margin-top:6px; font-size:12px; font-weight:700; color:var(--text-secondary);">{{ task.lifecycle_status }}</div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ 2 + (table_stage_headers | length) }}">
+        <div class="empty-state">No tasks match the current filters.</div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if table_tasks and section_tasks is not defined %}
+  <div class="pagination">
+    <span>Page {{ page }} of {{ total_pages }} &middot; {{ total }} task(s)</span>
+    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+      {% if page > 1 %}
+      <a class="btn btn-sm" href="?{% for key, value in filter_query_pairs %}{{ key | urlencode }}={{ value | urlencode }}&{% endfor %}page={{ page - 1 }}">&larr; Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a class="btn btn-sm" href="?{% for key, value in filter_query_pairs %}{{ key | urlencode }}={{ value | urlencode }}&{% endfor %}page={{ page + 1 }}">Next &rarr;</a>
+      {% endif %}
+      <form method="get" action="{{ routes.dashboard_route() }}" style="display:flex; gap:6px; align-items:center; margin:0;">
+        {% for key, value in filter_query_pairs %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}" />
+        {% endfor %}
+        <label for="jump-page" style="font-size:12px; color:var(--text-secondary);">Page</label>
+        <input id="jump-page" name="page" type="number" min="1" max="{{ total_pages }}" value="{{ page }}"
+               style="width:74px; padding:5px 8px; border:1px solid var(--border-color); border-radius:var(--radius-sm);" />
+        <button type="submit" class="btn btn-sm">Go</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>

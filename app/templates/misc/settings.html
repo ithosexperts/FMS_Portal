@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_name }}{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block content %}
+<section class="card">
+  <h3 class="card__title">Appearance</h3>
+  <button class="btn" onclick="toggleTheme()">Toggle Dark / Light Mode</button>
+</section>
+
+<section class="card">
+  <h3 class="card__title">Environment</h3>
+  <div class="question-grid">
+    <div class="question"><label>Application</label><div class="value">{{ app_name }}</div></div>
+    <div class="question"><label>Environment</label><div class="value">{{ environment }}</div></div>
+    <div class="question"><label>API_1_URL configured</label><div class="value">{{ 'Yes' if api_1_configured else 'No - set it in the environment' }}</div></div>
+    <div class="question"><label>API_2_URL configured</label><div class="value">{{ 'Yes' if api_2_configured else 'No - set it in the environment' }}</div></div>
+  </div>
+</section>
+
+<section class="card">
+  <h3 class="card__title">Permissions</h3>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0;">
+    Role-based permissions are not wired in yet. Every check flows through
+    <code>app/utils/permission_helper.py</code> so a future auth system can be
+    plugged in without touching dashboard, form or stage code.
+  </p>
+</section>
+{% endblock %}

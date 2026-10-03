@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Deep Links · {{ app_name }}{% endblock %}
+{% block page_title %}Deep Links{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.developer_hub_route() }}">&larr; Developer Hub</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h3 class="card__title">Standard Routes</h3>
+  {% for label, path in static_routes.items() %}
+  <div class="route-row">
+    <div><strong>{{ label }}</strong><br /><code>{{ path }}</code></div>
+    <div class="route-row__actions">
+      <button class="btn btn-sm" onclick="copyText('{{ path }}')">Copy</button>
+      <a class="btn btn-sm" href="{{ path }}" target="_blank">Open</a>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h3 class="card__title">Task-Specific Deep Links</h3>
+  <form class="filter-bar" method="get" action="{{ routes.developer_deeplinks_route() }}">
+    <div class="field field-search">
+      <label>Task ID</label>
+      <input type="text" name="task_id" placeholder="e.g. TSK000245" value="{{ task_id }}" />
+    </div>
+    <button type="submit" class="btn btn-primary">Load</button>
+  </form>
+
+  {% if error %}<div class="empty-state">{{ error }}</div>{% endif %}
+
+  {% for label, path in task_route_map.items() %}
+  <div class="route-row">
+    <div><strong>{{ label }}</strong><br /><code>{{ path }}</code></div>
+    <div class="route-row__actions">
+      <button class="btn btn-sm" onclick="copyText('{{ path }}')">Copy</button>
+      <a class="btn btn-sm" href="{{ path }}" target="_blank">Open</a>
+      <a class="btn btn-sm" href="/developer/qr?data={{ path | urlencode }}" target="_blank">QR</a>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

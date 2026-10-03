@@ -1,0 +1,110 @@
+{# Shared Lead Time Extension controls used by Stage S1-S6 custom forms. #}
+
+{% macro button(context, has_pending_ltg=false, embedded=false) %}
+  {% if not embedded %}
+  <button
+    type="button"
+    class="btn btn-sm btn-ghost"
+    id="lead-time-extension-open"
+    {% if has_pending_ltg %}disabled title="A Lead Time Extension request is already pending"{% else %}title="Request Lead Time Extension"{% endif %}
+    onclick="window.__openLeadTimeExtension && window.__openLeadTimeExtension()">
+    Lead Time Extension
+  </button>
+  {% endif %}
+{% endmacro %}
+
+{% macro modal(context, task_id, stage_no, doer_prefill='') %}
+<div id="lead-time-extension-modal" class="modal-overlay" hidden aria-hidden="true">
+  <div class="modal-card" style="width:min(760px,96vw); max-height:92vh; overflow:auto;">
+    <div class="modal-head">
+      <h3 class="modal-title">Lead Time Extension</h3>
+      <button type="button" class="btn btn-ghost" data-ltg-close aria-label="Close">&times;</button>
+    </div>
+
+    <form
+      method="post"
+      action="/forms/stage/{{ task_id }}/{{ stage_no }}/lead-time-grant"
+      enctype="multipart/form-data"
+      style="margin-top:14px;"
+      id="lead-time-extension-form">
+
+      <input type="hidden" name="app_id"
+             value="{{ context.fms.app_id if context.fms and context.fms.app_id is defined else '' }}">
+      <input type="hidden" name="fms_row_id"
+             value="{{ context.row[context.primary_key] if context.row and context.primary_key and context.primary_key in context.row else task_id }}">
+      <input type="hidden" name="doer_name" value="{{ doer_prefill }}">
+
+      <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+        <div class="form-field">
+          <label for="ltg-requested-minutes">Requested Minutes <span style="color:red">*</span></label>
+          <input id="ltg-requested-minutes" name="requested_minutes"
+                 type="number" min="1" step="1" required
+                 placeholder="Enter minutes">
+        </div>
+
+        <div class="form-field">
+          <label>Doer</label>
+          <input type="text" value="{{ doer_prefill or '-' }}" readonly>
+        </div>
+      </div>
+
+      <div class="form-field" style="margin-top:12px;">
+        <label for="ltg-remarks">Lead Time Grant Remarks <span style="color:red">*</span></label>
+        <textarea id="ltg-remarks" name="lead_time_grant_remarks"
+                  rows="4" required maxlength="2000"
+                  placeholder="Enter reason / remarks"></textarea>
+      </div>
+
+      <div class="form-field" style="margin-top:12px;">
+        <label for="ltg-attachments">Attachments</label>
+        <input id="ltg-attachments" name="attachments" type="file" multiple>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+          Optional. You can attach supporting documents/images.
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;border-top:1px solid var(--border-color);padding-top:14px;">
+        <button type="button" class="btn btn-ghost" data-ltg-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  function getModal() {
+    return document.getElementById("lead-time-extension-modal");
+  }
+
+  window.__openLeadTimeExtension = function () {
+    const modal = getModal();
+    if (!modal) return;
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    const input = document.getElementById("ltg-requested-minutes");
+    if (input) input.focus();
+  };
+
+  function closeModal() {
+    const modal = getModal();
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  document.addEventListener("click", function (event) {
+    if (event.target.closest("[data-ltg-close]")) {
+      closeModal();
+      return;
+    }
+    const modal = getModal();
+    if (modal && event.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") closeModal();
+  });
+})();
+</script>
+{% endmacro %}

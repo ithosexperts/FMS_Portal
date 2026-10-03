@@ -1,0 +1,51 @@
+{% import "components/macros.html" as macros %}
+
+<div id="row-details-modal" class="modal-overlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="row-details-title">
+    
+    <!-- Logo at the very top -->
+    <div style="margin-bottom: 12px;">
+        <img src="/static/logo.png" alt="HoseXperts Logo" style="height: 28px; width: auto; object-fit: contain;">
+    </div>
+
+    <div class="modal-head">
+      <h3 id="row-details-title" class="modal-title">Task Details: {{ task_id }}</h3>
+      <button type="button" class="btn btn-ghost" data-modal-close>&times;</button>
+    </div>
+
+    <div class="modal-meta" id="row-details-meta">
+      {{ context.fms.fms_name }} | {{ context.fms.table_name }}
+    </div>
+    
+    <div class="form-grid-toolbar" style="display:flex; justify-content:flex-end; margin-top:10px;">
+        {% if current_role_id in [1, 2, 3] %}
+        <button type="button" class="btn btn-sm btn-eye-toggle" onclick="toggleHiddenFields(this)" title="Toggle Hidden Fields">
+            <span class="icon">👁️</span><span class="text">Show Hidden</span>
+        </button>
+        {% endif %}
+    </div>
+
+    <section class="modal-section" style="margin-top: 10px; max-height: 60vh; overflow-y: auto;">
+      {% for section in sections %}
+      <div style="margin-bottom:14px;">
+        <h4 style="margin:0 0 8px;">{{ section.title }}</h4>
+        {% if section.fields %}
+        <div class="question-grid">
+          {% for q in section.fields %}
+            {{ macros.question_control(q) }}
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="readonly-empty">No {{ section.title }} fields found.</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+
+    <div class="modal-actions">
+      <a class="btn" id="row-open-task-link" href="{{ routes.task_route(task_id) }}">Open Full Task Page</a>
+      <button type="button" class="btn btn-primary" data-modal-close>Close</button>
+    </div>
+    
+  </div>
+</div>

@@ -1,0 +1,867 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block page_title %}{% endblock %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+  <div>
+    <div class="dashboard-active-fms">{{ active_fms_name }}</div>
+  </div>
+  <div style="font-size:13px; color:var(--text-secondary);">Current Time: {{ current_time }}</div>
+</div>
+
+<!-- FIX: Removed HTMX partial load to force full page sync -->
+<form id="dashboard-filter-form" class="filter-bar" action="{{ routes.dashboard_route() }}" method="get">
+
+  <div class="fms-multi-filter" data-filter-root data-filter-param="fms_name" data-filter-label="FMS Name">
+    <label class="fms-multi-filter__label">FMS Name</label>
+    <button type="button" class="fms-multi-filter__toggle" data-filter-toggle>
+      <span data-filter-toggle-text>Select...</span>
+      <span aria-hidden="true">▾</span>
+    </button>
+
+    <div class="fms-multi-filter__panel" data-filter-panel hidden>
+      <div class="fms-multi-filter__toolbar">
+        <button type="button" class="btn btn-sm" data-filter-select-all>Select All</button>
+        <button type="button" class="btn btn-sm" data-filter-clear-all>Clear All</button>
+      </div>
+
+      <input type="text" class="fms-multi-filter__search" data-filter-search placeholder="Search options..." autocomplete="off" />
+
+      <div class="fms-multi-filter__list" data-filter-options-list>
+        {% for fms in fms_options %}
+        <label class="fms-multi-filter__option" data-filter-option-item>
+          <input type="checkbox" data-filter-option value="{{ fms.fms_name }}" {{ 'checked' if fms.fms_name in (selected_fms_values or []) else '' }} />
+          <span>{{ fms.fms_name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="fms-multi-filter__actions">
+        <button type="button" class="btn btn-sm" data-filter-cancel>Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" data-filter-apply>Apply</button>
+      </div>
+    </div>
+
+    <div data-filter-hidden-inputs>
+      {% for selected_value in (selected_fms_values or []) %}
+      <input type="hidden" name="fms_name" value="{{ selected_value }}" />
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Status</label>
+    <!-- FIX: Added onchange auto-submit -->
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All Status</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{% if s == 'In Progress' %}Planned{% elif s == 'Delayed' %}Delayed{% else %}{{ s }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="fms-multi-filter" data-filter-root data-filter-param="doer" data-filter-label="Doer Name">
+    <label class="fms-multi-filter__label">Doer Name</label>
+    <button type="button" class="fms-multi-filter__toggle" data-filter-toggle>
+      <span data-filter-toggle-text>Select...</span>
+      <span aria-hidden="true">▾</span>
+    </button>
+
+    <div class="fms-multi-filter__panel" data-filter-panel hidden>
+      <div class="fms-multi-filter__toolbar">
+        <button type="button" class="btn btn-sm" data-filter-select-all>Select All</button>
+        <button type="button" class="btn btn-sm" data-filter-clear-all>Clear All</button>
+      </div>
+
+      <input type="text" class="fms-multi-filter__search" data-filter-search placeholder="Search options..." autocomplete="off" />
+
+      <div class="fms-multi-filter__list" data-filter-options-list>
+        {% if doer_options %}
+          {% for d in doer_options %}
+          <label class="fms-multi-filter__option" data-filter-option-item>
+            <input type="checkbox" data-filter-option value="{{ d }}" {{ 'checked' if d in (selected_doer_values or []) else '' }} />
+            <span>{{ d }}</span>
+          </label>
+          {% endfor %}
+        {% else %}
+          <div class="fms-multi-filter__empty">No options available</div>
+        {% endif %}
+      </div>
+
+      <div class="fms-multi-filter__actions">
+        <button type="button" class="btn btn-sm" data-filter-cancel>Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" data-filter-apply>Apply</button>
+      </div>
+    </div>
+
+    <div data-filter-hidden-inputs>
+      {% for selected_value in (selected_doer_values or []) %}
+      <input type="hidden" name="doer" value="{{ selected_value }}" />
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not multi_fms_mode %}
+  <div class="field" style="max-width: 250px;">
+    <label>Task Id</label>
+    <input type="text" name="search" placeholder="Exact Task ID..." value="{{ filters.search }}" />
+  </div>
+  {% endif %}
+
+  <div class="dashboard-filter-actions-left">
+    {% if not multi_fms_mode %}
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% endif %}
+    <a class="btn btn-primary" href="{{ routes.dashboard_route() }}">Reset</a>
+  </div>
+  <div class="dashboard-filter-actions-right">
+    <button type="submit" class="btn">Refresh</button>
+  </div>
+
+</form>
+
+<div id="dashboard-rows" data-progressive-loading="{{ '1' if progressive_dashboard_loading else '0' }}">
+  {% for section in dashboard_sections %}
+  <section class="card" style="padding:14px; margin-bottom:14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
+      <h3 style="margin:0; font-size:16px; color:var(--color-primary);">{{ section.fms_name }}</h3>
+      {% if section.show_pager %}
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+        <button type="button" class="btn btn-sm s1-dashboard-busy-picker-btn" id="s1-dashboard-busy-picker-btn" onclick="openBusyPickerBoard()">Busy Picker</button>
+        <span style="font-size:12px; color:var(--text-secondary);">Page {{ section.page }} of {{ section.total_pages }}</span>
+        {% if section.page > 1 %}
+        <a class="btn btn-sm" href="?{{ section.pager_query_prev }}">&larr; Prev</a>
+        {% endif %}
+        {% if section.page < section.total_pages %}
+        <a class="btn btn-sm" href="?{{ section.pager_query_next }}">Next &rarr;</a>
+        {% endif %}
+        <form method="get" action="{{ routes.dashboard_route() }}" style="display:flex; align-items:center; gap:6px; margin:0;">
+          {% for key, value in section.pager_hidden_pairs %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}" />
+          {% endfor %}
+             <label for="{{ section.page_param }}" style="font-size:12px; color:var(--text-secondary);">Page</label>
+             <input id="{{ section.page_param }}" name="{{ section.page_param }}" type="number" min="1" max="{{ section.total_pages }}" value="{{ section.page }}"
+                 style="width:74px; padding:5px 8px; border:1px solid var(--border-color); border-radius:var(--radius-sm);" />
+          <button type="submit" class="btn btn-sm">Go</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="filter-chips-row" style="margin-bottom:10px;">
+      <span class="filter-chip">FMS Filters:</span>
+      {% if section.applied_filters %}
+        {% for filter_text in section.applied_filters %}
+        <span class="filter-chip">{{ filter_text }}</span>
+        {% endfor %}
+      {% else %}
+      <span class="filter-chip">None</span>
+      {% endif %}
+    </div>
+
+    {% set is_multi_fms = (selected_fms_values or [])|length > 1 %}
+    {% if section.filter_options or is_multi_fms %}
+    <div class="fms-filters-block" style="margin-top:0; margin-bottom:10px; border-top:none; padding-top:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+        <div class="fms-filters-title" style="margin-bottom:0;">{{ section.fms_name }} Filters</div>
+        <a
+          href="?{{ section.filter_reset_query }}"
+          class="btn btn-sm btn-ghost section-filter-reset-btn"
+          title="Reset FMS Filters"
+          data-tooltip="Reset FMS Filters"
+          aria-label="Reset {{ section.fms_name }} filters"
+        >↺</a>
+      </div>
+      {% if is_multi_fms %}
+      <div class="fms-filter-grid" style="margin-bottom:10px; grid-template-columns: repeat(auto-fit, minmax(210px, 280px)); align-items:end;">
+        <div class="field" style="min-width: 180px;">
+          <label>Status</label>
+          <select name="s_{{ section.section_key }}_status" form="dashboard-filter-form" onchange="document.getElementById('dashboard-filter-form').requestSubmit()">
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {{ 'selected' if section.status == s }}>{% if s == 'In Progress' %}Planned{% elif s == 'Delayed' %}Pending{% else %}{{ s }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div
+          class="fms-multi-filter"
+          data-filter-root
+          data-filter-param="s_{{ section.section_key }}_doer"
+          data-filter-label="Doer Name"
+          data-filter-form-id="dashboard-filter-form"
+        >
+          <label class="fms-multi-filter__label">Doer Name</label>
+          <button type="button" class="fms-multi-filter__toggle" data-filter-toggle>
+            <span data-filter-toggle-text>Select...</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+
+          <div class="fms-multi-filter__panel" data-filter-panel hidden>
+            <div class="fms-multi-filter__toolbar">
+              <button type="button" class="btn btn-sm" data-filter-select-all>Select All</button>
+              <button type="button" class="btn btn-sm" data-filter-clear-all>Clear All</button>
+            </div>
+
+            <input
+              type="text"
+              class="fms-multi-filter__search"
+              data-filter-search
+              placeholder="Search options..."
+              autocomplete="off"
+            />
+
+            <div class="fms-multi-filter__list" data-filter-options-list>
+              {% if section.doer_options %}
+                {% for d in section.doer_options %}
+                <label class="fms-multi-filter__option" data-filter-option-item>
+                  <input
+                    type="checkbox"
+                    data-filter-option
+                    value="{{ d }}"
+                    {{ 'checked' if d in (section.selected_doer_values or []) else '' }}
+                  />
+                  <span>{{ d }}</span>
+                </label>
+                {% endfor %}
+              {% else %}
+                <div class="fms-multi-filter__empty">No options available</div>
+              {% endif %}
+            </div>
+
+            <div class="fms-multi-filter__actions">
+              <button type="button" class="btn btn-sm" data-filter-cancel>Cancel</button>
+              <button type="button" class="btn btn-sm btn-primary" data-filter-apply>Apply</button>
+            </div>
+          </div>
+
+          <div data-filter-hidden-inputs>
+            {% for selected_value in (section.selected_doer_values or []) %}
+            <input type="hidden" name="s_{{ section.section_key }}_doer" value="{{ selected_value }}" form="dashboard-filter-form" />
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="field" style="min-width: 220px;">
+          <label>Task Id</label>
+          <input
+            type="text"
+            name="s_{{ section.section_key }}_search"
+            form="dashboard-filter-form"
+            placeholder="Exact Task ID..."
+            value="{{ section.search }}"
+          />
+        </div>
+
+        {% if section.filter_options %}
+          {% for filter in section.filter_options %}
+          <div
+            class="fms-multi-filter"
+            data-filter-root
+            data-filter-param="{{ ('s_' ~ section.section_key ~ '_ff_' ~ filter.column_name) if is_multi_fms else ('ff_' ~ filter.column_name) }}"
+            data-filter-label="{{ filter.label }}"
+            data-filter-form-id="dashboard-filter-form"
+          >
+            <label class="fms-multi-filter__label">{{ filter.label }}</label>
+          <button type="button" class="fms-multi-filter__toggle" data-filter-toggle>
+            <span data-filter-toggle-text>Select...</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+
+            <div class="fms-multi-filter__panel" data-filter-panel hidden>
+              <div class="fms-multi-filter__toolbar">
+                <button type="button" class="btn btn-sm" data-filter-select-all>Select All</button>
+                <button type="button" class="btn btn-sm" data-filter-clear-all>Clear All</button>
+              </div>
+
+              <input
+                type="text"
+                class="fms-multi-filter__search"
+                data-filter-search
+                placeholder="Search options..."
+                autocomplete="off"
+              />
+
+              <div class="fms-multi-filter__list" data-filter-options-list>
+                {% if filter.options %}
+                  {% for option in filter.options %}
+                  <label class="fms-multi-filter__option" data-filter-option-item>
+                    <input
+                      type="checkbox"
+                      data-filter-option
+                      value="{{ option }}"
+                      {{ 'checked' if option in (filter.selected_values or []) else '' }}
+                    />
+                    <span>{{ option }}</span>
+                  </label>
+                  {% endfor %}
+                {% else %}
+                  <div class="fms-multi-filter__empty">No options available</div>
+                {% endif %}
+              </div>
+
+              <div class="fms-multi-filter__actions">
+                <button type="button" class="btn btn-sm" data-filter-cancel>Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" data-filter-apply>Apply</button>
+              </div>
+            </div>
+
+            <div data-filter-hidden-inputs>
+              {% for selected_value in (filter.selected_values or []) %}
+              <input
+                type="hidden"
+                name="{{ ('s_' ~ section.section_key ~ '_ff_' ~ filter.column_name) if is_multi_fms else ('ff_' ~ filter.column_name) }}"
+                value="{{ selected_value }}"
+                form="dashboard-filter-form"
+              />
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="field" style="align-self:end; min-width:0; width:max-content;">
+          <button
+            type="submit"
+            class="btn btn-sm btn-primary"
+            form="dashboard-filter-form"
+            style="padding:6px 14px; width:fit-content; min-width:0; border-radius:999px; font-weight:600;"
+          >Apply</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if section.filter_options and not is_multi_fms %}
+      <div class="fms-filter-grid">
+        {% for filter in section.filter_options %}
+        <div
+          class="fms-multi-filter"
+          data-filter-root
+          data-filter-param="ff_{{ filter.column_name }}"
+          data-filter-label="{{ filter.label }}"
+          data-filter-form-id="dashboard-filter-form"
+        >
+          <label class="fms-multi-filter__label">{{ filter.label }}</label>
+          <button type="button" class="fms-multi-filter__toggle" data-filter-toggle>
+            <span data-filter-toggle-text>Select...</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+
+          <div class="fms-multi-filter__panel" data-filter-panel hidden>
+            <div class="fms-multi-filter__toolbar">
+              <button type="button" class="btn btn-sm" data-filter-select-all>Select All</button>
+              <button type="button" class="btn btn-sm" data-filter-clear-all>Clear All</button>
+            </div>
+
+            <input
+              type="text"
+              class="fms-multi-filter__search"
+              data-filter-search
+              placeholder="Search options..."
+              autocomplete="off"
+            />
+
+            <div class="fms-multi-filter__list" data-filter-options-list>
+              {% if filter.options %}
+                {% for option in filter.options %}
+                <label class="fms-multi-filter__option" data-filter-option-item>
+                  <input
+                    type="checkbox"
+                    data-filter-option
+                    value="{{ option }}"
+                    {{ 'checked' if option in (filter.selected_values or []) else '' }}
+                  />
+                  <span>{{ option }}</span>
+                </label>
+                {% endfor %}
+              {% else %}
+                <div class="fms-multi-filter__empty">No options available</div>
+              {% endif %}
+            </div>
+
+            <div class="fms-multi-filter__actions">
+              <button type="button" class="btn btn-sm" data-filter-cancel>Cancel</button>
+              <button type="button" class="btn btn-sm btn-primary" data-filter-apply>Apply</button>
+            </div>
+          </div>
+
+          <div data-filter-hidden-inputs>
+            {% for selected_value in (filter.selected_values or []) %}
+            <input type="hidden" name="ff_{{ filter.column_name }}" value="{{ selected_value }}" form="dashboard-filter-form" />
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% set section_tasks = section.tasks %}
+    {% set section_stage_headers = section.stage_headers %}
+    {% include "dashboard/_table.html" %}
+  </section>
+  {% endfor %}
+</div>
+
+<!-- MOVED OUTSIDE OF HTMX RELOAD TARGET TO PREVENT IFRAME DOM DESTRUCTION BUG -->
+<div id="row-details-modal" class="modal-overlay" hidden></div>
+
+<!-- Busy Picker Board Modal -->
+<div id="dashboard-busy-picker-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="width:min(900px,96vw); max-height:88vh; display:flex; flex-direction:column; padding:0; overflow:hidden; background:var(--bg-surface);">
+    <div class="modal-head" style="padding:14px 20px;">
+      <h3 class="modal-title" style="margin:0; font-size:16px;">Busy Picker Board</h3>
+      <button type="button" class="btn btn-ghost" onclick="closeBusyPickerBoard()">&times;</button>
+    </div>
+    <div style="padding:0 20px 8px; font-size:12px; color:var(--text-secondary);">
+      Pickers assigned to unfinished Stage 1 work. Click a Row ID to open the Stage 1 form in this modal.
+    </div>
+    <div id="dashboard-busy-picker-loading" style="padding:12px 20px; font-size:12px; color:var(--text-secondary);">Loading...</div>
+    <div style="overflow:auto; padding:0 20px 12px;">
+      <table class="data-table" style="width:100%;">
+        <thead>
+          <tr><th>Pick ID</th><th>Pick Name(s)</th><th>Row ID</th></tr>
+        </thead>
+        <tbody id="dashboard-busy-picker-body"></tbody>
+      </table>
+      <div id="dashboard-busy-picker-empty" class="empty-state" hidden>No picker is currently busy.</div>
+      <div id="dashboard-busy-picker-error" style="padding:10px 0; color:var(--color-danger); font-size:12px;" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stage Form Iframe Modal -->
+<div id="stage-form-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="width: min(1320px, 96vw); height: 90vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: var(--bg-body);">
+    <div class="modal-head" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-surface);">
+      <h3 id="stage-form-title" class="modal-title" style="font-size: 16px; margin: 0;">Stage Form</h3>
+      
+      <!-- New Tab & Close Actions -->
+      <div style="display: flex; gap: 8px;">
+          <a id="stage-form-new-tab" href="#" target="_blank" class="btn btn-sm" title="Open in new tab">↗ New Tab</a>
+          <button type="button" class="btn btn-ghost" onclick="closeStageModal()">&times;</button>
+      </div>
+    </div>
+    <div style="flex: 1; position: relative;">
+        <div id="stage-form-loading" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:var(--bg-body); color:var(--text-secondary); font-size:13px; z-index:1;">
+          Loading stage form...
+        </div>
+        <!-- FIXED: Removed <iframe> tag completely. JS will inject a fresh one here every time. -->
+        <div id="iframe-container" style="width: 100%; height: 100%;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function initDashboardFmsFilters() {
+  const form = document.querySelector('form.filter-bar');
+  if (!form) return;
+
+  const filterRoots = Array.from(document.querySelectorAll('[data-filter-root]'));
+  if (!filterRoots.length) return;
+
+  const closeAllPanels = () => {
+    filterRoots.forEach((root) => {
+      const panel = root.querySelector('[data-filter-panel]');
+      if (panel) panel.hidden = true;
+    });
+  };
+
+  const checkedValuesFromRoot = (root) => Array.from(root.querySelectorAll('[data-filter-option]:checked'))
+    .map((el) => String(el.value || '').trim())
+    .filter(Boolean);
+
+  const readAppliedValues = (root) => {
+    const inputs = root.querySelectorAll('[data-filter-hidden-inputs] input[type="hidden"]');
+    return Array.from(inputs)
+      .map((input) => String(input.value || '').trim())
+      .filter(Boolean);
+  };
+
+  const setCheckboxes = (root, selectedValues) => {
+    const selected = new Set(selectedValues.map((item) => item.toLowerCase()));
+    root.querySelectorAll('[data-filter-option]').forEach((checkbox) => {
+      checkbox.checked = selected.has(String(checkbox.value || '').trim().toLowerCase());
+    });
+  };
+
+  const updateToggleText = (root) => {
+    const label = root.getAttribute('data-filter-label') || 'Filter';
+    const selected = readAppliedValues(root);
+    const target = root.querySelector('[data-filter-toggle-text]');
+    if (!target) return;
+    if (!selected.length) {
+      target.textContent = 'Select...';
+      return;
+    }
+    if (selected.length === 1) {
+      target.textContent = selected[0];
+      return;
+    }
+    target.textContent = `${label} (${selected.length})`;
+  };
+
+  const writeAppliedValues = (root, selectedValues) => {
+    const paramName = root.getAttribute('data-filter-param');
+    const formId = root.getAttribute('data-filter-form-id') || '';
+    const container = root.querySelector('[data-filter-hidden-inputs]');
+    if (!paramName || !container) return;
+
+    container.innerHTML = '';
+    selectedValues.forEach((value) => {
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = paramName;
+      hiddenInput.value = value;
+      if (formId) {
+        hiddenInput.setAttribute('form', formId);
+      }
+      container.appendChild(hiddenInput);
+    });
+    updateToggleText(root);
+  };
+
+  const filterVisibleOptions = (root, term) => {
+    const needle = String(term || '').trim().toLowerCase();
+    root.querySelectorAll('[data-filter-option-item]').forEach((item) => {
+      const text = String(item.textContent || '').toLowerCase();
+      item.style.display = (!needle || text.includes(needle)) ? 'flex' : 'none';
+    });
+  };
+
+  filterRoots.forEach((root) => {
+    if (root.dataset.filterBound === '1') {
+      updateToggleText(root);
+      return;
+    }
+    root.dataset.filterBound = '1';
+    updateToggleText(root);
+
+    const panel = root.querySelector('[data-filter-panel]');
+    const toggle = root.querySelector('[data-filter-toggle]');
+    const applyBtn = root.querySelector('[data-filter-apply]');
+    const cancelBtn = root.querySelector('[data-filter-cancel]');
+    const clearBtn = root.querySelector('[data-filter-clear-all]');
+    const selectAllBtn = root.querySelector('[data-filter-select-all]');
+    const searchInput = root.querySelector('[data-filter-search]');
+
+    toggle?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wasHidden = panel?.hidden !== false;
+      closeAllPanels();
+      if (panel) panel.hidden = !wasHidden;
+      setCheckboxes(root, readAppliedValues(root));
+      if (searchInput) {
+        searchInput.value = '';
+        filterVisibleOptions(root, '');
+        if (panel?.hidden === false) searchInput.focus();
+      }
+    });
+
+    selectAllBtn?.addEventListener('click', () => {
+      root.querySelectorAll('[data-filter-option-item]').forEach((item) => {
+        if (item.style.display === 'none') return;
+        const checkbox = item.querySelector('[data-filter-option]');
+        if (checkbox) checkbox.checked = true;
+      });
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      root.querySelectorAll('[data-filter-option]').forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+      setCheckboxes(root, readAppliedValues(root));
+      if (panel) panel.hidden = true;
+    });
+
+    applyBtn?.addEventListener('click', () => {
+      writeAppliedValues(root, checkedValuesFromRoot(root));
+      if (panel) panel.hidden = true;
+      form.requestSubmit();
+    });
+
+    searchInput?.addEventListener('input', (event) => {
+      filterVisibleOptions(root, event.target.value);
+    });
+  });
+
+  if (!window.__dashboardFmsFilterDocBound) {
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-filter-root]')) {
+        closeAllPanels();
+      }
+    });
+    window.__dashboardFmsFilterDocBound = true;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initDashboardFmsFilters);
+document.body.addEventListener('htmx:afterSwap', function(event) {
+  if (event.target && event.target.id === 'dashboard-rows') {
+    initDashboardFmsFilters();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// LIVE DASHBOARD SYNC
+// Stage forms run inside an iframe and the underlying dashboard used to stay
+// stale until the user pressed Refresh/F5.  Keep the dashboard shell + modal
+// intact and refresh only #dashboard-rows from the current URL.
+// ---------------------------------------------------------------------------
+(function initLiveDashboardSync() {
+  if (window.__liveDashboardSyncBound) return;
+  window.__liveDashboardSyncBound = true;
+
+  let refreshInFlight = null;
+  let lastRefreshAt = 0;
+
+  async function refreshDashboardRows(reason = 'manual') {
+    const rowsHost = document.getElementById('dashboard-rows');
+    if (!rowsHost || document.visibilityState === 'hidden') return;
+
+    const now = Date.now();
+    if (now - lastRefreshAt < 900 && refreshInFlight) return refreshInFlight;
+    lastRefreshAt = now;
+
+    if (refreshInFlight) return refreshInFlight;
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('_live_ts');
+    url.searchParams.set('_live_ts', String(now));
+
+    refreshInFlight = fetch(url.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'text/html',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Cache-Control': 'no-cache'
+      }
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Dashboard refresh HTTP ${response.status}`);
+        return response.text();
+      })
+      .then((html) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const incoming = doc.getElementById('dashboard-rows');
+        const current = document.getElementById('dashboard-rows');
+        if (!incoming || !current) return;
+
+        current.replaceWith(incoming);
+        initDashboardFmsFilters();
+        document.dispatchEvent(new CustomEvent('fms:dashboard-refreshed', { detail: { reason } }));
+      })
+      .catch((error) => {
+        // Live polling must never block the portal or show noisy alerts.
+        console.debug('[LIVE DASHBOARD] refresh skipped:', error);
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+
+    return refreshInFlight;
+  }
+
+  window.refreshDashboardLive = refreshDashboardRows;
+
+  // Remaining dashboard pages are warmed entirely by the backend after the first two pages.
+  // Do not poll/re-render the dashboard from the browser during warm-up.
+
+  // Immediate refresh when a stage form completes inside the iframe.
+  window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin) return;
+    if (!event.data || event.data.type !== 'fms-stage-saved') return;
+    refreshDashboardRows('stage-saved');
+  });
+
+  // Also pick up changes made by other users/portals. This is a data-only
+  // refresh, not a browser/page reload, so the modal and current UI stay open.
+  // Do not run a full dashboard rebuild every 5 seconds. That endpoint reads
+  // every configured FMS and all dashboard pages, so aggressive polling makes
+  // the whole portal compete with open forms. Stage-save messages still refresh
+  // immediately; this is only a low-frequency cross-user safety pulse.
+  window.setInterval(() => {
+    const modal = document.getElementById('stage-form-modal');
+    if (modal && !modal.hasAttribute('hidden')) return;
+    refreshDashboardRows('pulse');
+  }, 30000);
+})();
+
+window.openBusyPickerBoard = async function() {
+  const modal = document.getElementById('dashboard-busy-picker-modal');
+  const body = document.getElementById('dashboard-busy-picker-body');
+  const loading = document.getElementById('dashboard-busy-picker-loading');
+  const empty = document.getElementById('dashboard-busy-picker-empty');
+  const error = document.getElementById('dashboard-busy-picker-error');
+  if (!modal || !body) return;
+
+  body.innerHTML = '';
+  if (empty) empty.hidden = true;
+  if (error) { error.hidden = true; error.textContent = ''; }
+  if (loading) { loading.hidden = false; loading.textContent = 'Loading busy pickers...'; }
+  modal.removeAttribute('hidden');
+  modal.classList.add('show');
+
+  try {
+    const response = await fetch('/dashboard/busy-pickers?_ts=' + Date.now(), {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'Accept': 'application/json' }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Unable to load busy picker board.');
+    }
+
+    const assignments = Array.isArray(data.assignments) ? data.assignments : [];
+    if (!assignments.length) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+
+    assignments.forEach((assignment) => {
+      const rowLinks = Array.isArray(assignment.row_links) ? assignment.row_links : [];
+      const rowIdText = rowLinks.length
+        ? rowLinks.map((link) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm';
+            button.style.marginRight = '6px';
+            button.textContent = String(link.row_id || '-');
+            button.onclick = () => openStageModal(link.stage_url, 'Stage S1');
+            return button;
+          })
+        : [];
+
+      const tr = document.createElement('tr');
+      const pickId = document.createElement('td');
+      pickId.textContent = String(assignment.pick_id || '-');
+      const pickers = document.createElement('td');
+      pickers.textContent = Array.isArray(assignment.pickers) ? assignment.pickers.join(', ') : '';
+      const rowIds = document.createElement('td');
+      rowIdText.forEach((button) => rowIds.appendChild(button));
+      tr.append(pickId, pickers, rowIds);
+      body.appendChild(tr);
+    });
+  } catch (e) {
+    if (error) {
+      error.textContent = e?.message || 'Unable to load busy picker board.';
+      error.hidden = false;
+    }
+  } finally {
+    if (loading) loading.hidden = true;
+  }
+};
+
+window.closeBusyPickerBoard = function() {
+  const modal = document.getElementById('dashboard-busy-picker-modal');
+  if (!modal) return;
+  modal.setAttribute('hidden', 'hidden');
+  modal.classList.remove('show');
+};
+
+window.openStageModal = function(url, title) {
+  document.getElementById('stage-form-title').innerText = title;
+  document.getElementById('stage-form-new-tab').href = url;
+
+  const modal = document.getElementById('stage-form-modal');
+  const loading = document.getElementById('stage-form-loading');
+  const container = document.getElementById('iframe-container');
+
+  // 1 & 2. Destroy old modal and iframe completely before reopening
+  container.innerHTML = '';
+  
+  // 4. Remove stale backdrops just in case
+  document.querySelectorAll(".modal-backdrop").forEach(e => e.remove());
+  document.body.classList.remove("modal-open");
+  document.body.style.removeProperty("overflow");
+
+  // 5. Don't reuse old modal instance. Always recreate the iframe.
+  const iframe = document.createElement('iframe');
+  iframe.id = "dynamicFormIframe";
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = 'none';
+
+  // 3. Force iframe refresh by appending a timestamp
+  const joiner = url.includes('?') ? '&' : '?';
+  const freshUrl = `${url}${joiner}_ts=${Date.now()}`;
+
+  modal.removeAttribute('hidden');
+  modal.classList.add("show");
+
+  if (loading) loading.style.display = 'flex';
+
+  iframe.onload = function() {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      if(doc) {
+        const sidebar = doc.querySelector('.sidebar');
+        if(sidebar) sidebar.style.display = 'none';
+        // Do not hide the topbar. It contains Workflow, Developer Hub and Settings.
+      }
+
+      // The stage POST returns a 303 to ?saved=1&appended=1.  Detect that
+      // final iframe URL and refresh only the dashboard rows immediately.
+      // This does not reload the page and does not close the stage modal.
+      const childUrl = new URL(iframe.contentWindow.location.href);
+      const stageSaved =
+        childUrl.searchParams.get('saved') === '1' ||
+        childUrl.searchParams.get('appended') === '1';
+      if (stageSaved) {
+        // Allow the database/API commit to be visible before reading rows.
+        window.setTimeout(() => {
+          window.refreshDashboardLive?.('stage-saved');
+        }, 300);
+      }
+    } catch(e) {
+      console.debug('[STAGE IFRAME] saved-state refresh check skipped:', e);
+    }
+    if (loading) loading.style.display = 'none';
+  };
+
+  iframe.onerror = function() {
+    if (loading) loading.style.display = 'none';
+  };
+
+  container.appendChild(iframe);
+  iframe.src = freshUrl;
+};
+
+document.addEventListener('click', (event) => {
+  const modal = document.getElementById('dashboard-busy-picker-modal');
+  if (modal && event.target === modal) closeBusyPickerBoard();
+});
+
+document.addEventListener('keydown', (event) => {
+  const modal = document.getElementById('dashboard-busy-picker-modal');
+  if (modal && event.key === 'Escape' && !modal.hasAttribute('hidden')) closeBusyPickerBoard();
+});
+
+window.closeStageModal = function() {
+  const modal = document.getElementById('stage-form-modal');
+  modal.setAttribute('hidden', 'hidden');
+  modal.classList.remove("show");
+
+  // IMMEDIATELY KILL the iframe when modal closes to destroy cached DOM
+  const container = document.getElementById('iframe-container');
+  container.innerHTML = '';
+
+  const form = document.querySelector('form.filter-bar');
+  if(form && typeof htmx !== 'undefined') {
+    htmx.trigger(form, 'submit');
+  } else {
+    const params = new URLSearchParams(window.location.search);
+    const nextUrl = `/dashboard?${params.toString()}`;
+    window.location.href = nextUrl;
+  }
+};
+</script>
+{% endblock %}

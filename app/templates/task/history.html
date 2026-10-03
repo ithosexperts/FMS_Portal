@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}History · {{ task_id }}{% endblock %}
+{% block page_title %}Stage History &mdash; {{ task_id }}{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.dashboard_route() }}">&larr; Dashboard</a>
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h3 class="card__title">Completed Stages</h3>
+  <div class="table-wrapper">
+    <table class="data-table">
+      <thead>
+        <tr><th>Stage</th><th>Doer</th><th>Planned</th><th>Actual</th><th>Delay</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for stage in completed_stages %}
+        <tr>
+          <td><a href="{{ routes.stage_form_route(task_id, stage.stage_no) }}">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</a></td>
+          <td>{{ stage.doer or '-' }}</td>
+          <td>{{ stage.planned or '-' }}</td>
+          <td>{{ stage.actual or '-' }}</td>
+          <td>{{ stage.delay_minutes | duration }}</td>
+          <td>{{ macros.status_badge(stage.status) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty-state">No completed stages yet.</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

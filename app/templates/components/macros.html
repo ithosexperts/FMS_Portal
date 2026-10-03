@@ -1,0 +1,298 @@
+{# Reusable Jinja macros - status badges, stage cards, dynamic question controls. #}
+
+{% macro status_badge(status) -%}
+  {% set label = '-' %}
+  {% if status not in [none, ''] %}
+    {% if status == 'In Progress' %}
+      {% set label = 'Planned' %}
+    {% elif status == 'Delayed' %}
+      {% set label = 'Pending' %}
+    {% else %}
+      {% set label = status %}
+    {% endif %}
+  {% endif %}
+  {% set color = status_colors.get(status, 'grey') %}
+  <span class="badge badge-{{ color }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro stage_card(stage, href) -%}
+<a class="stage-card {{ 'current' if stage.is_current }}" href="{{ href }}">
+  <span class="stage-card__dot {{ stage.color }}"></span>
+  <span class="stage-card__body">
+    <span class="stage-card__title">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</span>
+    <span class="stage-card__meta">
+      <span class="stage-card__meta-item">
+        <span class="stage-card__meta-label">Planned</span>
+        <span class="stage-card__meta-value">{{ stage.planned or '-' }}</span>
+      </span>
+      <span class="stage-card__meta-item">
+        <span class="stage-card__meta-label">Actual</span>
+        <span class="stage-card__meta-value">{{ stage.actual or '-' }}</span>
+      </span>
+      <span class="stage-card__meta-item">
+        <span class="stage-card__meta-label">Doer</span>
+        <span class="stage-card__meta-value">{{ stage.doer or '-' }}</span>
+      </span>
+      {% if stage.delay_minutes and stage.status == 'Delayed' %}
+      <span class="stage-card__meta-item stage-card__meta-item--delay">
+        <span class="stage-card__meta-label">Delay</span>
+        <span class="stage-card__meta-value">{{ stage.delay_minutes | duration }}</span>
+      </span>
+      {% endif %}
+    </span>
+  </span>
+  <span class="badge badge-{{ stage.color }}">{{ 'Planned' if stage.status == 'In Progress' else 'Pending' if stage.status == 'Delayed' else (stage.status or '-') }}</span>
+</a>
+{%- endmacro %}
+
+{% macro question_control(q, form_prefix='') -%}
+{% set control_type = (q.input_type or 'text')|string|lower|replace('_', '-') %}
+{% if control_type == 'datetime' %}{% set control_type = 'datetime-local' %}{% endif %}
+{% if control_type == 'select' or control_type == 'dropdown (select)' %}{% set control_type = 'dropdown' %}{% endif %}
+{% set field_value = '' if q.value is none else q.value %}
+{% set checked_value = field_value|string|lower %}
+{% set is_checked = checked_value in ['1', 'true', 'yes', 'y'] %}
+
+<!-- FIX: Removed draggable="true" from here. It will only be added by JS on actual form pages -->
+<div class="question {{ 'hidden-field' if q.is_hidden else '' }} {{ 'question--readonly' if not q.editable else '' }}" 
+     data-draggable="true" 
+     data-field="{{ q.field }}" 
+     data-hidden="{{ 'true' if q.is_hidden else 'false' }}"
+     {% if q.show_if_column %}
+     data-show-col="{{ q.show_if_column }}"
+     data-show-op="{{ q.show_if_operator }}"
+     data-show-val="{{ q.show_if_value }}"
+     {% endif %}
+     style="{% if q.span %}grid-column: span {{ q.span }};{% endif %} {% if q.is_hidden %}display: none;{% endif %}">
+  
+  {% if control_type != 'checkbox' %}
+  <label for="{{ form_prefix }}{{ q.field }}">{{ q.caption }}{% if q.required and q.editable %} <span style="color:red">*</span>{% endif %}</label>
+  {% endif %}
+
+  {% if control_type == 'textarea' %}
+    <textarea name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}" rows="{{ q.rows or 8 }}" 
+              {{ 'required' if q.required and q.editable else '' }} 
+              {{ 'readonly' if not q.editable else '' }}>{{ field_value }}</textarea>
+
+  {% elif control_type == 'dropdown' %}
+    <select name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}"
+            {{ 'required' if q.required and q.editable else '' }}
+            {{ 'disabled' if not q.editable else '' }}
+            {% if q.select_mode == 'table' %}
+            data-dynamic-table="{{ q.select_table }}"
+            data-dynamic-select="{{ q.select_column }}"
+            {% endif %}
+            {% if q.dd_depends_on %}
+            data-dd-depends-on="{{ q.dd_depends_on }}"
+            data-dd-filter-col="{{ q.dd_filter_column }}"
+            {% endif %}
+            data-current-value="{{ field_value }}">
+      <option value="">Select {{ q.caption }}...</option>
+      
+      {% if q.select_mode == 'list' and q.select_list_values %}
+        {% for opt in q.select_list_values.split(',') %}
+          {% set option_value = opt.strip() %}
+          <option value="{{ option_value }}" {{ 'selected' if field_value|string == option_value }}>{{ option_value }}</option>
+        {% endfor %}
+      {% endif %}
+      
+      {% if not q.editable and field_value != '' %}
+          <option value="{{ field_value }}" selected>{{ field_value }}</option>
+      {% endif %}
+    </select>
+    
+    {% if not q.editable %}
+    <input type="hidden" name="{{ q.field }}" value="{{ field_value }}">
+    {% endif %}
+
+  {% elif control_type == 'select' %}
+    <select name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}"
+            {{ 'required' if q.required and q.editable else '' }}
+            {{ 'disabled' if not q.editable else '' }}>
+      <option value="">Select {{ q.caption }}...</option>
+      {% if q.select_list_values %}
+        {% for opt in q.select_list_values.split(',') %}
+          {% set option_value = opt.strip() %}
+          <option value="{{ option_value }}" {{ 'selected' if field_value|string == option_value }}>{{ option_value }}</option>
+        {% endfor %}
+      {% elif field_value != '' %}
+        <option value="{{ field_value }}" selected>{{ field_value }}</option>
+      {% endif %}
+    </select>
+    {% if not q.editable %}
+    <input type="hidden" name="{{ q.field }}" value="{{ field_value }}">
+    {% endif %}
+
+  {% elif control_type == 'radio' %}
+    <div class="radio-group">
+      {% set radio_options = q.select_list_values.split(',') if q.select_list_values else [field_value] %}
+      {% for opt in radio_options %}
+      {% set option_value = opt.strip() %}
+      {% if option_value != '' %}
+      <label class="radio-option">
+        <input type="radio" name="{{ q.field }}" value="{{ option_value }}"
+               {{ 'checked' if field_value|string == option_value }}
+               {{ 'disabled' if not q.editable else '' }} />
+        <span>{{ option_value }}</span>
+      </label>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% if not q.editable %}
+    <input type="hidden" name="{{ q.field }}" value="{{ field_value }}">
+    {% endif %}
+
+  {% elif control_type == 'checkbox' %}
+    
+    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-top: auto; margin-bottom: auto; padding: 10px 0;">
+        {% if q.editable %}
+        <!-- Hidden input pehle rakha gaya hai taaki unchecked hone par ye '0' bheje -->
+        <input type="hidden" name="{{ q.field }}" value="0">
+        {% endif %}
+        
+        <input type="checkbox" name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}" value="1"
+               {{ 'checked' if is_checked }} 
+               {{ 'disabled' if not q.editable else '' }} 
+               style="width: 20px; height: 20px; margin: 0; cursor: pointer;" />
+               
+        <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">
+            {{ q.caption }}{% if q.required and q.editable %} <span style="color:red">*</span>{% endif %}
+        </span>
+    </label>
+
+    {% if not q.editable %}
+    <input type="hidden" name="{{ q.field }}" value="{{ 1 if is_checked else 0 }}">
+    {% endif %}
+
+  {% elif control_type == 'file' %}
+    
+    <!-- NAYA LOGIC: COMMA SEPARATED ATTACHMENTS VIEW -->
+    {% if not q.editable %}
+        {% if field_value %}
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0;">
+            {% for url in field_value.split(',') %}
+                {% set url_clean = url.strip() %}
+                {% if url_clean %}
+                <button type="button" class="btn btn-sm global-attachment-btn" 
+                        style="border-radius: 50px; border: 1px solid var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" 
+                        data-url="{{ url_clean }}" data-title="{{ q.caption }} (File {{ loop.index }})">
+                    📎 View File {{ loop.index }}
+                </button>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding: 10px 0; color: var(--text-secondary); font-size: 13px; font-style: italic;">No attachments</div>
+        {% endif %}
+    {% else %}
+        <input type="file" name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}" multiple />
+    {% endif %}
+
+  {% else %}
+    {% set html_type = control_type if control_type in ['text', 'number', 'date', 'datetime-local', 'time', 'email', 'password', 'url', 'tel'] else 'text' %}
+    <input type="{{ html_type }}" name="{{ q.field }}" id="{{ form_prefix }}{{ q.field }}"
+           value="{{ field_value }}" 
+           {{ 'required' if q.required and q.editable else '' }} 
+           {{ 'readonly' if not q.editable else '' }} />
+  {% endif %}
+</div>
+{%- endmacro %}
+
+<script>
+// Conditional Logic & Dynamic Dropdown Fetching Engine
+function initMacrosLogic() {
+    function evaluateVisibility() {
+        document.querySelectorAll('.question[data-show-col]').forEach(el => {
+            const targetCol = el.dataset.showCol;
+            if(!targetCol) return;
+            const op = el.dataset.showOp;
+            const expectedVal = (el.dataset.showVal || '').toLowerCase();
+            
+            const targetInput = document.querySelector(`[name="${targetCol}"]`);
+            if(!targetInput) return;
+            
+            const actualVal = (targetInput.value || '').toLowerCase();
+            let shouldShow = true;
+            
+            if (op === 'equals') shouldShow = (actualVal === expectedVal);
+            else if (op === 'not_equals') shouldShow = (actualVal !== expectedVal);
+            else if (op === 'starts_with') shouldShow = actualVal.startsWith(expectedVal);
+            else if (op === 'contains') shouldShow = actualVal.includes(expectedVal);
+            else if (op === 'is_empty') shouldShow = (actualVal === '' || actualVal === 'null' || actualVal === 'undefined');
+            else if (op === 'is_not_empty') shouldShow = (actualVal !== '' && actualVal !== 'null' && actualVal !== 'undefined');
+            else if (op === 'greater_than') shouldShow = (parseFloat(actualVal) > parseFloat(expectedVal));
+            else if (op === 'less_than') shouldShow = (parseFloat(actualVal) < parseFloat(expectedVal));
+            
+            el.style.display = shouldShow ? '' : 'none';
+        });
+    }
+
+    async function fetchDropdown(selectEl, filterVal = "") {
+        const table = selectEl.dataset.dynamicTable;
+        const selectCol = selectEl.dataset.dynamicSelect;
+        const filterCol = selectEl.dataset.ddFilterCol || "";
+        const currentVal = selectEl.dataset.currentValue || selectEl.value;
+        
+        if(selectEl.disabled) return;
+        if(!table || !selectCol) return;
+        
+        try {
+            const res = await fetch(`/forms/dropdown-options?table=${table}&select_col=${selectCol}&filter_col=${filterCol}&filter_val=${filterVal}`);
+            const data = await res.json();
+            
+            selectEl.innerHTML = `<option value="">Select...</option>`;
+            if(data && data.length) {
+                data.forEach(item => {
+                    const opt = document.createElement("option");
+                    opt.value = item.value;
+                    opt.textContent = item.value;
+                    if(currentVal === String(item.value)) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+            }
+        } catch(e) { console.error("Dropdown fetch error", e); }
+    }
+    
+    function evaluateDropdowns() {
+        document.querySelectorAll('select[data-dynamic-table]').forEach(selectEl => {
+            const dependsOn = selectEl.dataset.ddDependsOn;
+            if(dependsOn) {
+                const parentInput = document.querySelector(`[name="${dependsOn}"]`);
+                if(parentInput && parentInput.value) {
+                    fetchDropdown(selectEl, parentInput.value);
+                }
+            } else {
+                if(selectEl.options.length <= 1) fetchDropdown(selectEl);
+            }
+        });
+    }
+
+    evaluateVisibility();
+    evaluateDropdowns();
+    
+    // Prevent duplicate event binding on multiple HTMX swaps
+    if (!window._macrosInitialized) {
+        document.addEventListener('change', (e) => {
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+                evaluateVisibility();
+                const changedName = e.target.name;
+                document.querySelectorAll(`select[data-dd-depends-on="${changedName}"]`).forEach(selectEl => {
+                    selectEl.dataset.currentValue = ''; 
+                    fetchDropdown(selectEl, e.target.value);
+                });
+            }
+        });
+        window._macrosInitialized = true;
+    }
+}
+
+// 1. Reinitialize after every HTMX swap and Page Load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMacrosLogic);
+} else {
+    initMacrosLogic();
+}
+document.addEventListener("htmx:afterSwap", () => {
+    initMacrosLogic();
+});
+</script>

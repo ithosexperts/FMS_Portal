@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}API Explorer · {{ app_name }}{% endblock %}
+{% block page_title %}API Explorer{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.developer_hub_route() }}">&larr; Developer Hub</a>
+{% endblock %}
+
+{% block content %}
+<p style="color:var(--text-secondary);">
+  These are the exact logical endpoints defined in <code>app/api/endpoints.py</code>.
+  Update paths there once the real API_1/API_2 contracts are known &mdash; every call site
+  (including this page) updates automatically.
+</p>
+
+{% for ep in endpoints %}
+<div class="card" data-endpoint-card>
+  <h3 class="card__title">
+    <span class="method-tag {{ ep.method }}">{{ ep.method }}</span>
+    <code>{{ ep.path }}</code>
+    <span class="badge badge-blue">{{ ep.base }}</span>
+  </h3>
+
+  <div class="question-grid" style="margin-bottom:12px;">
+    <div class="question">
+      <label>Path Params (JSON)</label>
+      <textarea data-path-params rows="2">{}</textarea>
+    </div>
+    <div class="question">
+      <label>Query Params (JSON)</label>
+      <textarea data-query-params rows="2">{}</textarea>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <button class="btn btn-primary btn-sm" onclick="testEndpoint(this, '{{ ep.key }}')">&#9654; Test</button>
+    <button class="btn btn-sm" onclick="copyText('{{ ep.path }}')">&#128203; Copy Path</button>
+  </div>
+
+  <pre class="code-block" data-endpoint-output>Response will appear here...</pre>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/api-explorer.js"></script>
+{% endblock %}

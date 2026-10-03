@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    <div class="main-area">
+      <header class="topbar">
+        {% set is_form_page = request.url.path.startswith('/forms/') %}
+        {% set current_role_id = request.state.role_id | default('', true) %}
+        {% set role_text = (current_role_id|string).strip() %}
+        {% set can_see_all_tabs = (not role_text) or (role_text in ['1', '2', '3']) %}
+        <div class="topbar__left">
+          <span class="topbar__title">{% block page_title %}{{ app_name }}{% endblock %}</span>
+          {% if not is_form_page %}
+          <nav class="topbar-tabs" aria-label="Primary">
+            <a href="{{ routes.dashboard_route() }}" class="topbar-tab {{ 'active' if request.url.path == routes.dashboard_route() }}">Workflow</a>
+            {% if can_see_all_tabs %}
+            <a href="{{ routes.developer_hub_route() }}" class="topbar-tab {{ 'active' if request.url.path.startswith(routes.developer_hub_route()) }}">Developer Hub</a>
+            <a href="/settings" class="topbar-tab {{ 'active' if request.url.path == '/settings' }}">Settings</a>
+            {% endif %}
+          </nav>
+          {% endif %}
+        </div>
+        {% if not is_form_page %}
+        <div class="topbar__actions">
+          {% set logged_in_name = request.state.employee_name | default('', true) %}
+          {% set logged_in_code = request.state.employee_code | default('', true) %}
+          {% set logged_in_role_id = request.state.role_id | default('', true) %}
+          <div class="topbar-user" title="Logged in user">
+            <span class="topbar-user__label">Logged in:</span>
+            <span class="topbar-user__value">
+              {% if logged_in_code or logged_in_name or logged_in_role_id %}
+                {% if logged_in_code %}{{ logged_in_code }}{% endif %}
+                {% if logged_in_name %} - {{ logged_in_name }}{% endif %}
+                {% if logged_in_role_id %} (Role {{ logged_in_role_id }}){% endif %}
+              {% else %}
+                Guest
+              {% endif %}
+            </span>
+          </div>
+          {% block header_actions %}{% endblock %}
+          <button class="btn btn-ghost" title="Toggle dark mode" onclick="toggleTheme()">&#9788;</button>
+        </div>
+        {% endif %}
+      </header>
+
+      <main class="content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

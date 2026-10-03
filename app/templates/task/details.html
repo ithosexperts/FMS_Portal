@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}{{ task_id }} · {{ app_name }}{% endblock %}
+{% block page_title %}Task {{ task_id }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .task-workflow-timeline .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .task-workflow-timeline .stage-card {
+    display: grid;
+    grid-template-columns: 10px 1fr auto;
+    align-items: start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  }
+
+  .task-workflow-timeline .stage-card:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow: 0 2px 8px rgba(21, 101, 192, 0.14);
+    text-decoration: none;
+  }
+
+  .task-workflow-timeline .stage-card__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    margin-top: 6px;
+    background: #9aa0a6;
+  }
+
+  .task-workflow-timeline .stage-card__dot.green { background: #2e7d32; }
+  .task-workflow-timeline .stage-card__dot.blue { background: #1565c0; }
+  .task-workflow-timeline .stage-card__dot.red { background: #c62828; }
+  .task-workflow-timeline .stage-card__dot.grey { background: #616161; }
+
+  .task-workflow-timeline .stage-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .task-workflow-timeline .stage-card__title {
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text-primary);
+  }
+
+  .task-workflow-timeline .stage-card__meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+  }
+
+  .task-workflow-timeline .stage-card__meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .task-workflow-timeline .stage-card__meta-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .task-workflow-timeline .stage-card__meta-value {
+    font-size: 12px;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .task-workflow-timeline .stage-card__meta-item--delay .stage-card__meta-value {
+    color: var(--color-danger);
+    font-weight: 700;
+  }
+
+  .task-workflow-timeline .stage-card .badge {
+    align-self: center;
+  }
+
+  @media (max-width: 1080px) {
+    .task-workflow-timeline .stage-card {
+      grid-template-columns: 10px 1fr;
+    }
+
+    .task-workflow-timeline .stage-card .badge {
+      grid-column: 2;
+      justify-self: start;
+      margin-top: 2px;
+    }
+
+    .task-workflow-timeline .stage-card__meta {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.dashboard_route() }}">&larr; Dashboard</a>
+<a class="btn btn-sm" href="{{ routes.task_timeline_route(task_id) }}">Timeline</a>
+<a class="btn btn-sm" href="{{ routes.task_history_route(task_id) }}">History</a>
+<a class="btn btn-sm" href="{{ routes.application_form_route(task_id) }}">Open Application Form</a>
+<a class="btn btn-sm" href="{{ routes.task_metadata_route(task_id) }}">Metadata</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <section class="card">
+    <h3 class="card__title" style="display: flex; align-items: center;">
+      <img src="/static/logo.png" alt="Logo" style="height: 24px; margin-right: 10px;">
+      Application Details &mdash; {{ context.fms.fms_name }}
+      {% if custom_form_template %}<span class="badge badge-blue" style="margin-left: auto;">Custom View</span>{% endif %}
+    </h3>
+    
+    {% if custom_form_template %}
+      {% include custom_form_template %}
+    {% else %}
+      <div class="form-grid-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-size:13px; color:var(--text-secondary);">Drag cards to reorder this view.</span>
+        <div style="display:flex; gap:8px;">
+          {% if current_role_id in [1, 2, 3] %}
+          <button type="button" class="btn btn-sm btn-eye-toggle" onclick="toggleHiddenFields(this)" title="Toggle Hidden Fields">
+            <span class="icon">👁️</span><span class="text">Show Hidden</span>
+          </button>
+          {% endif %}
+          <button type="button" class="btn btn-sm" data-reset-order>Reset Order</button>
+        </div>
+      </div>
+      <div class="question-grid" data-reorderable="true">
+        {% for q in application_fields %}
+          {{ macros.question_control(q) }}
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="card task-workflow-timeline">
+    <h3 class="card__title">&#128338; Workflow Timeline {{ macros.status_badge(context.status) }}</h3>
+    <div class="timeline">
+      {% for stage in context.timeline %}
+        {{ macros.stage_card(stage, routes.stage_form_route(task_id, stage.stage_no)) }}
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <h3 class="card__title">&#9998; Current Stage</h3>
+  {% if stage_context %}
+    <p style="color:var(--text-secondary); font-size:13px;">
+      {{ stage_context.stage.STAGE_NO }} &middot; {{ stage_context.stage.STAGE_NAME }} &mdash;
+      full stage form: <a href="{{ routes.stage_form_route(task_id, stage_context.stage.STAGE_NO) }}">open in dedicated page</a>
+    </p>
+
+    <div class="form-grid-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span style="font-size:13px; color:var(--text-secondary);">Drag cards to reorder this view.</span>
+      <div style="display:flex; gap:8px;">
+        {% if current_role_id in [1, 2, 3] %}
+        <button type="button" class="btn btn-sm btn-eye-toggle" onclick="toggleHiddenFields(this)" title="Toggle Hidden Fields">
+          <span class="icon">👁️</span><span class="text">Show Hidden</span>
+        </button>
+        {% endif %}
+        <button type="button" class="btn btn-sm" data-reset-order>Reset Order</button>
+      </div>
+    </div>
+
+    <form method="post" action="{{ routes.stage_form_route(task_id, stage_context.stage.STAGE_NO) }}" class="question-grid" data-reorderable="true">
+      {% for q in stage_context.fields %}
+        {{ macros.question_control(q) }}
+      {% endfor %}
+      {% if stage_context.editable %}
+      <div style="grid-column: 1 / -1; display:flex; gap:10px; margin-top: 10px;">
+        <button type="submit" name="_action" value="save" class="btn">Save</button>
+        <button type="submit" name="_action" value="submit" class="btn btn-primary">Submit</button>
+      </div>
+      {% endif %}
+    </form>
+  {% else %}
+    <div class="empty-state">
+      {% if context.status == 'Completed' %}All stages are complete for this task.
+      {% else %}No stage has been planned yet.{% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

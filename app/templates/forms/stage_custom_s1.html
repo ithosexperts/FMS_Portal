@@ -1,0 +1,462 @@
+{% extends layout_template|default("base.html") %}
+{% import "components/macros.html" as macros %}
+{% block title %}Stage 1{% endblock %}
+{% block page_title %}Stage Form &mdash; {{ context.stage.STAGE_NAME }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/stage1-custom.css?v=20260919final" />
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+<a class="btn btn-sm" href="{{ routes.application_form_route(task_id) }}">Application Form</a>
+{% endblock %}
+
+{% block content %}
+{% if saved %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-success-bg); color:var(--color-success);">&#10003; Saved successfully</div>
+{% endif %}
+{% if cleared %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
+{% endif %}
+{% if clear_error %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ clear_error }}</div>
+{% endif %}
+{% if app_error %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ app_error }}</div>
+{% endif %}
+{% if not embedded and (current_role_id|string).strip() in ['', '1', '2', '3'] %}
+<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+  <form method="post" action="{{ routes.stage_clear_route(task_id, stage_no) }}" style="margin:0;" onsubmit="return confirm('Clear saved responses and reopen this form?');">
+    <button type="submit" class="btn btn-sm btn-ghost" title="Clear responses and reopen">Clear &amp; Reset</button>
+  </form>
+</div>
+{% endif %}
+{% if appended %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Batch rows appended to server.</div>
+{% endif %}
+{% if ltg_saved %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-success-bg); color:var(--color-success);">Lead Time Extention saved successfully.</div>
+{% endif %}
+{% if ltg_error %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ ltg_error }}</div>
+{% endif %}
+
+<section class="card stage1-custom" data-stage-locked="{{ 'true' if custom_stage1.stage_locked else 'false' }}" data-appended-saved="{{ 'true' if custom_stage1.appended_saved else 'false' }}" data-task-id="{{ task_id }}" data-stage-no="{{ stage_no }}" data-weight-save-url="/forms/stage/{{ task_id }}/{{ stage_no | urlencode }}/weight-save">
+  
+  <h3 class="card__title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+        <span style="color:#3E1E68; font-weight:800; font-size:18px;">{{ context.fms.fms_name }}</span>
+        <span style="color:var(--text-secondary);">|</span>
+        <span>{{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}</span>
+        
+        {% if context.timeline_entry %}<span style="margin-left:8px;">{{ macros.status_badge(context.timeline_entry.status) }}</span>{% endif %}
+        
+        {% if custom_stage1.stage_locked %}
+        <span class="badge badge-grey" style="margin-left:8px;">Read Only</span>
+        {% else %}
+        <span class="badge badge-blue" style="margin-left:8px;">Editable</span>
+        
+        <!-- NAYA LOGIC: Pending check for Icon Button -->
+        {% if has_pending_ltg %}
+        <button type="button" class="btn btn-sm lead-time-extension-btn" style="margin-left:8px; opacity: 0.6;" 
+                onclick="alert('Your previous request is being reviewed till then you cannot submit new request for this FMS, row id and stage no.')" 
+                aria-label="Lead Time Extention Pending">
+          <span class="lead-time-hover-icon" aria-hidden="true"><svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg></span>
+          <span class="lead-time-tooltip" role="tooltip">Request Pending</span>
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-sm lead-time-extension-btn" id="btn-lead-time-extension" style="margin-left:8px;" aria-label="Lead Time Extention">
+          <span class="lead-time-hover-icon" aria-hidden="true"><svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg></span>
+          <span class="lead-time-tooltip" role="tooltip">Lead Time Extention</span>
+        </button>
+        {% endif %}
+        <!-- END NAYA LOGIC -->
+        
+        {% endif %}
+    </div>
+    <img src="/static/logo.png" alt="HoseXperts" style="height: 31px; width:auto; object-fit:contain;" />
+  </h3>
+
+  <!-- Top Fixed Read-Only Fields (General Stage Info - Pink Background) -->
+  <div class="pink-box" style="margin-bottom:16px; padding:14px; background:#FBEFEF; border-radius:var(--radius-md); border:1px solid var(--border-color);">
+    <!-- Row 1 (5 Items) -->
+    <div class="info-grid-5" style="margin-bottom:14px;">
+      {% set plhelper = custom_stage1.top_fields.plhelper %}
+      {% set plbasets = custom_stage1.top_fields.plbasets %}
+      {% set leadtime = custom_stage1.top_fields.leadtimemins %}
+      {% set pltime = custom_stage1.top_fields.pltimestamp %}
+      {% set doer = custom_stage1.top_fields.doer %}
+      
+      <div class="info-item"><label>{{ plhelper.caption if plhelper else 'Planned Helper' }}</label><div class="info-text">{{ plhelper.value if plhelper and plhelper.value is not none and plhelper.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ plbasets.caption if plbasets else 'Base Timestamp' }}</label><div class="info-text">{{ plbasets.value if plbasets and plbasets.value is not none and plbasets.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ leadtime.caption if leadtime else 'Lead Time Mins' }}</label><div class="info-text">{{ leadtime.value if leadtime and leadtime.value is not none and leadtime.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ pltime.caption if pltime else 'Planned Timestamp' }}</label><div class="info-text">{{ pltime.value if pltime and pltime.value is not none and pltime.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ doer.caption if doer else 'Doer' }}</label><div class="info-text">{{ doer.value if doer and doer.value is not none and doer.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    </div>
+    
+    <!-- Row 2 (5 Items) -->
+    <div class="info-grid-5">
+      {% set alhelper = custom_stage1.top_fields.alhelper %}
+      {% set ltgrant = custom_stage1.top_fields.ltgrantmins %}
+      {% set delay = custom_stage1.top_fields.delay %}
+      {% set altime = custom_stage1.top_fields.altimestamp %}
+      {% set taskstatus = custom_stage1.top_fields.taskstatus %}
+      
+      <div class="info-item"><label>{{ alhelper.caption if alhelper else 'Actual Helper' }}</label><div class="info-text">{{ alhelper.value if alhelper and alhelper.value is not none and alhelper.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ ltgrant.caption if ltgrant else 'Lead Time Grant Min' }}</label><div class="info-text">{{ ltgrant.value if ltgrant and ltgrant.value is not none and ltgrant.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ delay.caption if delay else 'Delay Time' }}</label><div class="info-text">{{ delay.value if delay and delay.value is not none and delay.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ altime.caption if altime else 'Actual Timestamp' }}</label><div class="info-text">{{ altime.value if altime and altime.value is not none and altime.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+      <div class="info-item"><label>{{ taskstatus.caption if taskstatus else 'Task Status' }}</label><div class="info-text">{{ taskstatus.value if taskstatus and taskstatus.value is not none and taskstatus.value|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    </div>
+  </div>
+
+  <!-- Order Info -->
+  <div class="info-grid-6" style="margin-bottom:12px; padding:14px; background:var(--bg-body); border-radius:var(--radius-md); border:1px solid var(--border-color);">
+    <div class="info-item"><label>{{ custom_stage1.order_info.sales_order_no_caption }}</label><div class="info-text">{{ custom_stage1.order_info.sales_order_no if custom_stage1.order_info.sales_order_no is not none and custom_stage1.order_info.sales_order_no|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    <div class="info-item"><label>{{ custom_stage1.order_info.order_processing_ts_caption }}</label><div class="info-text">{{ custom_stage1.order_info.order_processing_ts if custom_stage1.order_info.order_processing_ts is not none and custom_stage1.order_info.order_processing_ts|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    <div class="info-item"><label>{{ custom_stage1.order_info.location_caption }}</label><div class="info-text">{{ custom_stage1.order_info.location if custom_stage1.order_info.location is not none and custom_stage1.order_info.location|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    <div class="info-item"><label>{{ custom_stage1.order_info.whse_code_caption }}</label><div class="info-text">{{ custom_stage1.order_info.whse_code if custom_stage1.order_info.whse_code is not none and custom_stage1.order_info.whse_code|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    <div class="info-item"><label>{{ custom_stage1.order_info.shipping_type_caption }}</label><div class="info-text">{{ custom_stage1.order_info.shipping_type if custom_stage1.order_info.shipping_type is not none and custom_stage1.order_info.shipping_type|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+    <div class="info-item"><label>{{ custom_stage1.order_info.pick_pack_remarks_caption }}</label><div class="info-text">{{ custom_stage1.order_info.pick_pack_remarks if custom_stage1.order_info.pick_pack_remarks is not none and custom_stage1.order_info.pick_pack_remarks|string|trim|lower not in ('', 'none') else '-' }}</div></div>
+  </div>
+
+  <!-- S1 Pick ID + Picker assignment -->
+  <div class="s1-pick-assignment-card" style="margin-bottom:16px;">
+    <div class="s1-pick-id-row">
+      <div class="info-item">
+        <label>{{ custom_stage1.publish_names.get("S1_PickID", "Pick ID") }}</label>
+        <div class="info-text">{{ custom_stage1.pick_id if custom_stage1.pick_id is not none and custom_stage1.pick_id|string|trim|lower not in ('', 'none') else '-' }}</div>
+      </div>
+    </div>
+
+    {% set picker = custom_stage1.picker %}
+    {% if picker %}
+    <div class="s1-picker-editor" id="s1-picker-editor"
+         data-max-pickers="5"
+         data-locked="{{ 'true' if custom_stage1.stage_locked else 'false' }}"
+         data-picker-saved="{{ 'true' if picker.saved else 'false' }}"
+         data-picker-save-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-save"
+         data-picker-board-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-board"
+         data-current-pick-id="{{ custom_stage1.pick_id or '' }}"
+         data-picker-availability-ready="{{ 'true' if custom_stage1.stage_locked else 'false' }}"
+         data-picker-options="{{ picker.options | tojson | forceescape }}">
+      <div class="s1-picker-editor-head">
+        <div>
+          <label class="s1-picker-title">{{ picker.caption or 'S1 Picker' }} <span style="color:red">*</span></label>
+          <div class="s1-picker-help">Select a picker and press S to save. Saved pickers are booked until S1 Actual Timestamp is available.</div>
+        </div>
+        <div class="s1-picker-actions">
+          <button type="button" class="btn btn-sm s1-picker-add" id="s1-picker-add" {% if custom_stage1.stage_locked %}disabled{% endif %}>+ Add Picker</button>
+        </div>
+      </div>
+
+      <div id="s1-picker-rows" class="s1-picker-rows">
+        {% set picker_values = picker['values'] or [] %}
+        {% if picker_values %}
+          {% for selected_picker in picker_values %}
+          <div class="s1-picker-row" data-picker-saved="true">
+            <div class="s1-picker-number">{{ loop.index }}</div>
+            <select class="s1-picker-select" disabled>
+              <option value="">Select Picker</option>
+              {% for option in picker.options %}
+              <option value="{{ option.name }}" {% if selected_picker|string|trim|lower == option.name|string|trim|lower %}selected{% endif %}>{{ option.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-sm s1-picker-save" hidden>S</button>
+            <button type="button" class="btn btn-sm btn-ghost s1-picker-edit" {% if custom_stage1.stage_locked %}disabled{% endif %} title="Edit picker" aria-label="Edit picker">✎</button>
+            <button type="button" class="btn btn-sm btn-ghost s1-picker-remove-one" {% if custom_stage1.stage_locked %}disabled{% endif %} title="Remove picker" aria-label="Remove picker">−</button>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="s1-picker-row" data-picker-saved="false">
+            <div class="s1-picker-number">1</div>
+            <select class="s1-picker-select" {% if custom_stage1.stage_locked %}disabled{% endif %}>
+              <option value="">Select Picker</option>
+              {% for option in picker.options %}
+              <option value="{{ option.name }}">{{ option.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-sm s1-picker-save" {% if custom_stage1.stage_locked %}disabled{% endif %}>S</button>
+            <button type="button" class="btn btn-sm btn-ghost s1-picker-edit" hidden {% if custom_stage1.stage_locked %}disabled{% endif %} title="Edit picker" aria-label="Edit picker">✎</button>
+            <button type="button" class="btn btn-sm btn-ghost s1-picker-remove-one" {% if custom_stage1.stage_locked %}disabled{% endif %} title="Remove picker" aria-label="Remove picker">−</button>
+          </div>
+        {% endif %}
+      </div>
+        <div id="s1-picker-status" class="s1-picker-status" aria-live="polite"></div>
+    </div>
+    {% endif %}
+  </div>
+
+<div id="s1-busy-picker-modal" class="modal-overlay" hidden>
+  <div class="modal-card s1-busy-picker-card" role="dialog" aria-modal="true" aria-labelledby="s1-busy-picker-title">
+    <div class="modal-head">
+      <h3 id="s1-busy-picker-title" class="modal-title">Busy Picker Board</h3>
+      <button type="button" class="btn btn-ghost" data-s1-busy-picker-close>&times;</button>
+    </div>
+    <div class="s1-busy-picker-help">
+      Pickers shown here are assigned to a Pick ID whose Stage 1 Actual Timestamp is still blank. Click a Row ID to open that Stage 1 form.
+    </div>
+    <div id="s1-busy-picker-loading" class="s1-busy-picker-loading" hidden>Loading busy pickers...</div>
+    <div class="table-wrapper s1-busy-picker-table-wrap">
+      <table class="data-table s1-busy-picker-table">
+        <thead>
+          <tr>
+            <th>Pick ID</th>
+            <th>Pick Name(s)</th>
+            <th>Row ID</th>
+          </tr>
+        </thead>
+        <tbody id="s1-busy-picker-body"></tbody>
+      </table>
+    </div>
+    <div id="s1-busy-picker-empty" class="readonly-empty" hidden>No picker is currently busy.</div>
+    <div id="s1-busy-picker-error" class="s1-busy-picker-error" hidden></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" data-s1-busy-picker-close>Close</button>
+    </div>
+  </div>
+</div>
+
+  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
+    <input type="hidden" id="s1-picker-value" name="S1_Picker" value="{{ custom_stage1.picker.value if custom_stage1.picker else '' }}" />
+    <input type="hidden" name="__batch_checkbox_field" value="{{ custom_stage1.checkbox_field }}" />
+    <input type="hidden" name="__batch_remarks_field" value="{{ custom_stage1.remarks_row_field }}" />
+    <input type="hidden" name="__batch_payload_json" id="batch-payload-json" value="" />
+
+    {% if custom_stage1.batch_groups %}
+      {% for group in custom_stage1.batch_groups %}
+      <section class="stage1-line-group" data-line-num="{{ group.line_num }}" data-sales-row-id="{{ group.sales_row_id }}" style="margin-bottom:18px;">
+        <div class="stage1-line-title">Line No: {{ group.line_num if group.line_num else '-' }}</div>
+        <div class="stage1-line-meta">
+          <div class="stage1-line-meta-field">
+            <label>RowID</label>
+            <input type="text" value="{{ group.sales_row_id or '-' }}" readonly />
+          </div>
+          <div class="stage1-line-meta-field">
+            <label>Item Code</label>
+            <input type="text" value="{{ group.item_code or '-' }}" readonly />
+          </div>
+          <div class="stage1-line-meta-field stage1-line-meta-wide">
+            <label>Item Name</label>
+            <textarea rows="8" readonly class="stage1-item-name-textarea">{{ group.item_name or '-' }}</textarea>
+          </div>
+          <div class="stage1-line-meta-field">
+            <label>Qty</label>
+            <input type="text" value="{{ group.quantity or '-' }}" readonly />
+          </div>
+          <div class="stage1-line-meta-field">
+            <label>Weight</label>
+            <div class="stage1-weight-editor">
+              <input type="text" class="line-weight" inputmode="decimal" maxlength="20"
+                     value="{{ group.weight or '' }}"
+                     data-row-id="{{ group.sales_row_id }}"
+                     data-weight-saved="{{ 'true' if group.weight else 'false' }}"
+                     {% if custom_stage1.stage_locked or group.weight %}readonly{% endif %}
+                     placeholder="0.000" />
+              <button type="button" class="btn btn-sm line-weight-save" {% if custom_stage1.stage_locked %}disabled{% endif %} {% if group.weight %}hidden{% endif %}>S</button>
+              <button type="button" class="btn btn-sm btn-ghost line-weight-edit" {% if custom_stage1.stage_locked or not group.weight %}hidden{% endif %} title="Edit Weight" aria-label="Edit Weight">✎</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table stage1-batch-table{% if not (custom_stage1.picker['values'] or []) %} hide-batch-qty{% endif %}" data-line-key="{{ group.line_num }}">
+            <thead>
+              <tr>
+                <th>RowID</th>
+                <th>Batch No</th>
+                <th class="qty-column">Available Qty</th>
+                <th class="qty-column">Allocated Qty</th>
+                <th>BatchAttribute1</th>
+                <th>BatchAttribute2</th>
+                <th style="text-align:center;">Packed</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in group.rows %}
+              <tr class="batch-row" data-batch-key="{{ b.batch_key }}" data-row-id="{{ b.row_id or '' }}">
+                <td class="batch-row-id">{{ b.row_id or '-' }}</td>
+                <td>{{ b.batch_num or '-' }}</td>
+                <td class="qty-column">{{ b.available_qty }}</td>
+                <td class="qty-column">{{ b.allocated_qty }}</td>
+                <td>{{ b.batch_attribute_1 or '-' }}</td>
+                <td>{{ b.batch_attribute_2 or '-' }}</td>
+                <td style="text-align:center;"><input type="checkbox" class="batch-packed" {% if b.packed %}checked{% endif %} {% if custom_stage1.stage_locked %}disabled{% endif %} /></td>
+                <td><textarea class="batch-remarks" placeholder="Batch remarks" {% if custom_stage1.stage_locked %}readonly{% endif %}>{{ b.remarks or '' }}</textarea></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="8"><div class="empty-state" style="padding:14px;">{{ custom_stage1.batch_empty_message or ('No ' ~ (custom_stage1.batch_status or 'allocated') ~ ' batch rows found for this line.') }}</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endfor %}
+    {% else %}
+      <div class="table-wrapper" style="margin-bottom:16px;">
+        <div class="empty-state" style="padding:18px;">No Sales Order lines found for the current Sales Order and Create TS combination.</div>
+      </div>
+    {% endif %}
+
+    <!-- S1 Specific Document Fields shown strictly in ONE row -->
+    <div class="stage1-doc-fields" style="margin-bottom:16px;">
+      {% set no_packages = custom_stage1.doc_level_fields.no_packages %}
+      {% set weight_kgs = custom_stage1.doc_level_fields.weight_kgs %}
+      {% set remarks_doc = custom_stage1.doc_level_fields.remarks_doc %}
+      {% set pack_image_1 = custom_stage1.doc_level_fields.pack_image_1 %}
+
+      {% if no_packages %}
+      <div class="question">
+        <label>{{ no_packages.caption }} <span style="color:red">*</span></label>
+        <input type="number" step="1" name="{{ no_packages.field }}" value="{{ no_packages.value if no_packages.value is not none and no_packages.value|string|trim|lower not in ('', 'none') else '' }}" {% if custom_stage1.stage_locked %}readonly{% else %}required{% endif %} onkeypress="return event.charCode >= 48 && event.charCode <= 57" oninput="this.value = this.value.replace(/[^0-9]/g, '')" />
+      </div>
+      {% endif %}
+
+      {% if weight_kgs %}
+      <div class="question">
+        <label>{{ weight_kgs.caption or 'Weight Kgs' }}</label>
+        <input
+          type="number"
+          step="0.001"
+          name="{{ weight_kgs.field }}"
+          id="s1-total-weight-kgs"
+          class="readonly-weight-kgs"
+          value="{{ custom_stage1.batch_weight_total if custom_stage1.batch_weight_total is not none and custom_stage1.batch_weight_total|string|trim|lower not in ('', 'none') else (weight_kgs.value if weight_kgs.value is not none and weight_kgs.value|string|trim|lower not in ('', 'none') else '') }}"
+          readonly
+          aria-readonly="true"
+        />
+      </div>
+      {% endif %}
+
+      {% if remarks_doc %}
+      <div class="question">
+        <label>{{ remarks_doc.caption }} <span style="color:red">*</span></label>
+        <textarea name="{{ remarks_doc.field }}" style="resize: vertical; height: 38px; padding: 8px 10px;" {% if custom_stage1.stage_locked %}readonly{% else %}required{% endif %}>{{ remarks_doc.value if remarks_doc.value is not none and remarks_doc.value|string|trim|lower not in ('', 'none') else '' }}</textarea>
+      </div>
+      {% endif %}
+
+      {% if pack_image_1 %}
+      <div class="question">
+        <label>{{ pack_image_1.caption }} <span style="color:red">*</span></label>
+        {% set image1_url = pack_image_1.value if pack_image_1.value and pack_image_1.value|string|trim|lower not in ('', 'none') else '' %}
+        <input type="hidden" name="__existing_attachment_urls_{{ pack_image_1.field }}" value="{{ image1_url }}" />
+        {% if custom_stage1.stage_locked %}
+          {% if image1_url %}
+          <button type="button" class="btn btn-sm attachment-view-btn" data-urls="{{ image1_url }}" data-title="{{ pack_image_1.caption }}">View</button>
+          {% else %}
+          <input type="text" value="No attachment" readonly />
+          {% endif %}
+        {% else %}
+          <input id="pack-image-1-input" type="file" name="{{ pack_image_1.field }}" multiple {% if not image1_url %}required{% endif %} hidden />
+          <div id="pack-image-1-dropzone" class="ltg-dropzone" tabindex="0" style="margin-top:4px;">
+            <div class="ltg-dropzone-text">Drag and drop files here, or click to browse. Multiple files are allowed and saved together in Packing Img1.</div>
+            <button type="button" class="btn btn-sm" id="pack-image-1-browse-btn">Choose Files</button>
+          </div>
+          <div id="pack-image-1-list" class="ltg-attachment-list" aria-live="polite"></div>
+          {% if image1_url %}
+          <button type="button" class="btn btn-sm attachment-view-btn" data-urls="{{ image1_url }}" data-title="{{ pack_image_1.caption }}" style="margin-top:6px;">View Existing</button>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+
+    {% if not custom_stage1.stage_locked %}
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+      <button type="submit" name="_action" value="save" id="btn-save-stage" class="btn" formnovalidate>Save Progress</button>
+      <button type="submit" name="_action" value="submit" id="btn-submit-stage" class="btn btn-primary">Submit Stage</button>
+    </div>
+    {% endif %}
+  </form>
+</section>
+
+{% set doer_prefill = custom_stage1.top_fields.doer.value if custom_stage1.top_fields.doer and custom_stage1.top_fields.doer.value is not none and custom_stage1.top_fields.doer.value|string|trim|lower not in ('', 'none') else '' %}
+<div id="lead-time-extension-modal" class="modal-overlay" hidden>
+  <div class="modal-card lead-time-extension-modal-card">
+    <div class="modal-head">
+      <h3 class="modal-title">Lead Time Extention</h3>
+      <button type="button" class="btn btn-ghost" data-ltg-close>&times;</button>
+    </div>
+    <form id="lead-time-extension-form" method="post" action="{{ routes.stage_lead_time_grant_route(task_id, stage_no) }}" enctype="multipart/form-data">
+      <div class="readonly-grid" style="margin-top:12px;">
+        <div class="readonly-field">
+          <label>APPID</label>
+          <input type="text" name="app_id" value="{{ context.fms.app_id or '' }}" readonly />
+        </div>
+        <div class="readonly-field">
+          <label>FMS Name</label>
+          <input type="text" name="fms_name" value="{{ context.fms.fms_name or '' }}" readonly />
+        </div>
+        <div class="readonly-field">
+          <label>Stage No</label>
+          <input type="text" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}" readonly />
+        </div>
+        <div class="readonly-field">
+          <label>Stage Name</label>
+          <input type="text" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}" readonly />
+        </div>
+        <div class="readonly-field">
+          <label>Doer Name</label>
+          <input type="text" name="doer_name" value="{{ doer_prefill }}" readonly />
+        </div>
+        <div class="readonly-field">
+          <label>FMS Row ID</label>
+          <input type="text" name="fms_row_id" value="{{ context.row.get(context.primary_key) if context.row and context.primary_key else task_id }}" readonly />
+        </div>
+      </div>
+
+      <div class="question" style="margin-top:12px;">
+        <label>Requested Minutes *</label>
+        <input type="number" name="requested_minutes" min="1" step="1" required placeholder="10, 20, 120" oninput="this.value=this.value.replace(/[^0-9]/g,'')" />
+      </div>
+
+      <div class="question" style="margin-top:12px;">
+        <label>Attachments</label>
+        <div id="ltg-dropzone" class="ltg-dropzone" tabindex="0">
+          <div class="ltg-dropzone-text">Drag and drop files here, or click to browse. Multiple files are allowed and saved together in Packing Img1.</div>
+          <input id="ltg-attachments" type="file" name="attachments" multiple hidden />
+          <button type="button" class="btn btn-sm" id="ltg-browse-btn">Choose Files</button>
+        </div>
+        <div id="ltg-attachment-list" class="ltg-attachment-list" aria-live="polite"></div>
+      </div>
+
+      <div class="question" style="margin-top:12px;">
+        <label>Lead Time Grant Remarks *</label>
+        <textarea id="ltg-remarks" name="lead_time_grant_remarks" rows="2" class="ltg-remarks" placeholder="Enter remarks" required></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn" data-ltg-close>Cancel</button>
+        <button type="submit" id="ltg-save-btn" class="btn btn-primary" disabled>Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="attachment-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="width:min(960px,96vw); max-height:92vh;">
+    <div class="modal-head">
+      <h3 id="attachment-modal-title" class="modal-title">Attachment</h3>
+      <button type="button" class="btn btn-ghost" data-attachment-close>&times;</button>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <a id="attachment-open-new" class="btn btn-sm" href="#" target="_blank" rel="noopener">Open In New Tab</a>
+      <span id="attachment-count" style="font-size:12px; color:var(--text-secondary);"></span>
+    </div>
+    <div id="attachment-list" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;"></div>
+    <div style="margin-top:10px;">
+      <a id="attachment-current-open-new" class="btn btn-sm" href="#" target="_blank" rel="noopener">Open Current In New Tab</a>
+    </div>
+    <div style="margin-top:10px; border:1px solid var(--border-color); border-radius:var(--radius-sm); overflow:hidden;">
+      <iframe id="attachment-frame" src="about:blank" style="width:100%; min-height:70vh; border:0;"></iframe>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/stage1-custom-form.js?v=20260919final"></script>
+{% endblock %}

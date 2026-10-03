@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Developer Hub · {{ app_name }}{% endblock %}
+{% block page_title %}Developer Hub &mdash; Integration Center{% endblock %}
+
+{% block content %}
+<p style="color:var(--text-secondary); margin-top:0;">
+  Explore the shared APIs, generate deep links for any Task/Stage, and preview forms &mdash;
+  everything a QR code, email notification, Teams message, or SAP callback needs to jump
+  straight into a specific task or stage without visiting the dashboard first.
+</p>
+
+<div class="grid-3">
+  <a class="card" href="{{ routes.developer_apis_route() }}" style="text-decoration:none;">
+    <h3 class="card__title">&#128268; API Explorer</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin:0;">Browse and test every API_1/API_2 endpoint with copy &amp; live test buttons.</p>
+  </a>
+  <a class="card" href="{{ routes.developer_routes_route() }}" style="text-decoration:none;">
+    <h3 class="card__title">&#129504; Route Generator</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin:0;">Enter a Task ID and generate every route (application, timeline, per-stage) automatically.</p>
+  </a>
+  <a class="card" href="{{ routes.developer_deeplinks_route() }}" style="text-decoration:none;">
+    <h3 class="card__title">&#128279; Deep Links</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin:0;">Copy, open, or QR-code any static or task-specific URL for external integration.</p>
+  </a>
+  <a class="card" href="{{ routes.developer_metadata_route() }}" style="text-decoration:none;">
+    <h3 class="card__title">&#128203; Metadata Explorer</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin:0;">Inspect FMS_Config stage mapping and application table columns.</p>
+  </a>
+  <a class="card" href="{{ routes.developer_form_preview_route() }}" style="text-decoration:none;">
+    <h3 class="card__title">&#128221; Form Preview</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin:0;">See exactly which fields are read-only vs editable for every stage of a task.</p>
+  </a>
+</div>
+{% endblock %}

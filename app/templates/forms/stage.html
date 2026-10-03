@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}Stage {{ stage_no }} · {{ task_id }}{% endblock %}
+{% block page_title %}Stage Form &mdash; {{ context.stage.STAGE_NAME }}{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+<a class="btn btn-sm" href="{{ routes.application_form_route(task_id) }}">Application Form</a>
+{% endblock %}
+
+{% block content %}
+{% if saved %}
+<div class="filter-chip" style="margin-bottom:16px; background:var(--color-success-bg); color:var(--color-success);">&#10003; Saved successfully</div>
+{% endif %}
+{% if cleared %}
+<div class="filter-chip" style="margin-bottom:16px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
+{% endif %}
+{% if clear_error %}
+<div class="filter-chip" style="margin-bottom:16px; background:var(--color-danger-bg); color:var(--color-danger);">{{ clear_error }}</div>
+{% endif %}
+{% if (current_role_id|string).strip() in ['', '1', '2', '3'] %}
+<div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+  <form method="post" action="{{ routes.stage_clear_route(task_id, stage_no) }}" style="margin:0;" onsubmit="return confirm('Clear saved responses and reopen this form?');">
+    <button type="submit" class="btn btn-sm btn-ghost" title="Clear responses and reopen">Clear &amp; Reset</button>
+  </form>
+</div>
+{% endif %}
+
+{# --- SPLIT FIELDS LOGIC --- #}
+{# Ye logic un specific fields ko identify karega jinke end mein ye keywords aate hain (S1_, S2_ ignore karke) #}
+{% set fixed_suffixes = [
+    'plhelper', 'pltimestamp', 'pltime', 'doer', 'leadtimemins', 'plbasets',
+    'delaymins', 'delaytime', 'altimestamp', 'altime', 'alhelper', 'ltgrantmins'
+] %}
+
+{% set top_fixed_fields = [] %}
+{% set main_form_fields = [] %}
+
+{% for q in context.fields %}
+    {% set raw_name = q.field | lower | replace(' ', '') | replace('_', '') %}
+    {% set ns = namespace(is_fixed=false) %}
+    
+    {% for suffix in fixed_suffixes %}
+        {% if raw_name.endswith(suffix) %}
+            {% set ns.is_fixed = true %}
+        {% endif %}
+    {% endfor %}
+
+    {% if ns.is_fixed %}
+        {% set _ = top_fixed_fields.append(q) %}
+    {% else %}
+        {% set _ = main_form_fields.append(q) %}
+    {% endif %}
+{% endfor %}
+{# -------------------------- #}
+
+<section class="card">
+  <!-- Title with Logo -->
+  <h3 class="card__title" style="display: flex; align-items: center;">
+    <img src="/static/logo.png" alt="Logo" style="height: 24px; margin-right: 10px;">
+    {{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}
+    {% if context.timeline_entry %}
+      <span style="margin-left:8px;">{{ macros.status_badge(context.timeline_entry.status) }}</span>
+    {% endif %}
+    {% if context.editable %}
+      <span class="badge badge-blue" style="margin-left:8px;">Editable</span>
+    {% else %}
+      <span class="badge badge-grey" style="margin-left:8px;">Read Only</span>
+    {% endif %}
+  </h3>
+
+  <!-- Top Fixed Read-Only Identity & Extracted Meta Section -->
+  <div class="question-grid" style="margin-bottom:20px; padding: 16px; background: var(--bg-body); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+    <div class="question question--readonly">
+      <label>Task ID</label>
+      <div class="value" style="background: var(--bg-surface);">{{ task_id }}</div>
+    </div>
+    <div class="question question--readonly">
+      <label>Primary Key ({{ context.primary_key or 'ID' }})</label>
+      <div class="value" style="background: var(--bg-surface);">{{ context.row[context.primary_key] if context.row and context.primary_key in context.row else '-' }}</div>
+    </div>
+    <div class="question question--readonly">
+      <label>Assigned Doer</label>
+      <div class="value" style="background: var(--bg-surface);">
+        {{ context.stage.DOER or '-' }} {% if context.stage.DOER_EMP_CODE %}({{ context.stage.DOER_EMP_CODE }}){% endif %}
+      </div>
+    </div>
+    <div class="question question--readonly">
+      <label>Stage Delay</label>
+      <div class="value" style="background: var(--bg-surface);">
+        {{ (context.timeline_entry.delay_minutes if context.timeline_entry else 0) | duration }}
+      </div>
+    </div>
+    
+    <!-- Dynamically Extracted Meta Questions (Only showing when Not Null) -->
+    {% for q in top_fixed_fields %}
+      {% if q.value is not none and q.value|string|trim != '' and q.value|string|lower != 'none' %}
+        <div class="question question--readonly">
+          <label>{{ q.caption }}</label>
+          <div class="value" style="background: var(--bg-surface);">{{ q.value }}</div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <div class="form-grid-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <span style="font-size:13px; color:var(--text-secondary);">Drag cards to reorder this view.</span>
+    <div style="display:flex; gap:8px;">
+      {% if current_role_id in [1, 2, 3] %}
+      <button type="button" class="btn btn-sm btn-eye-toggle" onclick="toggleHiddenFields(this)" title="Toggle Hidden Fields">
+        <span class="icon">👁️</span><span class="text">Show Hidden</span>
+      </button>
+      {% endif %}
+      <button type="button" class="btn btn-sm" data-reset-order>Reset Order</button>
+    </div>
+  </div>
+
+  <!-- Main Stage Form -->
+  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" class="question-grid" data-reorderable="true" enctype="multipart/form-data">
+    
+    <!-- Hidden inputs for extracted read-only fields so they don't lose value on Save/Submit -->
+    {% for q in top_fixed_fields %}
+      {% if q.editable %}
+        <input type="hidden" name="{{ q.field }}" value="{{ q.value if q.value is not none else '' }}">
+      {% endif %}
+    {% endfor %}
+
+    <!-- Main Editable Questions (Extracted fields removed from here) -->
+    {% for q in main_form_fields %}
+      {{ macros.question_control(q) }}
+    {% endfor %}
+
+    {% if context.editable %}
+    <!-- Form Actions (Cancel, Save, Submit) -->
+    <div style="grid-column: 1 / -1; display:flex; justify-content: flex-end; gap:10px; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+      <button type="button" class="btn btn-ghost" onclick="window.parent !== window ? window.parent.closeStageModal() : history.back()">Cancel</button>
+      <button type="submit" name="_action" value="save" id="btn-save-stage" class="btn">Save Progress</button>
+      <button type="submit" name="_action" value="submit" id="btn-submit-stage" class="btn btn-primary">Submit Stage</button>
+    </div>
+    {% endif %}
+  </form>
+</section>
+
+<!-- Validation & Submission Script -->
+{% if context.editable %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("stage-main-form");
+    const submitBtn = document.getElementById("btn-submit-stage");
+    const saveBtn = document.getElementById("btn-save-stage");
+
+    if (form && submitBtn) {
+        
+        // Function to enable/disable Submit based on Mandatory (*) fields
+        const validateForm = () => {
+            let isValid = true;
+            const requiredFields = Array.from(form.querySelectorAll("input[required], select[required], textarea[required]"));
+            
+            requiredFields.forEach(field => {
+                // If the field is hidden by Conditional Visibility UI, do not enforce validation
+                const questionDiv = field.closest('.question');
+                if (questionDiv && questionDiv.style.display === 'none') {
+                    return; 
+                }
+                
+                if (!field.value || field.value.trim() === "") {
+                    isValid = false;
+                }
+                if (field.type === "checkbox" && !field.checked) {
+                    isValid = false;
+                }
+            });
+            
+            submitBtn.disabled = !isValid;
+        };
+
+        // Run validation on load and whenever user types/changes something
+        validateForm();
+        form.addEventListener("input", validateForm);
+        form.addEventListener("change", validateForm);
+
+        // Prevent Double Submission
+        form.addEventListener("submit", () => {
+            setTimeout(() => {
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = "Submitting...";
+                }
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                }
+            }, 10);
+        });
+    }
+});
+</script>
+{% endif %}
+
+{% endblock %}

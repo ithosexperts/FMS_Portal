@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <title>Service Error · FMS Portal</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body style="display:flex; align-items:center; justify-content:center; height:100vh; background:var(--bg-body);">
+  <div class="card" style="max-width:520px; text-align:center;">
+    <h2>Upstream API Error</h2>
+    <p style="color:var(--text-secondary);">{{ message or "The shared API service is currently unreachable." }}</p>
+    {% if status_code %}<p style="color:var(--text-secondary); font-size:12px;">Status code: {{ status_code }}</p>{% endif %}
+    <a class="btn btn-primary" href="/dashboard">Back to Dashboard</a>
+  </div>
+</body>
+</html>

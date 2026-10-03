@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Search · {{ app_name }}{% endblock %}
+{% block page_title %}Search{% endblock %}
+{% block content %}
+<section class="card">
+  <h3 class="card__title">&#128269; Find a Task</h3>
+  <form class="filter-bar" method="get" action="/search">
+    <div class="field field-search">
+      <label>Task ID or keyword</label>
+      <input type="text" name="q" placeholder="e.g. TSK000245" autofocus />
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+  <p style="color:var(--text-secondary); font-size:13px;">
+    An exact Task ID match opens the Task Details page directly; anything else falls back
+    to a filtered All Tasks search.
+  </p>
+</section>
+{% endblock %}

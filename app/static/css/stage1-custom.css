@@ -1,0 +1,697 @@
+
+.stage1-custom .stage1-batch-table th,
+.stage1-custom .stage1-batch-table td {
+  font-size: 12px;
+  padding: 5px 8px; /* Compact padding to prevent scrolling */
+  vertical-align: middle;
+}
+
+.stage1-custom .stage1-batch-table input[type="text"] {
+  min-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+/* 2-line compact restriction for remarks */
+.stage1-custom .stage1-batch-table .batch-remarks {
+  min-width: 150px;
+  width: 100%;
+  height: 34px; 
+  resize: vertical; 
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* Polished Checkbox */
+.stage1-custom .stage1-batch-table .batch-packed {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  margin: 0;
+}
+
+.stage1-custom .attachment-view-btn {
+  align-self: flex-start;
+}
+
+.lead-time-extension-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  position: relative;
+}
+
+.lead-time-hover-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  opacity: 0.35;
+  transform: translateY(2px) scale(0.94);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  color: #334155;
+}
+
+.lead-time-hover-icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.lead-time-hover-icon svg circle,
+.lead-time-hover-icon svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.lead-time-extension-btn:hover .lead-time-hover-icon,
+.lead-time-extension-btn:focus-visible .lead-time-hover-icon {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.lead-time-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  background: #111827;
+  color: #fff;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 5;
+}
+
+.lead-time-extension-btn:hover .lead-time-tooltip,
+.lead-time-extension-btn:focus-visible .lead-time-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.lead-time-extension-modal-card {
+  width: min(760px, 96vw);
+}
+
+#lead-time-extension-modal {
+  z-index: 999;
+}
+
+.ltg-dropzone {
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  cursor: pointer;
+}
+
+.ltg-dropzone.drag-over {
+  border-color: var(--color-info);
+  box-shadow: inset 0 0 0 1px var(--color-info);
+}
+
+.ltg-dropzone-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.ltg-attachment-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ltg-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.ltg-chip-remove {
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.ltg-remarks {
+  min-height: 58px;
+  max-height: 200px;
+}
+
+/* One row layout for document fields */
+.stage1-doc-fields {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+/* Clean Read-Only Info Grids */
+.stage1-custom .info-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 12px;
+  align-items: start;
+}
+
+.stage1-custom .info-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px 12px;
+  align-items: start;
+}
+
+.stage1-custom .info-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px 12px;
+  align-items: start;
+}
+
+.stage1-custom .info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage1-custom .info-item label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  /* text-transform: uppercase; REMOVED TO RESPECT METADATA PUBLISH NAME */
+}
+
+.stage1-custom .info-item .info-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* High contrast text overrides for the Pink Box */
+.stage1-custom .pink-box .info-item label {
+  color: #555; 
+}
+
+.stage1-custom .pink-box .info-item .info-text {
+  color: #000; 
+}
+
+@media (max-width: 1080px) {
+  .stage1-doc-fields,
+  .stage1-custom .info-grid-4,
+  .stage1-custom .info-grid-5,
+  .stage1-custom .info-grid-6 {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+/* ================================================================
+   Stage 1 Pick Assignment / Line-grouped Batch Table
+   ================================================================ */
+.s1-pick-assignment-card {
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.s1-pick-id-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.s1-picker-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.s1-picker-title {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.s1-picker-help {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.s1-picker-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.s1-picker-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 8px 12px;
+}
+
+.s1-picker-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.s1-picker-number {
+  width: 28px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.s1-picker-select {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.s1-picker-select:disabled {
+  background: #f6f7f9;
+  cursor: not-allowed;
+}
+
+.stage1-batch-table.hide-batch-qty .qty-column {
+  display: none;
+}
+
+.stage1-batch-table td:first-child,
+.stage1-batch-table th:first-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .s1-picker-rows {
+    grid-template-columns: 1fr;
+  }
+
+  .s1-picker-editor-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .s1-picker-actions {
+    justify-content: flex-start;
+  }
+}
+
+
+
+.s1-picker-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.s1-picker-save,
+.s1-picker-edit,
+.line-weight-save,
+.line-weight-edit {
+  white-space: nowrap;
+}
+
+.s1-picker-status {
+  margin-top: 7px;
+  min-height: 18px;
+  font-size: 11.5px;
+}
+.s1-picker-status.is-error { color: var(--color-danger); }
+.s1-picker-status.is-success { color: var(--color-success); }
+
+.stage1-line-title {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  margin-bottom: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stage1-line-meta {
+  display: grid;
+  grid-template-columns: 120px 160px minmax(260px, 1.5fr) 110px 190px;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.stage1-line-meta-field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.stage1-line-meta-field label { font-size:11px; font-weight:700; color:var(--text-secondary); }
+.stage1-line-meta-field input {
+  width:100%; min-width:0; padding:6px 8px; border:1px solid var(--border-color);
+  border-radius:var(--radius-sm); background:#f6f7f9; color:var(--text-primary); font-size:12px;
+}
+.stage1-weight-editor { display:grid; grid-template-columns:1fr auto auto; gap:5px; align-items:center; }
+.stage1-weight-editor input { background:#fff; }
+.stage1-weight-editor input[readonly] { background:#f6f7f9; }
+
+.readonly-weight-kgs { background:#f6f7f9 !important; color:#5f6368; cursor:not-allowed; }
+
+.stage1-batch-table.hide-batch-qty .qty-column { display:none; }
+
+@media (max-width: 1100px) {
+  .stage1-line-meta { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .stage1-line-meta-wide { grid-column: span 2; }
+}
+@media (max-width: 900px) {
+  .s1-picker-row { grid-template-columns:28px minmax(0,1fr) auto; }
+  .s1-picker-edit { grid-column: 2; justify-self:start; }
+}
+
+/* ================================================================
+   Stage 1 polished line / picker presentation
+   ================================================================ */
+.stage1-custom .s1-pick-assignment-card {
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+}
+.stage1-custom .s1-picker-editor {
+  padding: 10px 0 0;
+}
+.stage1-custom .s1-picker-row {
+  padding: 6px;
+  background: #fbfcfe;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.stage1-custom .s1-picker-row:focus-within {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
+}
+.stage1-custom .stage1-line-group {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.035);
+}
+.stage1-custom .stage1-line-title {
+  background: #eef4ff;
+  border-color: #d7e3ff;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+.stage1-custom .stage1-line-meta-field input {
+  background: #f8fafc;
+  border-color: #dbe2ea;
+}
+.stage1-custom .stage1-line-meta-field input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
+}
+.stage1-custom .stage1-weight-editor input[readonly],
+.stage1-custom .readonly-weight-kgs {
+  background: #eef1f5 !important;
+  color: #667085 !important;
+}
+.stage1-custom .stage1-batch-table {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef4ff;
+  border: 1px solid #d7e3ff;
+}
+.stage1-custom .stage1-batch-table thead th {
+  background: #eef4ff;
+  border-color: #d7e3ff;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+.stage1-custom .stage1-batch-table tbody td {
+  background: #eef4ff;
+  border-color: #d7e3ff;
+}
+.stage1-custom .stage1-batch-table .batch-remarks {
+  background: #fff;
+}
+
+
+.stage1-custom .s1-picker-edit,
+.stage1-custom .s1-picker-remove-one {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stage1-custom .s1-picker-remove-one {
+  color: var(--color-danger);
+}
+
+.stage1-custom .s1-picker-save.is-saving {
+  min-width: 78px;
+}
+
+.stage1-custom .s1-picker-row.is-saving {
+  opacity: 0.9;
+}
+
+.stage1-custom .s1-picker-remove-one:hover:not(:disabled),
+.stage1-custom .s1-picker-remove-one:focus-visible {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.stage1-custom .batch-row-id {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.stage1-custom .line-weight-edit {
+  min-width: 34px;
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+/* Picker selector: keep the control compact and never wider than 350px. */
+.stage1-custom .s1-picker-select {
+  width: 350px;
+  max-width: 350px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .stage1-custom .s1-picker-select {
+    width: 100%;
+    max-width: 350px;
+  }
+}
+
+/* v13 picker/weight polish */
+.stage1-custom .s1-picker-editor-head {
+  align-items: center;
+}
+
+.stage1-custom .s1-picker-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.stage1-custom .s1-picker-row {
+  grid-template-columns: 28px minmax(0, 350px) auto auto auto;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.stage1-custom .s1-picker-select {
+  width: min(350px, 100%);
+  max-width: 350px;
+}
+
+.stage1-custom .s1-picker-save,
+.stage1-custom .s1-picker-edit,
+.stage1-custom .s1-picker-remove-one {
+  min-width: 34px;
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+.stage1-custom .s1-picker-remove-one {
+  color: var(--color-danger);
+}
+
+.stage1-custom .s1-picker-save.is-saving {
+  min-width: 78px;
+}
+
+.stage1-custom .s1-picker-row.is-saving {
+  opacity: 0.9;
+}
+
+.stage1-custom .stage1-weight-editor {
+  grid-template-columns: minmax(100px, 135px) auto auto;
+  gap: 5px;
+}
+
+.stage1-custom .stage1-weight-editor .line-weight {
+  width: 135px;
+  max-width: 135px;
+}
+
+
+.stage1-custom .stage1-item-name-textarea {
+  width: 100%;
+  min-height: 156px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #f6f7f9;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+
+.stage1-custom .s1-inline-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 5px;
+  animation: s1-spin .7s linear infinite;
+}
+
+.stage1-custom .line-weight-save.is-saving {
+  min-width: 74px;
+}
+
+.stage1-custom .line-weight.is-saving {
+  background: #f3f4f6;
+  cursor: wait;
+}
+
+@keyframes s1-spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* Busy Picker board ------------------------------------------------------ */
+.s1-busy-picker-card {
+  width: min(900px, 96vw);
+  max-height: 88vh;
+}
+
+.s1-busy-picker-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.s1-busy-picker-loading {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-body);
+}
+
+.s1-busy-picker-table-wrap {
+  margin-top: 12px;
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.s1-busy-picker-table th,
+.s1-busy-picker-table td {
+  vertical-align: middle;
+}
+
+.s1-busy-picker-row-link {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.s1-busy-picker-error {
+  margin-top: 10px;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.s1-busy-picker-btn {
+  white-space: nowrap;
+}

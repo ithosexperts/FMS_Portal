@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}Form Preview · {{ app_name }}{% endblock %}
+{% block page_title %}Form Preview{% endblock %}
+{% block header_actions %}
+<a class="btn btn-sm" href="{{ routes.developer_hub_route() }}">&larr; Developer Hub</a>
+{% endblock %}
+
+{% block content %}
+<form class="filter-bar" method="get" action="{{ routes.developer_form_preview_route() }}">
+  <div class="field field-search">
+    <label>Task ID</label>
+    <input type="text" name="task_id" placeholder="e.g. TSK000245" value="{{ task_id }}" />
+  </div>
+  <button type="submit" class="btn btn-primary">Preview</button>
+</form>
+
+{% if error %}<div class="card"><div class="empty-state">{{ error }}</div></div>{% endif %}
+
+{% if context %}
+<section class="card">
+  <h3 class="card__title" style="display: flex; align-items: center;">
+    <img src="/static/logo.png" alt="Logo" style="height: 24px; margin-right: 10px;">
+    Application <span class="badge badge-grey" style="margin-left: 8px;">Read Only</span>
+  </h3>
+  <div class="question-grid">
+    {% for q in application_fields %}{{ macros.question_control(q) }}{% endfor %}
+  </div>
+</section>
+
+{% for section in preview_sections %}
+<section class="card">
+  <h3 class="card__title">
+    {{ section.stage.STAGE_NO }} &middot; {{ section.stage.STAGE_NAME }}
+    {% if section.is_current %}<span class="badge badge-blue">Editable (Current Stage)</span>
+    {% else %}<span class="badge badge-grey">Read Only</span>{% endif %}
+    {{ macros.status_badge(section.status) }}
+  </h3>
+
+  <div class="question-grid">
+    {% for q in section.fields %}{{ macros.question_control(q) }}{% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}

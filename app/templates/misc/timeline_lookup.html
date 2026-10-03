@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Timeline · {{ app_name }}{% endblock %}
+{% block page_title %}Timeline Lookup{% endblock %}
+{% block content %}
+<section class="card">
+  <h3 class="card__title">&#8987; Open a Task Timeline</h3>
+  <form class="filter-bar" method="get" action="/timeline">
+    <div class="field field-search">
+      <label>Task ID</label>
+      <input type="text" name="task_id" placeholder="e.g. TSK000245" autofocus />
+    </div>
+    <button type="submit" class="btn btn-primary">Open Timeline</button>
+  </form>
+</section>
+{% endblock %}

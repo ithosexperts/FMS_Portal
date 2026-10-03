@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+{% import "components/macros.html" as macros %}
+{% block title %}Stage {{ stage_no }} · {{ task_id }}{% endblock %}
+{% block page_title %}Stage Form &mdash; {{ context.stage.STAGE_NAME }}{% endblock %}
+
+{% macro display_value(value) -%}
+  {%- if value is none or value|string|trim|lower in ('', 'none', 'null') -%}
+  {%- else -%}{{ value }}{%- endif -%}
+{%- endmacro %}
+
+
+<style>
+  .s2-locked-field { background:#f6f7f9 !important; cursor:not-allowed !important; }
+  .s2-driver-third-input, .s2-vehicle-third-input { text-transform:uppercase; }
+</style>
+
+{% block content %}
+{% if cleared %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
+{% endif %}
+{% if clear_error %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ clear_error }}</div>
+{% endif %}
+{% if (current_role_id|string).strip() in ['', '1', '2', '3'] %}
+<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+  <form method="post" action="{{ routes.stage_clear_route(task_id, stage_no) }}" style="margin:0;" onsubmit="return confirm('Clear saved responses and reopen this form?');">
+    <button type="submit" class="btn btn-sm btn-ghost" title="Clear responses and reopen">Clear &amp; Reset</button>
+  </form>
+</div>
+{% endif %}
+
+<section class="card" style="padding:20px;">
+  <h3 style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+    <span style="color:#3E1E68;font-weight:800;">{{ context.fms.fms_name }}</span>
+    <span style="color:var(--text-secondary);">|</span>
+    <span>{{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}</span>
+    {% if context.timeline_entry %}<span class="s2-timeline-status">{{ macros.status_badge(context.timeline_entry.status) }}</span>{% endif %}
+    {% if not custom_stage2.s2_locked %}
+      {% if has_pending_ltg %}
+      <button type="button" class="btn btn-sm s2-lead-time-extension-btn" style="margin-left:2px;opacity:.6;"
+              onclick="alert('Your previous request is being reviewed till then you cannot submit a new request for this FMS, row ID and stage no.')"
+              aria-label="Lead Time Extension Pending">
+        <span class="s2-lead-time-hover-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg>
+        </span>
+        <span class="s2-lead-time-tooltip" role="tooltip">Request Pending</span>
+      </button>
+      {% else %}
+      <button type="button" class="btn btn-sm s2-lead-time-extension-btn" id="btn-lead-time-extension-s2" style="margin-left:2px;" aria-label="Lead Time Extension">
+        <span class="s2-lead-time-hover-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg>
+        </span>
+        <span class="s2-lead-time-tooltip" role="tooltip">Lead Time Extension</span>
+      </button>
+      {% endif %}
+    {% endif %}
+  </h3>
+
+  <!-- S2 fixed stage summary labels; values come exclusively from S2_* columns. -->
+  <div class="pink-box" style="margin-bottom:16px; padding:14px; background:#FBEFEF; border-radius:var(--radius-md); border:1px solid var(--border-color);">
+    <div class="info-grid-5" style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px 12px;align-items:start;margin-bottom:14px;">
+      {% set s2_1 = custom_stage2.stage2_summary[0] %}
+      {% set s2_2 = custom_stage2.stage2_summary[1] %}
+      {% set s2_3 = custom_stage2.stage2_summary[2] %}
+      {% set s2_4 = custom_stage2.stage2_summary[3] %}
+      {% set s2_5 = custom_stage2.stage2_summary[4] %}
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_1.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_1.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_2.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_2.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_3.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_3.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_4.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_4.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_5.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_5.value) or '-' }}</div></div>
+    </div>
+    <div class="info-grid-5" style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px 12px;align-items:start;">
+      {% set s2_6 = custom_stage2.stage2_summary[5] %}
+      {% set s2_7 = custom_stage2.stage2_summary[6] %}
+      {% set s2_8 = custom_stage2.stage2_summary[7] %}
+      {% set s2_9 = custom_stage2.stage2_summary[8] %}
+      {% set s2_10 = custom_stage2.stage2_summary[9] %}
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_6.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_6.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ custom_stage2.publish_names.get("S2_LTGrantMins", "Lead Time Grant Min") }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">-</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_7.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_7.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_8.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_8.value) or '-' }}</div></div>
+      <div class="info-item" style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s2_10.label }}</label><div class="info-text" style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s2_10.value) or '-' }}</div></div>
+    </div>
+  </div>
+
+  <div class="readonly-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:14px 18px;margin-bottom:18px;">
+    <div class="question">
+      <label>{{ custom_stage2.publish_names.get("S1_PickID", "Pick ID") }}</label>
+      <input type="text" value="{{ custom_stage2.pick_id or '-' }}" readonly style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
+    </div>
+  </div>
+
+  <form method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
+    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:18px;">
+      <div class="question">
+        <label>{{ custom_stage2.vehicle_origin.label }} <span style="color:red">*</span></label>
+        <select name="S2_VehicleOrigin" class="vehicle-origin-select{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}" {% if custom_stage2.s2_locked %}disabled{% endif %}>
+          <option value="">Select</option>
+          {% for option in custom_stage2.vehicle_origin.options %}
+          <option value="{{ option }}" {% if custom_stage2.vehicle_origin.value|string|trim == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="question">
+        <label>{{ custom_stage2.vehicle_type.label }} <span style="color:red">*</span></label>
+        <select name="S2_VehicleType"
+                class="vehicle-type-select"
+                data-saved-value="{{ custom_stage2.vehicle_type.value|string|trim }}"
+                {% if custom_stage2.s2_locked %}disabled{% endif %}>
+          <option value="">Select</option>
+          {% for option in ['Vikram','Truck','Auto','Porter','Two Wheeler'] %}
+          <option value="{{ option }}"
+                  {% if custom_stage2.vehicle_type.value|string|trim|lower == option|string|trim|lower %}selected{% endif %}>
+            {{ option }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% set current_origin_norm = custom_stage2.vehicle_origin.value|string|trim|lower|replace(' ', '') %}
+      {% set is_own_vehicle = current_origin_norm in ('ownvehicle', 'own') %}
+
+      <div class="question">
+        <label>{{ custom_stage2.driver_name.label }} <span style="color:red">*</span></label>
+
+        <!-- Own Vehicle: choose DRIVER from FL_Users -->
+        <select name="S2_AssignedDriver"
+                class="s2-driver-select{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}"
+                {% if custom_stage2.s2_locked or not custom_stage2.driver_master_options %}disabled{% endif %} data-own-display="block" data-third-display="none">
+          <option value="">Select Driver</option>
+          {% for driver in custom_stage2.driver_master_options %}
+          <option value="{{ driver.name }}"
+                  data-mobile="{{ driver.mobile or '' }}"
+                  {% if driver.name|string|trim|lower == custom_stage2.driver_name.value|string|trim|lower %}selected{% endif %}>
+            {{ driver.name }}
+          </option>
+          {% endfor %}
+        </select>
+
+        <!-- Third Party: driver is entered manually -->
+        <input type="text"
+               name="S2_AssignedDriver"
+               class="s2-driver-third-input{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}"
+               value="{{ custom_stage2.driver_name.value or '' }}"
+               placeholder="Enter Assigned Driver"
+               maxlength="100"
+               autocomplete="off"
+               {% if custom_stage2.s2_locked %}readonly{% endif %} />
+
+        {% if not custom_stage2.driver_master_options %}
+        <div class="s2-driver-master-empty" style="margin-top:5px;font-size:11px;color:var(--text-secondary);">No DRIVER users found in FL_Users.</div>
+        {% endif %}
+      </div>
+
+      <div class="question">
+        <label>{{ custom_stage2.driver_number.label }} <span style="color:red">*</span></label>
+        <input type="text" name="S2_DriverContact"
+               class="s2-driver-number-input{% if custom_stage2.s2_locked or is_own_vehicle %} s2-locked-field{% endif %}"
+               value="{{ custom_stage2.driver_number.value or '' }}"
+               placeholder="+91XXXXXXXXXX"
+               inputmode="tel" autocomplete="tel" maxlength="13"
+               {% if custom_stage2.s2_locked or is_own_vehicle %}readonly{% endif %} />
+        <div style="margin-top:5px;font-size:11px;color:var(--text-secondary);">
+          {% if is_own_vehicle %}Phone is fetched from FL_Users (Role = DRIVER) and displayed with +91.{% else %}Enter a 10 digit contact number for the Third Party driver.{% endif %}
+        </div>
+      </div>
+
+      <div class="question vehicle-no-wrap">
+        <label>{{ custom_stage2.vehicle_no.label }} <span style="color:red">*</span></label>
+
+        <!-- Own Vehicle: select from FL_Vehicles.vehicle_number -->
+        <select name="S2_VehicleNo"
+                class="s2-vehicle-select{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}"
+                {% if custom_stage2.s2_locked %}disabled{% endif %} data-own-display="block" data-third-display="none">
+          <option value="">Select Vehicle</option>
+          {% for vehicle_no in custom_stage2.vehicle_master_options %}
+          <option value="{{ vehicle_no }}" {% if vehicle_no|string|trim|upper == custom_stage2.vehicle_no.value|string|trim|upper %}selected{% endif %}>{{ vehicle_no }}</option>
+          {% endfor %}
+        </select>
+
+        <!-- Third Party: enter vehicle number manually -->
+        <input type="text"
+               name="S2_VehicleNo"
+               value="{{ custom_stage2.vehicle_no.value or '' }}"
+               placeholder="e.g. DL01AB1234"
+               maxlength="12"
+               autocomplete="off"
+               inputmode="text"
+               autocapitalize="characters"
+               spellcheck="false"
+               pattern="[A-Z0-9]{1,12}"
+               {% if custom_stage2.s2_locked %}readonly{% endif %}
+               class="s2-vehicle-third-input{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}" />
+
+        <div style="margin-top:5px;font-size:11px;color:var(--text-secondary);">
+          {% if is_own_vehicle %}Own Vehicle numbers are loaded from FL_Vehicles.vehicle_number.{% else %}Enter the Third Party vehicle registration number.{% endif %}
+        </div>
+      </div>
+
+      <div class="question">
+        <label>{{ custom_stage2.dispatch_datetime.label }} <span style="color:red">*</span></label>
+        <input type="datetime-local" name="S2_DispatchDateTime" value="{{ (custom_stage2.dispatch_datetime.value|string).replace(' ', 'T')[:16] if custom_stage2.dispatch_datetime.value else '' }}" {% if custom_stage2.s2_locked %}readonly{% endif %} class="{% if custom_stage2.s2_locked %}s2-locked-field{% endif %}" />
+      </div>
+
+      <div class="question" style="grid-column:1/-1;">
+        <label>{{ custom_stage2.loading_image_1.label }} <span style="color:red">*</span></label>
+        {% set s2_loading_urls = custom_stage2.loading_image_1.value|string if custom_stage2.loading_image_1.value is not none and custom_stage2.loading_image_1.value|string|trim|lower not in ('', 'none', 'null') else '' %}
+        {% if s2_loading_urls %}
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 10px;">
+            {% for image_url in s2_loading_urls.split(',') if image_url|string|trim %}
+              {% set url = image_url|string|trim %}
+              <a href="{{ url }}" target="_blank" rel="noopener" title="Open existing {{ custom_stage2.loading_image_1.label }}" style="display:inline-flex;align-items:center;text-decoration:none;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;background:#fff;">
+                <span style="color:var(--primary-color);">View Attachment</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <input type="hidden" name="__existing_attachment_urls_S2_LoadingImage1" value="{{ s2_loading_urls }}" />
+        {% if not custom_stage2.s2_locked %}
+        <input type="file" name="S2_LoadingImage1" multiple class="s2-loading-image-input" accept="image/*" />
+        {% endif %}
+      </div>
+
+      <div class="question" style="grid-column:1/-1;">
+        <label>{{ custom_stage2.remarks.label }} <span style="color:red">*</span></label>
+        <textarea name="S2_Remarks" rows="4" {% if custom_stage2.s2_locked %}readonly{% endif %} class="{% if custom_stage2.s2_locked %}s2-locked-field{% endif %}">{{ custom_stage2.remarks.value or '' }}</textarea>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
+      <button type="button" class="btn" id="open-s1-picknpack" data-s1-url="/forms/stage/{{ task_id }}/S1?embedded=1">S1 PickNPack Form</button>
+      {% if not custom_stage2.s2_locked %}
+      <button type="submit" name="_action" value="save" class="btn">Save Progress</button>
+      <button type="submit" name="_action" value="submit" class="btn btn-primary s2-submit-btn" disabled aria-disabled="true">Submit Stage</button>
+      <div class="s2-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">Fill the required Stage 2 driver, vehicle, dispatch, remarks and loading-image fields to enable Submit Stage.</div>
+      {% else %}
+      <div style="font-size:12px;color:var(--text-secondary);align-self:center;">Stage 2 is completed and the submitted values are read-only.</div>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<div id="s1-embedded-container" hidden style="margin-top:16px;"></div>
+
+<script>
+  const origin = document.querySelector('.vehicle-origin-select');
+  const type = document.querySelector('.vehicle-type-select');
+  const driverSelect = document.querySelector('.s2-driver-select');
+  const driverNumberInput = document.querySelector('.s2-driver-number-input');
+  const vehicleNoSelect = document.querySelector('.s2-vehicle-select');
+  const vehicleThirdInput = document.querySelector('.s2-vehicle-third-input');
+
+  const isOwnVehicle = () => {
+    const originValue = String(origin?.value || '').trim().toLowerCase().replace(/\s+/g, '');
+    const typeValue = String(type?.value || '').trim().toLowerCase().replace(/\s+/g, '');
+    return originValue === 'ownvehicle' || originValue === 'own' || typeValue === 'ownvehicle' || typeValue === 'own';
+  };
+
+  if (origin && type && !origin.disabled) {
+    const optionsByOrigin = {
+      'Third Party': ['Vikram', 'Truck', 'Auto', 'Porter', 'Two Wheeler'],
+      'Own Vehicle': ['Vikram', 'Truck', 'Two Wheeler']
+    };
+
+    const syncTypeOptions = () => {
+      const originKey = String(origin.value || '').trim().toLowerCase();
+      const allowed = Object.keys(optionsByOrigin).find(
+        key => key.toLowerCase() === originKey
+      ) ? optionsByOrigin[Object.keys(optionsByOrigin).find(
+        key => key.toLowerCase() === originKey
+      )] : [];
+
+      // Preserve the value returned by the backend after Save/Append.
+      // data-saved-value is used first because the browser may have reset
+      // the select to "Select" before this function runs.
+      const saved = String(type.dataset.savedValue || '').trim();
+      const current = String(type.value || '').trim();
+      const preferred = saved || current;
+
+      type.innerHTML = '<option value="">Select</option>';
+
+      allowed.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        type.appendChild(opt);
+      });
+
+      const matched = allowed.find(
+        v => String(v).trim().toLowerCase() === preferred.toLowerCase()
+      );
+
+      if (matched) {
+        type.value = matched;
+      } else {
+        type.value = '';
+      }
+
+      // Keep the backend value available for subsequent re-syncs caused by
+      // a Vehicle Origin change.
+      type.dataset.savedValue = type.value || saved;
+    };
+
+    origin.addEventListener('change', syncTypeOptions);
+    syncTypeOptions();
+  }
+
+  const driverThirdInput = document.querySelector('.s2-driver-third-input');
+
+  const syncOwnThirdPartyFields = () => {
+    const own = isOwnVehicle();
+    const locked = String(document.body.dataset.s2Locked || '') === 'true'
+      || Boolean(
+        driverSelect?.disabled &&
+        (driverSelect?.dataset?.formLocked === 'true' || {{ 'true' if custom_stage2.s2_locked else 'false' }})
+      );
+
+    // Driver UI
+    if (driverSelect) {
+      driverSelect.style.display = own ? 'block' : 'none';
+      driverSelect.disabled = !own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+    }
+    if (driverThirdInput) {
+      driverThirdInput.style.display = own ? 'none' : 'block';
+      driverThirdInput.readOnly = (!own) ? {{ 'true' if custom_stage2.s2_locked else 'false' }} : true;
+      // Disable the inactive duplicate control so FormData cannot submit an empty
+      // hidden Third-Party driver after Own Vehicle is selected.
+      driverThirdInput.disabled = own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+      if ({{ 'true' if custom_stage2.s2_locked else 'false' }}) {
+        driverThirdInput.style.background = '#f6f7f9';
+        driverThirdInput.style.cursor = 'not-allowed';
+      } else {
+        driverThirdInput.style.background = '';
+        driverThirdInput.style.cursor = '';
+      }
+    }
+
+    // Driver contact: Own Vehicle = fetched/read-only; Third Party = manually editable
+    if (driverNumberInput) {
+      driverNumberInput.readOnly = own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+      driverNumberInput.style.background = (own || {{ 'true' if custom_stage2.s2_locked else 'false' }}) ? '#f6f7f9' : '';
+      driverNumberInput.style.cursor = (own || {{ 'true' if custom_stage2.s2_locked else 'false' }}) ? 'not-allowed' : '';
+      if (own) {
+        const selected = driverSelect?.selectedOptions?.[0];
+        const mobile = String(selected?.dataset?.mobile || '').replace(/\D/g, '').slice(-10);
+        if (mobile) driverNumberInput.value = `+91${mobile}`;
+      }
+    }
+
+    // Vehicle No: Own Vehicle = master dropdown; Third Party = manual input
+    if (vehicleNoSelect) {
+      vehicleNoSelect.style.display = own ? 'block' : 'none';
+      vehicleNoSelect.disabled = !own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+    }
+    if (vehicleThirdInput) {
+      vehicleThirdInput.style.display = own ? 'none' : 'block';
+      vehicleThirdInput.readOnly = own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+      // Disable the inactive duplicate control so FormData cannot submit an empty
+      // hidden Third-Party vehicle number after Own Vehicle is selected.
+      vehicleThirdInput.disabled = own || {{ 'true' if custom_stage2.s2_locked else 'false' }};
+      if ({{ 'true' if custom_stage2.s2_locked else 'false' }}) {
+        vehicleThirdInput.style.background = '#f6f7f9';
+        vehicleThirdInput.style.cursor = 'not-allowed';
+      } else {
+        vehicleThirdInput.style.background = '';
+        vehicleThirdInput.style.cursor = '';
+      }
+    }
+
+    const empty = document.querySelector('.s2-driver-master-empty');
+    if (empty) empty.style.display = own ? 'block' : 'none';
+  };
+
+  if (driverSelect) {
+    driverSelect.addEventListener('change', () => {
+      const selected = driverSelect.selectedOptions?.[0];
+      const mobile = String(selected?.dataset?.mobile || '').replace(/\D/g, '').slice(-10);
+      if (driverNumberInput) driverNumberInput.value = mobile ? `+91${mobile}` : '';
+      updateS2SubmitState();
+    });
+  }
+  if (driverThirdInput) {
+    driverThirdInput.addEventListener('input', () => updateS2SubmitState());
+  }
+  if (origin) origin.addEventListener('change', () => {
+    syncOwnThirdPartyFields();
+    updateS2SubmitState();
+  });
+
+  // Vehicle number is always entered by the doer. Normalize registration text as:
+  // "dl 01 ab 1234" -> "DL01AB1234".
+  const normalizeVehicleNo = () => {
+    if (!vehicleThirdInput) return;
+    vehicleThirdInput.value = vehicleThirdInput.value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 12);
+  };
+  if (vehicleThirdInput && !vehicleThirdInput.readOnly) {
+    vehicleThirdInput.addEventListener('input', normalizeVehicleNo);
+    normalizeVehicleNo();
+  }
+
+  // Third-party driver mobile: digits only, exactly 10 digits for submit.
+  if (driverNumberInput) {
+    driverNumberInput.addEventListener('input', () => {
+      if (isOwnVehicle() || {{ 'true' if custom_stage2.s2_locked else 'false' }}) return;
+      driverNumberInput.value = driverNumberInput.value.replace(/\D/g, '').slice(0, 10);
+      updateS2SubmitState();
+    });
+  }
+
+  // Submit Stage is disabled until all required S2 inputs are populated and
+  // at least one loading-image attachment already exists or is selected.
+  const s2Form = document.querySelector('form[enctype="multipart/form-data"]');
+  const s2SubmitBtn = document.querySelector('.s2-submit-btn');
+  const s2Origin = document.querySelector('select[name="S2_VehicleOrigin"]');
+  const s2Type = document.querySelector('select[name="S2_VehicleType"]');
+  const s2DriverName = () => {
+    if (isOwnVehicle()) return driverSelect && !driverSelect.disabled ? String(driverSelect.value || '').trim() : '';
+    return driverThirdInput && !driverThirdInput.readOnly ? String(driverThirdInput.value || '').trim() : '';
+  };
+  const s2VehicleNo = () => {
+    if (isOwnVehicle()) return vehicleNoSelect && !vehicleNoSelect.disabled ? String(vehicleNoSelect.value || '').trim() : '';
+    return vehicleThirdInput && !vehicleThirdInput.disabled ? String(vehicleThirdInput.value || '').trim() : '';
+  };
+  const s2Dispatch = document.querySelector('[name="S2_DispatchDateTime"]');
+  const s2Remarks = document.querySelector('[name="S2_Remarks"]');
+  const s2ImageInput = document.querySelector('.s2-loading-image-input');
+  const s2ExistingImages = document.querySelector('input[name="__existing_attachment_urls_S2_LoadingImage1"]');
+  const s2SubmitHint = document.querySelector('.s2-submit-hint');
+  const hasText = (el) => !!(el && String(el.value || '').trim());
+  const hasImage = () => {
+    const existing = String(s2ExistingImages?.value || '').trim();
+    const selected = !!(s2ImageInput && s2ImageInput.files && s2ImageInput.files.length > 0);
+    return !!existing || selected;
+  };
+
+  const updateS2SubmitState = () => {
+    if (!s2SubmitBtn) return;
+    const mobile = String(driverNumberInput?.value || '').trim();
+    const mobileDigits = mobile.replace(/\D/g, '');
+    const mobileOk = isOwnVehicle()
+      ? /^91\d{10}$/.test(mobileDigits)
+      : /^\d{10}$/.test(mobileDigits);
+    const ready = hasText(s2Origin) && hasText(s2Type) && !!s2DriverName() && mobileOk
+      && !!s2VehicleNo() && hasText(s2Dispatch) && hasText(s2Remarks) && hasImage();
+    s2SubmitBtn.disabled = !ready;
+    s2SubmitBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    if (s2SubmitHint) {
+      s2SubmitHint.textContent = ready
+        ? 'All required Stage 2 fields are ready. Submit Stage will update every row with the same PickID and run the backend workflow.'
+        : 'Fill the Stage 2 vehicle, driver, mobile (10 digits), dispatch, remarks and loading image fields to enable Submit Stage.';
+    }
+  };
+
+  [s2Origin, s2Type, driverSelect, driverNumberInput, vehicleNoSelect, vehicleThirdInput, s2Dispatch, s2Remarks].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('input', updateS2SubmitState);
+    el.addEventListener('change', updateS2SubmitState);
+  });
+  if (s2ImageInput) s2ImageInput.addEventListener('change', updateS2SubmitState);
+
+  if (s2Form) {
+    s2Form.addEventListener('submit', (event) => {
+      const submitter = event.submitter;
+      if (!submitter || submitter.value !== 'submit') return;
+      updateS2SubmitState();
+      if (s2SubmitBtn && s2SubmitBtn.disabled) {
+        event.preventDefault();
+        alert('Please fill all Stage 2 required fields, use a 10-digit Driver Mobile No, and attach at least one Loading Image before submitting.');
+      }
+    });
+  }
+
+  // S1 PickNPack embedded form: render the same PickID's S1 form below S2.
+  const s1Button = document.getElementById('open-s1-picknpack');
+  const s1Host = document.getElementById('s1-embedded-container');
+  if (s1Button && s1Host) {
+    s1Button.addEventListener('click', async () => {
+      let url = s1Button.dataset.s1Url || '';
+      // IMPORTANT: open the S1 form for this exact Stage-2 RowID.
+      // Do not resolve by PickID here because one PickID can contain multiple
+      // physical Z_SalesOrder rows and the user must edit the same RowID.
+      if (!url) {
+        const taskId = {{ task_id|tojson }};
+        url = `/forms/stage/${encodeURIComponent(taskId)}/S1?embedded=1`;
+      }
+      s1Button.disabled = true;
+      s1Button.textContent = 'Loading S1...';
+      try {
+        const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const html = await response.text();
+        s1Host.innerHTML = html;
+        // Scripts inserted through innerHTML do not execute automatically.
+        // Recreate each script node so the existing S1 PickNPack JS runs.
+        s1Host.querySelectorAll('script').forEach((oldScript) => {
+          const newScript = document.createElement('script');
+          for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
+          newScript.textContent = oldScript.textContent || '';
+          oldScript.replaceWith(newScript);
+        });
+        s1Host.hidden = false;
+        s1Host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (error) {
+        console.error('Failed to load embedded S1 form:', error);
+        alert('Could not load the S1 PickNPack Form. Please try again.');
+      } finally {
+        s1Button.disabled = false;
+        s1Button.textContent = 'S1 PickNPack Form';
+      }
+    });
+  }
+
+  syncOwnThirdPartyFields();
+  updateS2SubmitState();
+</script>
+
+<style>
+  .s2-lead-time-extension-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;padding:0;position:relative}
+  .s2-lead-time-hover-icon{width:24px;height:24px;display:inline-block;opacity:.35;transform:translateY(2px) scale(.94);transition:opacity .18s ease,transform .18s ease;color:#334155}
+  .s2-lead-time-hover-icon svg{width:24px;height:24px;display:block}
+  .s2-lead-time-hover-icon svg circle,.s2-lead-time-hover-icon svg path{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round}
+  .s2-lead-time-extension-btn:hover .s2-lead-time-hover-icon,.s2-lead-time-extension-btn:focus-visible .s2-lead-time-hover-icon{opacity:1;transform:translateY(0) scale(1)}
+  .s2-lead-time-tooltip{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%) translateY(-4px);opacity:0;pointer-events:none;white-space:nowrap;background:#111827;color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;transition:opacity .15s ease,transform .15s ease;z-index:50}
+  .s2-lead-time-extension-btn:hover .s2-lead-time-tooltip,.s2-lead-time-extension-btn:focus-visible .s2-lead-time-tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
+  .s2-ltg-modal-card{width:min(760px,96vw)}
+  #lead-time-extension-modal-s2{z-index:1100}
+  .s2-ltg-dropzone{border:1px dashed var(--border-color);border-radius:var(--radius-sm);background:var(--bg-body);padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;cursor:pointer}
+  .s2-ltg-dropzone.drag-over{border-color:var(--color-info);box-shadow:inset 0 0 0 1px var(--color-info)}
+  .s2-ltg-dropzone-text{font-size:12.5px;color:var(--text-secondary)}
+  .s2-ltg-attachment-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px}
+  .s2-ltg-file-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-primary);background:var(--bg-body);border:1px solid var(--border-color);border-radius:999px;padding:4px 10px}
+  .s2-ltg-chip-remove{border:0;background:transparent;font-size:14px;line-height:1;cursor:pointer;color:var(--text-secondary)}
+  .s2-ltg-remarks{min-height:58px;max-height:200px}
+</style>
+
+{% set s2_ltg_doer = custom_stage2.stage2_summary[4].value if custom_stage2.stage2_summary and custom_stage2.stage2_summary|length > 4 else '' %}
+<div id="lead-time-extension-modal-s2" class="modal-overlay" hidden aria-hidden="true">
+  <div class="modal-card s2-ltg-modal-card">
+    <div class="modal-head">
+      <h3 class="modal-title">Lead Time Extension</h3>
+      <button type="button" class="btn btn-ghost" data-ltg-close-s2>&times;</button>
+    </div>
+    <form id="lead-time-extension-form-s2" method="post" action="{{ routes.stage_lead_time_grant_route(task_id, stage_no) }}" enctype="multipart/form-data">
+      <div class="readonly-grid" style="margin-top:12px;">
+        <div class="readonly-field"><label>APPID</label><input type="text" name="app_id" value="{{ context.fms.app_id or '' }}" readonly /></div>
+        <div class="readonly-field"><label>FMS Name</label><input type="text" name="fms_name" value="{{ context.fms.fms_name or '' }}" readonly /></div>
+        <div class="readonly-field"><label>Stage No</label><input type="text" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}" readonly /></div>
+        <div class="readonly-field"><label>Stage Name</label><input type="text" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}" readonly /></div>
+        <div class="readonly-field"><label>Doer Name</label><input type="text" name="doer_name" value="{{ s2_ltg_doer or '' }}" readonly /></div>
+        <div class="readonly-field"><label>FMS Row ID</label><input type="text" name="fms_row_id" value="{{ context.row.get(context.primary_key) if context.row and context.primary_key else task_id }}" readonly /></div>
+      </div>
+      <div class="question" style="margin-top:12px;"><label>Requested Minutes *</label><input type="number" name="requested_minutes" min="1" step="1" required placeholder="10, 20, 120" oninput="this.value=this.value.replace(/[^0-9]/g,'')" /></div>
+      <div class="question" style="margin-top:12px;">
+        <label>Attachments</label>
+        <div id="s2-ltg-dropzone" class="s2-ltg-dropzone" tabindex="0">
+          <div class="s2-ltg-dropzone-text">Drag and drop files here, or click to browse. Multiple files are allowed.</div>
+          <input id="s2-ltg-attachments" type="file" name="attachments" multiple hidden />
+          <button type="button" class="btn btn-sm" id="s2-ltg-browse-btn">Choose Files</button>
+        </div>
+        <div id="s2-ltg-attachment-list" class="s2-ltg-attachment-list" aria-live="polite"></div>
+      </div>
+      <div class="question" style="margin-top:12px;"><label>Lead Time Grant Remarks *</label><textarea id="s2-ltg-remarks" name="lead_time_grant_remarks" rows="2" class="s2-ltg-remarks" placeholder="Enter remarks" required></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-ltg-close-s2>Cancel</button>
+        <button type="submit" id="s2-ltg-save-btn" class="btn btn-primary" disabled>Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const openBtn=document.getElementById('btn-lead-time-extension-s2');
+  const modal=document.getElementById('lead-time-extension-modal-s2');
+  const form=document.getElementById('lead-time-extension-form-s2');
+  if(!openBtn||!modal||!form)return;
+  const dropzone=document.getElementById('s2-ltg-dropzone');
+  const fileInput=document.getElementById('s2-ltg-attachments');
+  const list=document.getElementById('s2-ltg-attachment-list');
+  const browseBtn=document.getElementById('s2-ltg-browse-btn');
+  const remarks=document.getElementById('s2-ltg-remarks');
+  const requested=form.querySelector("input[name='requested_minutes']");
+  const saveBtn=document.getElementById('s2-ltg-save-btn');
+  const selectedFiles=[];
+  const syncFiles=()=>{if(!fileInput)return;const dt=new DataTransfer();selectedFiles.forEach(f=>dt.items.add(f));fileInput.files=dt.files;};
+  const render=()=>{if(!list)return;list.innerHTML='';selectedFiles.forEach((f,i)=>{const chip=document.createElement('span');chip.className='s2-ltg-file-chip';chip.textContent=f.name;const x=document.createElement('button');x.type='button';x.className='s2-ltg-chip-remove';x.textContent='x';x.addEventListener('click',()=>{selectedFiles.splice(i,1);syncFiles();render();});chip.appendChild(x);list.appendChild(chip);});};
+  const addFiles=files=>{Array.from(files||[]).forEach(f=>{if(f&&f.name)selectedFiles.push(f);});syncFiles();render();};
+  const resize=()=>{if(!remarks)return;remarks.style.height='auto';remarks.style.height=Math.min(200,Math.max(58,remarks.scrollHeight))+'px';};
+  const update=()=>{if(!saveBtn)return;const m=String(requested?.value||'').trim();const r=String(remarks?.value||'').trim();saveBtn.disabled=!/^\d+$/.test(m)||Number(m)<=0||!r;};
+  openBtn.addEventListener('click',()=>{modal.hidden=false;modal.setAttribute('aria-hidden','false');resize();update();});
+  document.addEventListener('click',e=>{if(e.target.closest('[data-ltg-close-s2]')||e.target===modal){modal.hidden=true;modal.setAttribute('aria-hidden','true');}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden){modal.hidden=true;modal.setAttribute('aria-hidden','true');}});
+  if(browseBtn&&fileInput)browseBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();fileInput.click();});
+  if(fileInput)fileInput.addEventListener('change',()=>addFiles(fileInput.files));
+  if(dropzone&&fileInput){dropzone.addEventListener('click',e=>{if(!e.target.closest('#s2-ltg-browse-btn'))fileInput.click();});dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('drag-over');});dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('drag-over'));dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('drag-over');addFiles(e.dataTransfer?.files||[]);});}
+  if(remarks)remarks.addEventListener('input',()=>{resize();update();});
+  if(requested)requested.addEventListener('input',update);
+  form.addEventListener('submit',()=>{syncFiles();if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Processing...';}});
+})();
+</script>
+
+{% endblock %}
+
+

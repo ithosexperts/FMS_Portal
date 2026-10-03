@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% block title %}Metadata Explorer · {{ app_name }}{% endblock %}
+{% block page_title %}Metadata Explorer{% endblock %}
+{% block header_actions %}
+{% if task_id %}
+<a class="btn btn-sm" href="{{ routes.dashboard_route() }}">&larr; Dashboard</a>
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+<a class="btn btn-sm" href="{{ routes.developer_form_preview_route() }}?task_id={{ task_id }}">Form Preview</a>
+{% endif %}
+<a class="btn btn-sm" href="{{ routes.developer_hub_route() }}">&larr; Developer Hub</a>
+{% endblock %}
+
+{% block content %}
+<form class="filter-bar" method="get" action="{{ routes.developer_metadata_route() }}">
+  {% if task_id %}<input type="hidden" name="task_id" value="{{ task_id }}">{% endif %}
+  <div class="field field-search">
+    <label>Application</label>
+    <select name="app_id" onchange="this.form.submit()">
+      <option value="">Select an application...</option>
+      {% for fms in fms_options %}
+      <option value="{{ fms.app_id }}" {{ 'selected' if app_id == fms.app_id|string }}>{{ fms.fms_name }} ({{ fms.fms_type }})</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+{% if selected %}
+<section class="card">
+  <h3 class="card__title">{{ selected.fms_name }}</h3>
+  <div class="question-grid">
+    <div class="question"><label>APP_ID</label><div class="value">{{ selected.app_id }}</div></div>
+    <div class="question"><label>FMS Type</label><div class="value">{{ selected.fms_type }}</div></div>
+    <div class="question"><label>Table</label><div class="value">{{ selected.table_name }}</div></div>
+    <div class="question"><label>Primary Key</label><div class="value">{{ primary_key }}</div></div>
+  </div>
+</section>
+
+<section class="card">
+  <h3 class="card__title">Table Columns ({{ selected.table_name }})</h3>
+  <p style="margin-top:0; margin-bottom:14px; color:var(--text-secondary); font-size:13px;">
+    This metadata table is the single source of truth for Task Details, Application Form, and Stage Form rendering.
+  </p>
+
+  <!-- DUMMY-PROOF DOCUMENTATION CHEAT SHEET -->
+  <div style="background: var(--color-info-bg); border-left: 4px solid var(--color-info); padding: 12px 16px; margin-bottom: 20px; border-radius: var(--radius-sm); font-size: 13px;">
+    <details>
+      <summary style="font-weight: 700; color: var(--color-info); cursor: pointer;">📘 Click here for Dummy-Proof Setup Guide (Dropdowns & Visibility Rules)</summary>
+      <div style="margin-top: 12px; color: var(--text-primary); line-height: 1.6;">
+        <strong style="color: var(--color-primary-dark);">1. DEPENDENT DROPDOWN (Example: Show Description based on Item Code)</strong><br>
+        Open options for the Child Field (e.g., <code>I_Dscription</code>) to filter its values:<br>
+        &bull; <strong>Table Name:</strong> <code>Z_SalesOrder</code> <em>(Master table with the list)</em><br>
+        &bull; <strong>Column Name:</strong> <code>I_Dscription</code> <em>(What to show in the dropdown options)</em><br>
+        &bull; <strong>Depends On Field:</strong> <code>I_ItemCode</code> <em>(Form field to listen to for changes)</em><br>
+        &bull; <strong>Target Filter Col:</strong> <code>I_ItemCode</code> <em>(Column in Master table to match against)</em><br>
+        <br>
+        <strong style="color: var(--color-primary-dark);">2. VISIBILITY RULES (Example: Show "Cheque Number" only if Payment is "Cheque")</strong><br>
+        Open options for the Field you want to Hide/Show (e.g., <code>I_ChequeNumber</code>):<br>
+        &bull; Check <strong>Apply Visibility Rules</strong> (Do not tick 'Hidden By Default')<br>
+        &bull; <strong>Target Column:</strong> <code>I_PaymentMode</code> <em>(Field to watch)</em><br>
+        &bull; <strong>Condition:</strong> <code>Equals</code><br>
+        &bull; <strong>Value:</strong> <code>Cheque</code>
+      </div>
+    </details>
+  </div>
+  
+  <form method="post" action="/developer/metadata/save-settings">
+    <input type="hidden" name="table_name" value="{{ selected.table_name }}">
+    {% if has_form_settings_access %}
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+      <div style="font-size:13px; color:var(--text-secondary);">Drag rows to reorder the form. Reset restores the order currently loaded on the page.</div>
+      <button type="button" class="btn btn-sm" id="resetColumnOrderBtn">Reset Order</button>
+    </div>
+    {% endif %}
+    
+    <div class="table-wrapper">
+      <table class="data-table" id="metadata-settings-table">
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th>Data Type</th>
+            <th>Nullable</th>
+            {% if has_form_settings_access %}
+            <th>Publish Name</th>
+            <th>Input Box Type</th>
+            <th>Actions</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody id="metadata-settings-body">
+          {% for col in columns %}
+          <tr class="metadata-setting-row" data-column-name="{{ col.name }}" draggable="true">
+            <td>
+              <code>{{ col.name }}</code>
+              <input type="hidden" name="display_order_{{ col.name }}" value="{{ col.display_order or loop.index }}" class="display-order-input">
+            </td>
+            <td>{{ col.data_type }}</td>
+            <td>{{ 'Yes' if col.nullable else 'No' }}</td>
+            
+            {% if has_form_settings_access %}
+            <td>
+              <input type="text" name="publish_name_{{ col.name }}" value="{{ col.publish_name or '' }}" placeholder="Default Name..." style="padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); width: 140px; background: var(--bg-surface); color: var(--text-primary);" />
+            </td>
+            <td>
+              <select name="input_type_{{ col.name }}" id="type_{{ col.name }}" style="padding: 4px; border-radius: 4px;" onchange="handleTypeChange('{{ col.name }}')">
+                <option value="text" {{ 'selected' if col.input_type == 'text' else '' }}>Text</option>
+                <option value="textarea" {{ 'selected' if col.input_type == 'textarea' else '' }}>Textarea</option>
+                <option value="number" {{ 'selected' if col.input_type == 'number' else '' }}>Number</option>
+                <option value="date" {{ 'selected' if col.input_type == 'date' else '' }}>Date</option>
+                <option value="datetime-local" {{ 'selected' if col.input_type == 'datetime-local' else '' }}>DateTime</option>
+                <option value="checkbox" {{ 'selected' if col.input_type == 'checkbox' else '' }}>Checkbox</option>
+                <option value="file" {{ 'selected' if col.input_type == 'file' else '' }}>File</option>
+                <option value="dropdown" {{ 'selected' if col.input_type == 'dropdown' else '' }}>Dropdown (Select)</option>
+                <option value="url" {{ 'selected' if col.input_type == 'url' else '' }}>URL</option>
+                <option value="custom" {{ 'selected' if col.input_type == 'custom' else '' }}>Custom (Code)</option>
+              </select>
+            </td>
+            <td>
+              <button type="button" class="btn btn-sm" onclick="document.getElementById('form-settings-{{ loop.index }}').toggleAttribute('hidden')">⚙️ Options</button>
+            </td>
+            {% endif %}
+          </tr>
+          
+          {% if has_form_settings_access %}
+          <!-- Hidden Details Row -->
+          <tr id="form-settings-{{ loop.index }}" class="metadata-setting-details" hidden style="background: var(--color-primary-light);">
+            <td colspan="6" style="padding: 16px;">
+              <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+                
+                <div class="field" style="flex-direction: row; align-items: center; gap: 15px;">
+                  <label style="margin:0; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="radio" name="access_{{ col.name }}" value="editable" {{ 'checked' if col.is_editable else '' }}> Editable
+                  </label>
+                  <label style="margin:0; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="radio" name="access_{{ col.name }}" value="readonly" {{ 'checked' if col.is_readonly else '' }}> Read Only
+                  </label>
+                </div>
+                
+                <div class="field" style="flex-direction: row; align-items: center; gap: 15px; border-left: 2px solid var(--border-color); padding-left: 15px;">
+                  <label style="margin:0; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:700; color:var(--color-danger);">
+                    <input type="checkbox" name="is_mandatory_{{ col.name }}" value="1" {{ 'checked' if col.is_mandatory else '' }}> Mandatory (*)
+                  </label>
+                  <label style="margin:0; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:700;">
+                    <input type="checkbox" name="is_hidden_{{ col.name }}" value="1" {{ 'checked' if col.is_hidden else '' }}> Hidden by Default 👁️
+                  </label>
+                  <label style="margin:0; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:700; color:var(--color-primary-dark);">
+                    <input type="checkbox" name="apply_filter_{{ col.name }}" value="1" {{ 'checked' if col.apply_filter else '' }}> Apply as Dashboard Filter
+                  </label>
+                </div>
+
+                <div id="div_rows_{{ col.name }}" class="field" style="display:flex;"{% if col.input_type != 'textarea' %} hidden{% endif %}>
+                  <label>Textarea Rows</label>
+                  <select name="text_rows_{{ col.name }}" style="padding: 6px;">
+                    <option value="2" {{ 'selected' if col.text_rows|string == '2' else '' }}>2 Rows</option>
+                    <option value="4" {{ 'selected' if col.text_rows|string == '4' else '' }}>4 Rows</option>
+                    <option value="6" {{ 'selected' if col.text_rows|string == '6' else '' }}>6 Rows</option>
+                    <option value="8" {{ 'selected' if col.text_rows|string == '8' else '' }}>8 Rows</option>
+                  </select>
+                </div>
+
+                <div id="div_dropmode_{{ col.name }}" class="field" style="display:flex;"{% if col.input_type != 'dropdown' %} hidden{% endif %}>
+                  <label>Dropdown Source</label>
+                  <select name="select_mode_{{ col.name }}" id="mode_{{ col.name }}" onchange="handleDropMode('{{ col.name }}')" style="padding: 6px;">
+                    <option value="">Select mode...</option>
+                    <option value="list" {{ 'selected' if col.select_mode == 'list' else '' }}>Fixed List</option>
+                    <option value="table" {{ 'selected' if col.select_mode == 'table' else '' }}>Database Table</option>
+                  </select>
+                </div>
+
+                <div id="div_listval_{{ col.name }}" class="field" style="display:flex;"{% if not (col.select_mode == 'list' and col.input_type == 'dropdown') %} hidden{% endif %}>
+                  <label>Values (Comma separated)</label>
+                  <input type="text" name="select_list_values_{{ col.name }}" placeholder="Apple, Banana, Mango" value="{{ col.select_list_values }}">
+                </div>
+
+                <!-- Database Dropdown settings -->
+                <div id="div_tableval_{{ col.name }}" style="display:flex; flex-wrap:wrap; gap: 10px;"{% if not (col.select_mode == 'table' and col.input_type == 'dropdown') %} hidden{% endif %}>
+                  <div class="field">
+                    <label>Table Name (Type to search)</label>
+                    <input type="text" name="select_table_{{ col.name }}" list="tables_list_{{ col.name }}" placeholder="e.g. TM_Customers" value="{{ col.select_table }}" onblur="fetchColumnsForTable('{{ col.name }}', this.value)" style="padding: 6px;">
+                    <datalist id="tables_list_{{ col.name }}">
+                        {% for tbl in all_tables %}
+                        <option value="{{ tbl }}"></option>
+                        {% endfor %}
+                    </datalist>
+                  </div>
+                  <div class="field">
+                    <label>Column Name (To Display)</label>
+                    <select name="select_column_{{ col.name }}" id="sel_col_{{ col.name }}" data-saved="{{ col.select_column }}" style="padding: 6px;">
+                        <option value="">Type table first...</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Depends On Field (From Form)</label>
+                    <select name="dd_depends_on_{{ col.name }}" style="padding: 6px;">
+                        <option value="">-- None --</option>
+                        {% for c in columns %}
+                        <option value="{{ c.name }}" {{ 'selected' if col.dd_depends_on == c.name }}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Target Filter Col (From DB Table)</label>
+                    <select name="dd_filter_column_{{ col.name }}" id="fil_col_{{ col.name }}" data-saved="{{ col.dd_filter_column }}" style="padding: 6px;">
+                        <option value="">Type table first...</option>
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+              
+              <!-- Conditional Visibility Rules Checkbox -->
+              <div class="field" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 10px; width: 100%;">
+                  <label style="color:var(--color-primary); font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                      <input type="checkbox" id="enable_vis_{{ col.name }}" {{ 'checked' if col.show_if_column else '' }} onchange="toggleVisibilityRules('{{ col.name }}')">
+                      Apply Visibility Rules (Conditional UI)
+                  </label>
+                  
+                  <!-- This section only shows if the checkbox above is ticked -->
+                  <div id="vis_rules_container_{{ col.name }}" style="display:flex; gap: 10px; align-items: center; margin-top:10px; flex-wrap:wrap;"{% if not col.show_if_column %} hidden{% endif %}>
+                      <span style="font-size:12px;">Show this field ONLY IF</span>
+                      <select name="show_if_column_{{ col.name }}" style="padding: 6px; width:200px; border: 1px solid var(--border-color); border-radius: 4px;">
+                          <option value="">-- Select Target Column --</option>
+                          {% for c in columns %}
+                          <option value="{{ c.name }}" {{ 'selected' if col.show_if_column == c.name }}>{{ c.name }}</option>
+                          {% endfor %}
+                      </select>
+                      <select name="show_if_operator_{{ col.name }}" onchange="handleOperatorChange(this, '{{ col.name }}')" style="padding: 6px; border: 1px solid var(--border-color); border-radius: 4px;">
+                          <option value="">-- Condition --</option>
+                          <option value="equals" {{ 'selected' if col.show_if_operator == 'equals' }}>Equals</option>
+                          <option value="not_equals" {{ 'selected' if col.show_if_operator == 'not_equals' }}>Not Equals</option>
+                          <option value="starts_with" {{ 'selected' if col.show_if_operator == 'starts_with' }}>Starts With</option>
+                          <option value="contains" {{ 'selected' if col.show_if_operator == 'contains' }}>Contains</option>
+                          <option value="greater_than" {{ 'selected' if col.show_if_operator == 'greater_than' }}>Is More Than (>)</option>
+                          <option value="less_than" {{ 'selected' if col.show_if_operator == 'less_than' }}>Is Less Than (<)</option>
+                          <option value="is_empty" {{ 'selected' if col.show_if_operator == 'is_empty' }}>Is Empty / Null</option>
+                          <option value="is_not_empty" {{ 'selected' if col.show_if_operator == 'is_not_empty' }}>Is Not Empty / Not Null</option>
+                      </select>
+                      <input type="text" name="show_if_value_{{ col.name }}" id="show_val_{{ col.name }}" placeholder="Value (e.g. Cheque)" value="{{ col.show_if_value }}" style="padding: 6px; width:180px; border: 1px solid var(--border-color); border-radius: 4px;">
+                  </div>
+              </div>
+
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if has_form_settings_access %}
+    <div style="margin-top: 16px; text-align: right;">
+      <button type="submit" class="btn btn-primary">Save Input Settings</button>
+    </div>
+    {% endif %}
+  </form>
+</section>
+
+{% if has_form_settings_access %}
+<script>
+  const metadataSettingsBody = document.getElementById('metadata-settings-body');
+  const initialColumnOrder = Array.from(metadataSettingsBody.querySelectorAll('tr.metadata-setting-row'))
+    .map(row => row.dataset.columnName);
+  let draggedColumnRow = null;
+
+  function handleTypeChange(colName) {
+    const val = document.getElementById('type_' + colName).value;
+    document.getElementById('div_rows_' + colName).style.display = (val === 'textarea') ? 'flex' : 'none';
+    document.getElementById('div_dropmode_' + colName).style.display = (val === 'dropdown') ? 'flex' : 'none';
+    handleDropMode(colName);
+  }
+
+  function handleDropMode(colName) {
+    const val = document.getElementById('mode_' + colName).value;
+    const typeVal = document.getElementById('type_' + colName).value;
+    const isDrop = (typeVal === 'dropdown');
+    
+    document.getElementById('div_listval_' + colName).style.display = (isDrop && val === 'list') ? 'flex' : 'none';
+    document.getElementById('div_tableval_' + colName).style.display = (isDrop && val === 'table') ? 'flex' : 'none';
+  }
+
+  function updateDisplayOrderInputs() {
+    const rows = Array.from(metadataSettingsBody.querySelectorAll('tr.metadata-setting-row'));
+    rows.forEach((row, index) => {
+      const input = row.querySelector('.display-order-input');
+      if (input) input.value = String(index + 1);
+    });
+  }
+
+  function getDetailRow(mainRow) {
+    const detailsRow = mainRow.nextElementSibling;
+    return detailsRow && detailsRow.classList.contains('metadata-setting-details') ? detailsRow : null;
+  }
+
+  function moveRowPair(beforeRow, activeRow) {
+    const activeDetails = getDetailRow(activeRow);
+    const targetDetails = getDetailRow(beforeRow);
+    metadataSettingsBody.insertBefore(activeRow, beforeRow);
+    if (activeDetails) {
+      metadataSettingsBody.insertBefore(activeDetails, targetDetails || beforeRow.nextSibling);
+    }
+    updateDisplayOrderInputs();
+  }
+
+  function resetColumnOrder() {
+    const rowMap = new Map(
+      Array.from(metadataSettingsBody.querySelectorAll('tr.metadata-setting-row')).map(row => [row.dataset.columnName, row])
+    );
+    const detailMap = new Map(
+      Array.from(metadataSettingsBody.querySelectorAll('tr.metadata-setting-details')).map(row => [row.previousElementSibling?.dataset.columnName, row])
+    );
+
+    initialColumnOrder.forEach((columnName) => {
+      const row = rowMap.get(columnName);
+      const details = detailMap.get(columnName);
+      if (row) {
+        metadataSettingsBody.appendChild(row);
+        if (details) metadataSettingsBody.appendChild(details);
+      }
+    });
+    updateDisplayOrderInputs();
+  }
+
+  metadataSettingsBody.querySelectorAll('tr.metadata-setting-row').forEach((row) => {
+    row.addEventListener('dragstart', (event) => {
+      draggedColumnRow = row;
+      row.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', row.dataset.columnName);
+    });
+
+    row.addEventListener('dragend', () => {
+      draggedColumnRow = null;
+      row.classList.remove('dragging');
+    });
+
+    row.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    });
+
+    row.addEventListener('drop', (event) => {
+      event.preventDefault();
+      if (!draggedColumnRow || draggedColumnRow === row) return;
+      moveRowPair(row, draggedColumnRow);
+    });
+  });
+
+  document.getElementById('resetColumnOrderBtn')?.addEventListener('click', resetColumnOrder);
+  updateDisplayOrderInputs();
+
+  // Handle Visibility Checkbox Toggle
+  function toggleVisibilityRules(colName) {
+      const cb = document.getElementById('enable_vis_' + colName);
+      const container = document.getElementById('vis_rules_container_' + colName);
+      
+      if(cb.checked) {
+          container.style.display = 'flex';
+      } else {
+          container.style.display = 'none';
+          // Clear inputs so they don't accidentally save hidden logic
+          const selCol = document.querySelector(`select[name="show_if_column_${colName}"]`);
+          const selOp = document.querySelector(`select[name="show_if_operator_${colName}"]`);
+          const valInput = document.querySelector(`input[name="show_if_value_${colName}"]`);
+          if(selCol) selCol.value = '';
+          if(selOp) selOp.value = '';
+          if(valInput) valInput.value = '';
+      }
+  }
+
+  // Handle Value field visibility
+  function handleOperatorChange(selectEl, colName) {
+      const valInput = document.getElementById(`show_val_${colName}`);
+      if(!valInput) return;
+      if(selectEl.value === 'is_empty' || selectEl.value === 'is_not_empty') {
+          valInput.style.display = 'none';
+      } else {
+          valInput.style.display = 'inline-block';
+      }
+  }
+
+  // Fetch table columns dynamically for dropdowns
+  async function fetchColumnsForTable(colName, tableName) {
+      const selCol = document.getElementById('sel_col_' + colName);
+      const filCol = document.getElementById('fil_col_' + colName);
+      
+      // Fix: Guard against "None" string or empty values
+      if(!tableName || tableName.trim() === '' || tableName.trim().toLowerCase() === 'none') {
+          if(selCol) selCol.innerHTML = '<option value="">Type table first...</option>';
+          if(filCol) filCol.innerHTML = '<option value="">Type table first...</option>';
+          return;
+      }
+      
+      try {
+          const res = await fetch(`/developer/metadata/api/columns?table=${tableName}`);
+          const data = await res.json();
+          if(data.status === 'ok' && data.columns.length > 0) {
+              let opts = '<option value="">-- Select Column --</option>';
+              data.columns.forEach(c => {
+                  opts += `<option value="${c}">${c}</option>`;
+              });
+              if(selCol) selCol.innerHTML = opts;
+              if(filCol) filCol.innerHTML = opts;
+              
+              // Apply saved values if they exist
+              if(selCol && selCol.dataset.saved) selCol.value = selCol.dataset.saved;
+              if(filCol && filCol.dataset.saved) filCol.value = filCol.dataset.saved;
+          } else {
+              if(selCol) selCol.innerHTML = '<option value="">No columns found</option>';
+              if(filCol) filCol.innerHTML = '<option value="">No columns found</option>';
+          }
+      } catch(e) {
+          console.error("Error fetching columns", e);
+      }
+  }
+
+  // Run on page load
+  document.addEventListener("DOMContentLoaded", () => {
+      // 1. Fetch columns for any pre-filled table names
+      document.querySelectorAll('input[name^="select_table_"]').forEach(input => {
+          const val = input.value;
+          // Guard to avoid fetching if value is physically "None"
+          if(val && val.trim() !== '' && val.trim().toLowerCase() !== 'none') {
+              const colName = input.name.replace('select_table_', '');
+              fetchColumnsForTable(colName, val);
+          }
+      });
+      // 2. Hide value box if operator is empty/not_empty
+      document.querySelectorAll('select[name^="show_if_operator_"]').forEach(sel => {
+          const colName = sel.name.replace('show_if_operator_', '');
+          handleOperatorChange(sel, colName);
+      });
+  });
+
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+<aside class="sidebar">
+  <div class="sidebar__logo-wrap">
+    <div class="sidebar__logo-panel">
+      <img src="/static/logo.png" alt="HoseXperts" class="sidebar__logo-img" />
+    </div>
+  </div>
+  <button class="sidebar__brand" type="button" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+    <span class="material-icon">&#9881;</span>
+    <span class="sidebar__brand-text sidebar__brand-text--single">ONE X FMS PORTAL</span>
+  </button>
+  <ul class="sidebar__nav">
+    <li><a href="{{ routes.dashboard_route() }}" class="{{ 'active' if request.url.path == routes.dashboard_route() }}">
+      <span class="icon">&#128202;</span><span class="sidebar__label">Dashboard</span></a></li>
+    <li><a href="{{ routes.developer_hub_route() }}" class="{{ 'active' if request.url.path.startswith(routes.developer_hub_route()) }}">
+      <span class="icon">&#128187;</span><span class="sidebar__label">Developer Hub</span></a></li>
+    <li><a href="/settings" class="{{ 'active' if request.url.path == '/settings' }}">
+      <span class="icon">&#9881;&#65039;</span><span class="sidebar__label">Settings</span></a></li>
+  </ul>
+</aside>
