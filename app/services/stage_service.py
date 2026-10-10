@@ -25,15 +25,30 @@ class StageNotFoundError(Exception):
 async def get_stage_context(task_id: str, stage_no: str, table_name: str | None = None, app_id: str | None = None, primary_key: str | None = None) -> dict[str, Any]:
     context = await task_service.get_task_context(task_id, table_name=table_name, app_id=app_id, primary_key=primary_key)
 
+    def _stage_no_key(value: Any) -> str:
+        text = str(value or "").strip().upper()
+        if text.startswith("STAGE"):
+            text = text[5:].strip()
+        if text.startswith("S") and text[1:].isdigit():
+            return text[1:]
+        return text
+
+    requested_stage_key = _stage_no_key(stage_no)
     stage = next(
-        (s for s in context["stage_configs"] if str(s.get("STAGE_NO")) == str(stage_no)),
+        (
+            s for s in context["stage_configs"]
+            if _stage_no_key(s.get("STAGE_NO")) == requested_stage_key
+        ),
         None,
     )
     if stage is None:
         raise StageNotFoundError(f"Stage '{stage_no}' is not defined for this application.")
 
     current_stage = context["current_stage"]
-    is_current = bool(current_stage and str(current_stage.get("STAGE_NO")) == str(stage_no))
+    is_current = bool(
+        current_stage
+        and _stage_no_key(current_stage.get("STAGE_NO")) == requested_stage_key
+    )
     editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, {"task_id": task_id, "stage_no": stage_no})
 
     # Fixed: Rely on get_metadata to ensure TM_Form_Settings are merged correctly.
@@ -43,15 +58,21 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
     try:
         table_columns = await get_metadata(context["fms"]["table_name"])
     except Exception as metadata_exc:
+        # Recreated SQL tables can temporarily expose incomplete/unsupported
+        # metadata even though the actual row is readable.  Custom Pack-to-
+        # Dispatch stages are row-driven and do not need metadata to render.
+        # Fall back to the columns present on the row instead of turning a
+        # successful task lookup into the generic 500 page.
         stage_upper = str(stage_no).strip().upper()
-        if stage_upper in {"S3", "S4", "S5", "S6"}:
+        if stage_upper in {"S1", "1", "S2", "2", "S3", "3", "S4", "4", "S5", "5", "S6", "6"}:
             print(
                 f"[{stage_upper} FORM LOAD] Metadata API failed; continuing with "
                 "row-derived fields. "
                 f"table='{context['fms'].get('table_name')}' error={metadata_exc}"
             )
             row_for_fallback = context.get("row") or {}
-            prefix = stage_upper + "_"
+            stage_num = stage_upper[1:] if stage_upper.startswith("S") and stage_upper[1:].isdigit() else stage_upper
+            prefix = "S" + stage_num + "_"
             table_columns = [
                 {"name": str(key), "input_type": "text", "nullable": True}
                 for key in row_for_fallback.keys()
@@ -264,7 +285,7 @@ async def run_linked_stage_procedure(task_id: str, stage_no: str, payload: dict[
 
     # Linked SPs like SP_FMS_Pack2Dispatch_S2 expect the sales-order entry value
     # (I_DocEntry / DocEntry) to be passed in, not the document number.
-    base_payload.setdefault("RowID", row_id_value)
+    base_payload["RowID"] = row_id_value
     base_payload.setdefault("I_DocEntry", sales_order_entry)
     base_payload.setdefault("DocEntry", sales_order_entry)
     base_payload.setdefault("DocEntrySO", sales_order_entry)
@@ -303,7 +324,10 @@ async def run_named_stage_procedure(
         "linked_stored_procedure": proc_name,
     }
     proc_data = dict(payload or {})
-    proc_data.setdefault("RowID", physical_row_id)
+    # RowID is authoritative from the physical row loaded for this task.
+    # Do not allow callers to accidentally pass a dashboard/task id that is
+    # different from the table's real primary key.
+    proc_data["RowID"] = physical_row_id
     request_payload["data"] = proc_data
 
     print(
@@ -325,10 +349,17 @@ async def run_named_stage_procedure(
         f"procedure='{proc_name}' stage='{stage_no}' task_id='{task_id}' "
         f"physical_row_id='{physical_row_id}' result={result!r}"
     )
-    if isinstance(result, dict) and (str(result.get("status") or "").strip().casefold() in {"error", "failed", "failure"} or result.get("success") is False):
+    if isinstance(result, dict) and (
+        str(result.get("status") or "").strip().casefold() in {"error", "failed", "failure"}
+        or result.get("success") is False
+    ):
         print(
             "[SP EXECUTION VERIFY] PROCEDURE RESPONSE INDICATES FAILURE: "
             f"procedure='{proc_name}' result={result!r}"
+        )
+        detail = result.get("error") or result.get("message") or result.get("detail") or result
+        raise RuntimeError(
+            f"Stored procedure '{proc_name}' failed for RowID={physical_row_id}: {detail}"
         )
     return result
 

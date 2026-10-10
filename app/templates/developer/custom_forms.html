@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Custom Forms · {{ app_name }}{% endblock %}
+{% block page_title %}Custom Forms{% endblock %}
+
+{% block content %}
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+  <a class="btn btn-sm" href="{{ routes.developer_hub_route() }}">&larr; Developer Hub</a>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <h3 class="card__title">Custom Form Links</h3>
+  <p style="color:var(--text-secondary); font-size:13px; margin:0 0 14px;">
+    Select an application. Each Stage is shown <strong>once</strong>, even when FMS_Config has multiple condition rows for the same APP_ID + STAGE_NO.
+    Task ID <strong>1</strong> is used only for preview/open/QR. The saved Stage Form Link remains dynamic and contains <code>{TASK_ID}</code>.
+  </p>
+
+  <form class="filter-bar" method="get" action="{{ routes.developer_custom_forms_route() }}" style="align-items:end;">
+    <div class="field field-search" style="min-width:340px;">
+      <label>Application</label>
+      <select name="app_id" required onchange="this.form.submit()">
+        <option value="">Select application...</option>
+        {% for app in fms_options %}
+        <option value="{{ app.app_id }}" {% if app_id|string == app.app_id|string %}selected{% endif %}>
+          {{ app.fms_name }}{% if app.app_id %} ({{ app.app_id }}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="font-size:13px; color:var(--text-secondary); padding-bottom:9px;">
+      Preview Task ID: <strong>1</strong> (fixed sample only)
+    </div>
+  </form>
+</div>
+
+{% if error %}
+<div class="card" style="margin-bottom:16px; border-left:4px solid var(--danger, #d33);">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+{% if selected %}
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+    <div>
+      <h3 class="card__title" style="margin-bottom:4px;">{{ selected.fms_name }}</h3>
+      <div style="color:var(--text-secondary); font-size:12px;">
+        APP_ID: <code>{{ selected.app_id }}</code>
+        &nbsp; · &nbsp; Table: <code>{{ selected.table_name }}</code>
+      </div>
+    </div>
+    <span class="badge badge-blue">Sample Task {{ sample_task_id }}</span>
+  </div>
+</div>
+
+{% if custom_forms_list %}
+<section class="card">
+  <h3 class="card__title">Application Stages</h3>
+  <p style="color:var(--text-secondary); font-size:12px; margin-top:0;">
+    The Form URL is saved to <code>FMS_Config.Stage_Form_Link</code> for all matching rows of this APP_ID + Stage No.
+    The saved URL keeps <code>{TASK_ID}</code> dynamic; Task 1 is only a preview.
+  </p>
+
+  {% for item in custom_forms_list %}
+  <div class="route-row" style="align-items:flex-start; margin-bottom:10px; gap:16px; padding:12px; border:1px solid var(--border-color, #ddd); border-radius:10px;">
+    <div style="min-width:0; flex:1 1 42%;">
+      <strong>{{ item.name }}</strong>
+      {% if item.duplicate_count and item.duplicate_count > 1 %}
+      <span class="badge" style="margin-left:8px;">{{ item.duplicate_count }} config rows</span>
+      {% endif %}
+      <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+        Template: <code>{{ item.template }}</code>
+      </div>
+      <div style="font-size:12px; margin-top:6px; word-break:break-all;">
+        Preview URL (Task 1): <code>{{ item.sample_url }}</code>
+      </div>
+      <div style="font-size:12px; margin-top:4px; word-break:break-all; color:var(--text-secondary);">
+        Saved dynamic URL: <code>{{ item.dynamic_url }}</code>
+      </div>
+      {% if item.saved_link %}
+      <div style="font-size:12px; margin-top:4px;">
+        FMS_Config current link: <code>{{ item.saved_link }}</code>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="route-row__actions" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:flex-end; min-width:220px;">
+      <button class="btn btn-sm btn-primary js-copy-save" type="button"
+              data-app-id="{{ item.app_id }}"
+              data-stage-no="{{ item.stage_no }}"
+              data-sample-url="{{ item.sample_url }}"
+              data-dynamic-url="{{ item.dynamic_url }}">
+        Copy &amp; Save
+      </button>
+      <a class="btn btn-sm" href="{{ item.sample_url }}" target="_blank" rel="noopener">Open Task 1</a>
+      <a class="btn btn-sm" href="/developer/qr?data={{ item.sample_route|default('')|urlencode }}" target="_blank" rel="noopener">QR</a>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% else %}
+<div class="card">
+  <div class="empty-state">No custom stage form is registered for this application yet.</div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state">Select an application to see its custom forms.</div>
+</div>
+{% endif %}
+
+<script>
+async function copyAndSave(button) {
+  const row = button.closest('.route-row');
+  const appId = button.dataset.appId || '';
+  const stageNo = button.dataset.stageNo || '';
+  const dynamicUrl = button.dataset.dynamicUrl || '';
+
+  if (!appId || !stageNo) {
+    alert('Application or Stage is missing.');
+    return;
+  }
+
+  button.disabled = true;
+  const oldText = button.textContent;
+  button.textContent = 'Saving...';
+
+  try {
+    const response = await fetch('/developer/custom-forms/save-stage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        app_id: appId,
+        stage_no: stageNo,
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.message || result.error || 'Unable to save FMS_Config.');
+    }
+
+    await navigator.clipboard.writeText(dynamicUrl);
+    button.textContent = 'Copied & Saved';
+    button.title = `Saved dynamic link: ${result.stage_form_link || dynamicUrl}`;
+    setTimeout(() => { button.textContent = oldText; }, 1800);
+  } catch (err) {
+    alert(err.message || 'Unable to save/copy.');
+    button.textContent = oldText;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.querySelectorAll('.js-copy-save').forEach(btn => {
+  btn.addEventListener('click', () => copyAndSave(btn));
+});
+</script>
+{% endblock %}

@@ -20,8 +20,8 @@ _locator_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _locator_locks: dict[str, asyncio.Lock] = {}
 
 
-def _lock(task_id: str) -> asyncio.Lock:
-    return _locator_locks.setdefault(task_id, asyncio.Lock())
+def _lock(locator_key: str) -> asyncio.Lock:
+    return _locator_locks.setdefault(locator_key, asyncio.Lock())
 
 
 async def _locate_task(
@@ -39,6 +39,7 @@ async def _locate_task(
     normalized_id = str(task_id).strip()
     direct_table = str(table_name or "").strip()
     direct_app = str(app_id or "").strip()
+    locator_key = f"{direct_app}::{normalized_id.lower()}" if direct_app else normalized_id.lower()
 
     if direct_table:
         pk = str(primary_key or "").strip() or await metadata_service.resolve_primary_key(direct_table)
@@ -57,7 +58,7 @@ async def _locate_task(
         fms = metadata_service._group_by_app(matching)[0]
         return fms, matching, row
 
-    cached = _locator_cache.get(normalized_id.lower())
+    cached = _locator_cache.get(locator_key)
     if cached and time.monotonic() - cached[0] < _LOCATOR_TTL:
         item = cached[1]
         fms = item["fms"]
@@ -67,8 +68,8 @@ async def _locate_task(
         if row is not None:
             return fms, item["stage_configs"], row
 
-    async with _lock(normalized_id.lower()):
-        cached = _locator_cache.get(normalized_id.lower())
+    async with _lock(locator_key):
+        cached = _locator_cache.get(locator_key)
         if cached and time.monotonic() - cached[0] < _LOCATOR_TTL:
             item = cached[1]
             fms = item["fms"]
@@ -78,7 +79,7 @@ async def _locate_task(
             if row is not None:
                 return fms, item["stage_configs"], row
 
-        config_rows = await metadata_service.get_fms_config()
+        config_rows = await metadata_service.get_fms_config(app_id=direct_app) if direct_app else await metadata_service.get_fms_config()
         fms_options = metadata_service._group_by_app(config_rows)
         config_by_app: dict[str, list[dict[str, Any]]] = {}
         for row in config_rows:
@@ -102,7 +103,7 @@ async def _locate_task(
         for result in results:
             if result:
                 fms, stage_configs, row = result
-                _locator_cache[normalized_id.lower()] = (time.monotonic(), {"fms": fms, "stage_configs": stage_configs})
+                _locator_cache[locator_key] = (time.monotonic(), {"fms": fms, "stage_configs": stage_configs})
                 return fms, stage_configs, row
 
     raise TaskNotFoundError(f"Task '{task_id}' was not found in any registered application table.")

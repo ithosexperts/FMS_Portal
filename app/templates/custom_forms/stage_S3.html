@@ -88,6 +88,7 @@
   </div>
 
   <form method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data" id="s3-form">
+    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
     <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:18px;">
       <div class="question">
         <label>{{ custom_stage3.del_doc_no.label }} <span style="color:red">*</span></label>

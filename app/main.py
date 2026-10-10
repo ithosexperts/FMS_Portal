@@ -89,7 +89,15 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     HTML fallback is kept in case the error template itself cannot be rendered.
     """
     logging.exception("Unhandled error on %s", request.url)
-    message = "Something went wrong while loading this page."
+    # During local development show the real exception in the form modal/page
+    # instead of hiding it behind a generic 500. Production keeps the generic
+    # message so internal details are not exposed to users.
+    environment = str(getattr(settings, "environment", "")).strip().lower()
+    message = (
+        f"{type(exc).__name__}: {exc}"
+        if environment not in {"production", "prod", "live"}
+        else "Something went wrong while loading this page."
+    )
     try:
         return templates.TemplateResponse(
             request,

@@ -92,6 +92,7 @@
   </div>
 
   <form method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
+    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
     <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:18px;">
       <div class="question">
         <label>{{ custom_stage2.vehicle_origin.label }} <span style="color:red">*</span></label>

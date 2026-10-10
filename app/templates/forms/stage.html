@@ -116,6 +116,7 @@
 
   <!-- Main Stage Form -->
   <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" class="question-grid" data-reorderable="true" enctype="multipart/form-data">
+    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
     
     <!-- Hidden inputs for extracted read-only fields so they don't lose value on Save/Submit -->
     {% for q in top_fixed_fields %}

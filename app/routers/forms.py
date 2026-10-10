@@ -1314,6 +1314,7 @@ async def stage_form_page(
     request: Request,
     task_id: str,
     stage_no: str,
+    app_id: str = "",
     saved: bool = False,
     embedded: bool = False,
     pick_id: str = "",
@@ -1355,7 +1356,9 @@ async def stage_form_page(
         except Exception as exc:
             print(f"Embedded S1 PickID resolution failed for PickID {requested_pick_id}: {exc}")
 
-    stage_context = await stage_service.get_stage_context(task_id, stage_no)
+    stage_context = await stage_service.get_stage_context(
+        task_id, stage_no, app_id=(str(app_id).strip() or None)
+    )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
     
     # Embedded S1 must be resolved BEFORE generic custom-template detection.
@@ -1782,15 +1785,18 @@ async def stage1_weight_save(request: Request, task_id: str, stage_no: str):
     return JSONResponse({"ok": True, "row_id": row_id, "weight": f"{persisted_num:.3f}"})
 
 @router.post("/forms/stage/{task_id}/{stage_no}", response_class=HTMLResponse)
-async def stage_form_submit(request: Request, task_id: str, stage_no: str):
+async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     form_data = await request.form()
+    requested_app_id = str(form_data.get("app_id") or app_id or "").strip()
     action = str(form_data.get("_action", "save") or "save").strip().lower()
     print(
         "[FORM SUBMIT] START: "
         f"task_id={task_id!r} stage={str(stage_no).strip().upper()!r} action={action!r}"
     )
     
-    stage_context = await stage_service.get_stage_context(task_id, stage_no)
+    stage_context = await stage_service.get_stage_context(
+        task_id, stage_no, app_id=(requested_app_id or None)
+    )
     fms_info = stage_context.get("fms", {})
     
     app_id = fms_info.get("app_id", "GENERAL")
@@ -2165,6 +2171,11 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
                 + ", ".join(missing_fields)
             )
 
+    # Track whether SP_FMS_ALTimeStampStatus completed for this submission.
+    # SP_FMS_Pack2Dispatch_RowCycleStatus will run only after every downstream
+    # stage-specific/linked SP for this submission has completed.
+    altimestamp_sp_ran = False
+
     if action in {"submit", "append"}:
         stage_row = stage_context.get("row") or {}
         stage_info = stage_context.get("stage") or {}
@@ -2460,7 +2471,11 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
         # the current task. That ensures all rows in the same submission are
         # timestamped together.
         # ------------------------------------------------------------
-        affected_row_ids = [str(task_id), *[str(r) for r in related_row_ids]]
+        # Use the actual physical primary-key value for the current row.
+        # The dashboard/task id is not guaranteed to be identical after table
+        # recreation or when an API gateway introduces a task wrapper id.
+        physical_current_row_id = stage_service._context_row_id(stage_context, task_id)
+        affected_row_ids = [str(physical_current_row_id), *[str(r) for r in related_row_ids]]
         unique_row_ids = []
         seen_row_ids = set()
         for row_id_for_batch in affected_row_ids:
@@ -2522,7 +2537,7 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
             # ------------------------------------------------------------
             try:
                 sp_result = await stage_service.run_named_stage_procedure(
-                    row_id_for_sp,
+                    task_id,
                     stage_no_for_sp,
                     "SP_FMS_ALTimeStampStatus",
                     proc_payload,
@@ -2543,6 +2558,12 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
                     f"Error={proc_exc}"
                 )
                 raise
+
+        # All SP_FMS_ALTimeStampStatus executions for the current submission
+        # completed successfully. Downstream stage SPs can now run, and the
+        # RowCycleStatus SP will be deferred until ALL of them are finished.
+        if unique_row_ids:
+            altimestamp_sp_ran = True
 
         # Pick/Pack custom Stage-1 detection. This gate intentionally limits
         # the explicit SP_FMS_Pack2Dispatch_S3 chain to the custom Stage-1
@@ -3287,6 +3308,80 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
                             "no active S2 FMS_Config condition matched."
                         )
 
+            # ====================================================================
+            # FINAL ROW-CYCLE STATUS UPDATE
+            #
+            # Whenever SP_FMS_ALTimeStampStatus ran, this procedure MUST be the
+            # final stored procedure for the submission. It is intentionally
+            # placed after every S1/S2/S3/S4/linked-SP branch above.
+            # ====================================================================
+            if altimestamp_sp_ran:
+                print(
+                    "[FINAL ROW CYCLE] Starting SP_FMS_Pack2Dispatch_RowCycleStatus "
+                    "after all stage stored procedures have completed."
+                )
+
+                row_cycle_errors: list[str] = []
+                row_cycle_row_ids: list[str] = []
+                for candidate in [str(task_id), *[str(r) for r in related_row_ids]]:
+                    candidate = str(candidate or "").strip()
+                    if candidate and candidate not in row_cycle_row_ids:
+                        row_cycle_row_ids.append(candidate)
+
+                for row_id_for_cycle in row_cycle_row_ids:
+                    cycle_payload = {
+                        "RowID": row_id_for_cycle,
+                        "AppID": app_id_for_sp,
+                        "StageNo": stage_no_for_sp,
+                    }
+                    print(
+                        "[FINAL ROW CYCLE] Running "
+                        f"RowID='{row_id_for_cycle}', AppID='{app_id_for_sp}', "
+                        f"StageNo='{stage_no_for_sp}'"
+                    )
+                    try:
+                        cycle_result = await stage_service.run_named_stage_procedure(
+                            row_id_for_cycle,
+                            stage_no_for_sp,
+                            "SP_FMS_Pack2Dispatch_RowCycleStatus",
+                            cycle_payload,
+                        )
+                        print(
+                            "[FINAL ROW CYCLE] Completed: "
+                            f"RowID='{row_id_for_cycle}', Result={cycle_result!r}"
+                        )
+                        if isinstance(cycle_result, dict):
+                            status_text = str(
+                                cycle_result.get("status") or ""
+                            ).strip().casefold()
+                            if (
+                                status_text in {"error", "failed", "failure"}
+                                or cycle_result.get("success") is False
+                            ):
+                                row_cycle_errors.append(
+                                    f"RowID {row_id_for_cycle}: "
+                                    f"{cycle_result.get('message') or cycle_result}"
+                                )
+                    except Exception as row_cycle_exc:
+                        row_cycle_errors.append(
+                            f"RowID {row_id_for_cycle}: {row_cycle_exc}"
+                        )
+                        print(
+                            "[FINAL ROW CYCLE] FAILED: "
+                            f"RowID='{row_id_for_cycle}', Error={row_cycle_exc!r}"
+                        )
+
+                if row_cycle_errors:
+                    raise RuntimeError(
+                        "SP_FMS_Pack2Dispatch_RowCycleStatus failed: "
+                        + " | ".join(row_cycle_errors)
+                    )
+
+                print(
+                    "[FINAL ROW CYCLE] COMPLETE: "
+                    "RowCycleStatus was the final SP in the submission flow."
+                )
+
         except Exception as proc_exc:
             print(f"Linked stored procedure run failed for {task_id}/{stage_no}: {proc_exc}")
             raise
@@ -3297,17 +3392,25 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str):
         stage1_custom_service.invalidate_picker_assignment_cache()
 
     if action in {"submit", "append"}:
-        return RedirectResponse(f"{route_builder.stage_form_route(task_id, stage_no)}?saved=1&appended=1", status_code=303)
+        return RedirectResponse(
+            route_builder.stage_form_route(task_id, stage_no, app_id=str(fms_info.get("app_id") or requested_app_id or ""))
+            + "&saved=1&appended=1",
+            status_code=303,
+        )
 
-    return RedirectResponse(f"{route_builder.stage_form_route(task_id, stage_no)}?saved=1", status_code=303)
+    return RedirectResponse(
+        route_builder.stage_form_route(task_id, stage_no, app_id=str(fms_info.get("app_id") or requested_app_id or ""))
+        + "&saved=1",
+        status_code=303,
+    )
 
 
 @router.post("/forms/stage/{task_id}/{stage_no}/clear-responses", response_class=HTMLResponse)
-async def stage_form_clear_responses(request: Request, task_id: str, stage_no: str):
+async def stage_form_clear_responses(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     # Clear & Reset is intentionally available to Guest as well as logged-in roles.
     # The action only clears this stage's editable/runtime data; planned fields remain intact.
 
-    stage_context = await stage_service.get_stage_context(task_id, stage_no)
+    stage_context = await stage_service.get_stage_context(task_id, stage_no, app_id=(str(app_id).strip() or None))
     clear_payload = _build_stage_clear_payload(stage_context, stage_no)
     employee_code = _get_authenticated_employee_code(request)
     _inject_update_audit_fields(clear_payload, stage_context.get("row") or {}, employee_code)
@@ -3381,12 +3484,16 @@ async def stage_form_clear_responses(request: Request, task_id: str, stage_no: s
     if str(stage_no or "").strip().upper() in {"1", "S1"} or str(stage_no or "").strip().upper().startswith("S1"):
         stage1_custom_service.invalidate_picker_assignment_cache()
 
-    return RedirectResponse(f"{route_builder.stage_form_route(task_id, stage_no)}?cleared=1", status_code=303)
+    return RedirectResponse(
+        route_builder.stage_form_route(task_id, stage_no, app_id=str((stage_context.get("fms") or {}).get("app_id") or app_id or ""))
+        + "&cleared=1",
+        status_code=303,
+    )
 
 
 @router.post("/forms/stage/{task_id}/{stage_no}/lead-time-grant")
-async def stage_lead_time_grant_submit(request: Request, task_id: str, stage_no: str):
-    stage_context = await stage_service.get_stage_context(task_id, stage_no)
+async def stage_lead_time_grant_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
+    stage_context = await stage_service.get_stage_context(task_id, stage_no, app_id=(str(app_id).strip() or None))
     if not stage_context.get("editable"):
         return RedirectResponse(
             f"{route_builder.stage_form_route(task_id, stage_no)}?ltg_error=Stage+is+not+editable",

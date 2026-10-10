@@ -300,8 +300,36 @@ def _empty_field(field: str, caption: str, value: Any = None) -> dict[str, Any]:
     return {"field": field, "caption": caption, "value": value}
 
 
+def _actual_field_name(row: dict[str, Any], preferred: str, *aliases: str) -> str:
+    """Return the exact physical column name present in the loaded SQL row.
+
+    The recreated tables have used a few harmless naming variants over time
+    (for example S1_PackingImg1 vs S1_PackImage1).  Rendering a field under the
+    preferred alias is dangerous for file fields because the browser then posts
+    a column name that may not exist.  Prefer an exact match first, then an
+    alias, while preserving the preferred name as a final fallback.
+    """
+    if not isinstance(row, dict):
+        return preferred
+
+    targets = {_norm(value) for value in (preferred, *aliases) if value}
+    # Exact normalized column match.
+    for key in row.keys():
+        if _norm(key) in targets:
+            return str(key)
+
+    # Suffix match handles gateway projections that prefix/quote the column.
+    for key in row.keys():
+        normalized_key = _norm(key)
+        if any(normalized_key.endswith(target) for target in targets if target):
+            return str(key)
+
+    return preferred
+
+
 def _field_from_row(row: dict[str, Any], field: str, caption: str, *aliases: str) -> dict[str, Any]:
-    return _empty_field(field, caption, _value(row, field, *aliases))
+    actual_field = _actual_field_name(row, field, *aliases)
+    return _empty_field(actual_field, caption, _value(row, field, *aliases))
 
 
 async def _load_publish_names(table_name: str) -> dict[str, str]:
@@ -689,7 +717,13 @@ async def build_stage1_custom_context(stage_context: dict[str, Any]) -> dict[str
         "no_packages": _field_from_row(row, "S1_NoOfPackages", _publish_label(publish_names, "S1_NoOfPackages", "No of Packages"), "NoOfPackages"),
         "weight_kgs": _field_from_row(row, "S1_WeightKgs", _publish_label(publish_names, "S1_WeightKgs", "Weight Kgs"), "WeightKg"),
         "remarks_doc": _field_from_row(row, "S1_Remarks", _publish_label(publish_names, "S1_Remarks", "Remarks"), "S1_RemarksDoc"),
-        "pack_image_1": _field_from_row(row, "S1_PackingImg1", _publish_label(publish_names, "S1_PackImage1", "Packing Img1"), "S1_PackImage1", "S1_PackingImage1"),
+        "pack_image_1": _field_from_row(
+            row,
+            "S1_PackImage1",
+            _publish_label(publish_names, "S1_PackImage1", "Packing Img1"),
+            "S1_PackingImg1",
+            "S1_PackingImage1",
+        ),
         "pack_image_2": _field_from_row(row, "S1_PackingImg2", _publish_label(publish_names, "S1_PackImage2", "Packing Img2"), "S1_PackImage2", "S1_PackingImage2"),
     }
 

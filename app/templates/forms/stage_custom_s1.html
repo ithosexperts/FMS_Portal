@@ -219,6 +219,7 @@
 </div>
 
   <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
+    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
     <input type="hidden" id="s1-picker-value" name="S1_Picker" value="{{ custom_stage1.picker.value if custom_stage1.picker else '' }}" />
     <input type="hidden" name="__batch_checkbox_field" value="{{ custom_stage1.checkbox_field }}" />
     <input type="hidden" name="__batch_remarks_field" value="{{ custom_stage1.remarks_row_field }}" />

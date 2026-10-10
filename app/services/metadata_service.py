@@ -91,8 +91,22 @@ def _normalize_fms_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized["BACKUP_EMP_CODE"] = _pick_str(row, "BACKUP_EMP_CODE", "BackupDoer_EC", "backup_ec")
     normalized["PLANNED_COLUMN"] = _pick_str(row, "PLANNED_COLUMN", "planned_column")
     normalized["ACTUAL_COLUMN"] = _pick_str(row, "ACTUAL_COLUMN", "actual_column")
+    normalized["PROCESS_COORDINATOR"] = _pick_str(
+        row, "Process_Corrdinator", "PROCESS_COORDINATOR", "Process Coordinator", "process_coordinator"
+    )
+    normalized["STAGE_FORM_LINK"] = _pick_str(
+        row, "Stage_Form_Link", "STAGE_FORM_LINK", "Stage Form Link", "stage_form_link"
+    )
     normalized["DISPLAY_ORDER"] = _to_int(_pick(row, "DISPLAY_ORDER", "display_order"), default=0)
     return normalized
+
+
+def invalidate_fms_config_cache(app_id: str | None = None) -> None:
+    """Invalidate cached FMS_Config rows after a developer configuration save."""
+    target = str(app_id or "")
+    keys = [key for key in _cache if key and key[0] == "fms_config" and (not target or key[1] == target)]
+    for key in keys:
+        _cache.pop(key, None)
 
 
 async def get_fms_config(app_id: str | None = None, fms_type: str | None = None) -> list[dict[str, Any]]:
