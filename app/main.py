@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.client import ApiError, api_client
 from app.config import settings
 from app.middleware.oneportal_auth import OnePortalAuthMiddleware
-from app.routers import dashboard, developer, forms, misc, task
+from app.routers import dashboard, developer, forms, misc, sso, task
 from app.services.task_service import TaskNotFoundError
 from app.services.stage_service import StageNotFoundError
 from app.templates_config import templates
@@ -40,6 +40,7 @@ app.add_middleware(OnePortalAuthMiddleware)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+app.include_router(sso.router)
 app.include_router(dashboard.router)
 app.include_router(task.router)
 app.include_router(forms.router)
