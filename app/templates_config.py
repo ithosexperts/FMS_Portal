@@ -19,5 +19,7 @@ templates.env.globals["status_colors"] = STATUS_COLORS
 templates.env.globals["app_name"] = settings.app_name
 templates.env.globals["environment"] = settings.environment
 templates.env.globals["is_production"] = settings.is_production
+templates.env.globals["comments_origin"] = settings.comments_origin.rstrip("/")
+templates.env.globals["one_portal_origin"] = settings.one_portal_origin.rstrip("/")
 templates.env.globals["current_role_id"] = 1  # Simulated Admin Role for Eye Button
 templates.env.filters["duration"] = format_duration
