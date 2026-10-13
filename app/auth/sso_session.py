@@ -87,8 +87,16 @@ class _ReplayStore:
 replay_store = _ReplayStore()
 
 
-def make_session_cookie_value(employee_code: str, portal_session_id: str, ttl_seconds: int) -> str:
+def make_session_cookie_value(
+    employee_code: str,
+    portal_session_id: str,
+    ttl_seconds: int,
+    target_database: str | None = None,
+) -> str:
     now = int(time.time())
+    target = str(target_database or "").strip()
+    if target not in {"Test_OperationsDB", "OperationsDB"}:
+        target = "OperationsDB" if settings.is_production else "Test_OperationsDB"
     return jwt.encode(
         {
             "iss": SESSION_ISSUER,
@@ -96,6 +104,7 @@ def make_session_cookie_value(employee_code: str, portal_session_id: str, ttl_se
             "sub": employee_code,
             "employee_code": employee_code,
             "session_id": portal_session_id,
+            "target_database": target,
             "iat": now,
             "nbf": now - 1,
             "exp": now + ttl_seconds,
