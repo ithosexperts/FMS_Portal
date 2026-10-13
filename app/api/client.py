@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.auth.request_context import get_current_bearer_token, get_current_identity
+from app.auth.request_context import get_current_bearer_token, get_current_database_target, get_current_identity
 from app.api.endpoints import API_ENDPOINTS
 from app.config import settings
 
@@ -29,15 +29,18 @@ def _current_role_id() -> str:
 
 
 def _select_base_for_role(spec_base: str) -> str:
-    """Select the database API from deployment environment, not employee role.
+    """Select the API from signed One Portal request context when available.
 
-    Local/development runs against Test_OperationsDB (API_1).
-    Production runs against OperationsDB (API_2).
-
-    This keeps the exact same form/SP code in both environments while ensuring
-    metadata, table reads, updates and stored procedures all hit the same DB.
-    RoleID must never decide which database is used; it only controls permissions.
+    A valid FMS SSO cookie carries the database the employee selected in One Portal.
+    All FMS reads and writes in that request then use the matching API. Requests
+    without that signed context retain the existing environment/default behavior.
     """
+    request_target = get_current_database_target()
+    if request_target == "Test_OperationsDB":
+        return "API_1"
+    if request_target == "OperationsDB":
+        return "API_2"
+
     # Optional explicit override for controlled testing.
     target = str(getattr(settings, "fms_db_target", "") or "").strip().upper()
     if target in {"TEST", "API_1", "TESTING"}:
