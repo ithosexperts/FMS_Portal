@@ -13,8 +13,10 @@ from app.api.client import ApiError
 from app.auth.request_context import (
     AuthenticatedIdentity,
     reset_current_bearer_token,
+    reset_current_database_target,
     reset_current_identity,
     set_current_bearer_token,
+    set_current_database_target,
     set_current_identity,
 )
 from app.auth.sso_session import SESSION_COOKIE, read_session_cookie
@@ -112,6 +114,18 @@ def _extract_permissions(rows: list[dict[str, Any]]) -> set[str]:
 
 class OnePortalAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # The DB target is accepted only from a verified, signed FMS SSO cookie.
+        # Browser headers/query params cannot choose the database for authenticated SSO.
+        sso_claims = read_session_cookie(request.cookies.get(SESSION_COOKIE))
+        target_database = str((sso_claims or {}).get("target_database") or "").strip()
+        database_context = set_current_database_target(target_database)
+        request.state.target_database = target_database or None
+        try:
+            return await self._dispatch_with_database_context(request, call_next, sso_claims)
+        finally:
+            reset_current_database_target(database_context)
+
+    async def _dispatch_with_database_context(self, request: Request, call_next, sso_claims):
         enforce_auth = bool(settings.one_portal_auth_enabled)
         capture_identity = bool(settings.one_portal_identity_capture_enabled)
 
@@ -132,7 +146,6 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
         token_source = "none"
         jwt_payload: dict[str, Any] | None = None
 
-        sso_claims = read_session_cookie(request.cookies.get(SESSION_COOKIE))
         if sso_claims:
             token_source = "sso_cookie"
             jwt_payload = {
