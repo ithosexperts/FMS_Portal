@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # One Portal identity provider integration.
     one_portal_auth_enabled: bool = False
+    comments_origin: str = ""
+    one_portal_origin: str = ""
     one_portal_identity_capture_enabled: bool = True
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
