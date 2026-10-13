@@ -36,11 +36,21 @@ class Settings(BaseSettings):
 
     # One Portal identity provider integration.
     one_portal_auth_enabled: bool = False
-    comments_origin: str = ""
-    one_portal_origin: str = ""
     one_portal_identity_capture_enabled: bool = True
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
+
+    # One Portal -> FMS ticket SSO (see app/auth/sso_session.py).
+    # FMS_SSO_SECRET must equal the secret configured for this app in One
+    # Portal's SSO_APPS setting (48+ random characters).
+    fms_sso_secret: str = ""
+    sso_session_minutes: int = 480
+    # "none" is required when FMS is shown in an iframe on a different site.
+    sso_cookie_samesite: str = "none"
+
+    # Comments widget configuration (rendered only when both URLs are set).
+    comments_origin: str = ""
+    one_portal_origin: str = ""
 
     @property
     def is_production(self) -> bool:
