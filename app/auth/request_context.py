@@ -23,6 +23,7 @@ class AuthenticatedIdentity:
 
 _current_identity: ContextVar[AuthenticatedIdentity | None] = ContextVar("current_identity", default=None)
 _current_bearer_token: ContextVar[str | None] = ContextVar("current_bearer_token", default=None)
+_current_database_target: ContextVar[str | None] = ContextVar("current_database_target", default=None)
 
 
 def set_current_identity(identity: AuthenticatedIdentity | None) -> Token:
@@ -47,3 +48,19 @@ def reset_current_bearer_token(token: Token) -> None:
 
 def get_current_bearer_token() -> str | None:
     return _current_bearer_token.get()
+
+
+def set_current_database_target(target: str | None) -> Token:
+    """Set a validated database target for this request/task context."""
+    value = str(target or "").strip()
+    if value not in {"Test_OperationsDB", "OperationsDB"}:
+        value = None
+    return _current_database_target.set(value)
+
+
+def reset_current_database_target(token: Token) -> None:
+    _current_database_target.reset(token)
+
+
+def get_current_database_target() -> str | None:
+    return _current_database_target.get()
