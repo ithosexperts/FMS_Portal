@@ -17,6 +17,7 @@ from app.auth.request_context import (
     set_current_bearer_token,
     set_current_identity,
 )
+from app.auth.sso_session import SESSION_COOKIE, read_session_cookie
 from app.config import settings
 
 
@@ -30,6 +31,7 @@ EXCLUDED_PATH_PREFIXES = (
 EXCLUDED_PATHS = {
     "/healthz",
     "/favicon.ico",
+    "/auth/launch",
 }
 
 
@@ -123,27 +125,46 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
         if path == "/":
             return await call_next(request)
 
-        token, token_source = _extract_bearer_token(request)
-        if not token:
-            if enforce_auth:
-                return JSONResponse(status_code=401, content={"detail": "Missing bearer token"})
-            return await call_next(request)
+        # 1) Preferred: FMS session cookie created by /auth/launch from a signed
+        #    One Portal ticket. It only carries employee_code + One Portal session_id;
+        #    everything else is re-read from the database below on every request.
+        token: str | None = None
+        token_source = "none"
+        jwt_payload: dict[str, Any] | None = None
 
-        if not settings.jwt_secret_key:
-            if enforce_auth:
-                return JSONResponse(status_code=503, content={"detail": "JWT secret is not configured"})
-            return await call_next(request)
+        sso_claims = read_session_cookie(request.cookies.get(SESSION_COOKIE))
+        if sso_claims:
+            token_source = "sso_cookie"
+            jwt_payload = {
+                "session_id": sso_claims.get("session_id"),
+                "employee_code": sso_claims.get("employee_code"),
+            }
+        else:
+            # 2) Legacy: One Portal JWT in header / query / cookie.
+            token, token_source = _extract_bearer_token(request)
+            if not token:
+                if enforce_auth:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Not signed in. Open this application from One Portal."},
+                    )
+                return await call_next(request)
 
-        try:
-            jwt_payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        except jwt.ExpiredSignatureError:
-            if enforce_auth:
-                return JSONResponse(status_code=401, content={"detail": "Token expired"})
-            return await call_next(request)
-        except jwt.InvalidTokenError:
-            if enforce_auth:
-                return JSONResponse(status_code=401, content={"detail": "Invalid token"})
-            return await call_next(request)
+            if not settings.jwt_secret_key:
+                if enforce_auth:
+                    return JSONResponse(status_code=503, content={"detail": "JWT secret is not configured"})
+                return await call_next(request)
+
+            try:
+                jwt_payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            except jwt.ExpiredSignatureError:
+                if enforce_auth:
+                    return JSONResponse(status_code=401, content={"detail": "Token expired"})
+                return await call_next(request)
+            except jwt.InvalidTokenError:
+                if enforce_auth:
+                    return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+                return await call_next(request)
 
         session_id = str(jwt_payload.get("session_id") or jwt_payload.get("SessionID") or "").strip()
         if not session_id:
@@ -253,7 +274,7 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
         request.state.permissions = permissions
 
         identity_token = set_current_identity(identity)
-        bearer_token_token = set_current_bearer_token(token)
+        bearer_token_token = set_current_bearer_token(token)  # None for SSO cookie -> API_AUTH_TOKEN is used
 
         try:
             response = await call_next(request)
