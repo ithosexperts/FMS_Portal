@@ -63,7 +63,7 @@
   {% set _comments_fms = context.fms|default({}, true) %}
   {% set _comments_row = context.row|default({}, true) %}
   {% set _comments_ref = _comments_row.get(context.primary_key) if context.primary_key else task_id %}
-  <script defer src="{{ comments_origin }}/embed.js?v=20261014-inline-comments1&portalOrigin={{ one_portal_origin | urlencode }}&tableName={{ _comments_fms.get('table_name', '') | urlencode }}&fmsRefId={{ (_comments_ref or task_id) | urlencode }}&rowId={{ (_comments_ref or task_id) | urlencode }}&primaryKey={{ (context.primary_key or '') | urlencode }}&taskId={{ task_id | urlencode }}&appId={{ (_comments_fms.get('app_id', '') or '') | urlencode }}&stageNo={{ stage_no | urlencode }}"></script>
+  <script defer src="{{ comments_origin }}/embed.js?v=20261014-top-level-bridge-fix1&portalOrigin={{ one_portal_origin | urlencode }}&tableName={{ _comments_fms.get('table_name', '') | urlencode }}&fmsRefId={{ (_comments_ref or task_id) | urlencode }}&rowId={{ (_comments_ref or task_id) | urlencode }}&primaryKey={{ (context.primary_key or '') | urlencode }}&taskId={{ task_id | urlencode }}&appId={{ (_comments_fms.get('app_id', '') or '') | urlencode }}&stageNo={{ stage_no | urlencode }}"></script>
   {% endif %}
   {% block extra_scripts %}{% endblock %}
 </body>
