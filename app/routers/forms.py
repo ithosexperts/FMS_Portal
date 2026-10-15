@@ -1314,6 +1314,8 @@ async def stage_form_page(
     request: Request,
     task_id: str,
     stage_no: str,
+    table_name: str = "",
+    primary_key: str = "",
     app_id: str = "",
     saved: bool = False,
     embedded: bool = False,
@@ -1356,8 +1358,15 @@ async def stage_form_page(
         except Exception as exc:
             print(f"Embedded S1 PickID resolution failed for PickID {requested_pick_id}: {exc}")
 
+    # Preserve the exact FMS/table context from the dashboard link. This is
+    # essential for Runner360 because another FMS may have a row with the same
+    # task ID; it also ensures shared Comments receives the correct table/app.
     stage_context = await stage_service.get_stage_context(
-        task_id, stage_no, app_id=(str(app_id).strip() or None)
+        task_id,
+        stage_no,
+        table_name=(str(table_name).strip() or None),
+        app_id=(str(app_id).strip() or None),
+        primary_key=(str(primary_key).strip() or None),
     )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
     

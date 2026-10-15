@@ -85,6 +85,64 @@ def _row_value(row: dict[str, Any], field_name: Any) -> Any:
             return value
     return None
 
+def runner360_task_metrics(row: dict[str, Any]) -> dict[str, Any]:
+    """Return normalized Runner360 task start and extra-busy minutes.
+
+    Extra Busy Time is the positive difference between the actual return time
+    and the planned return time, in whole minutes. Early/on-time returns count
+    as zero extra minutes; unfinished/cancelled tasks have no measured value.
+    The assignment start date is used for day/week grouping.
+    """
+    status_value = _pick_row_value(row, "S1_TaskStatus", "S1_Task_Status")[1]
+    normalized_status = _normalize_lookup_key(str(status_value or ""))
+    is_cancelled = normalized_status in {"cancelled", "canceled", "revoked"}
+
+    start_value = _pick_row_value(
+        row, "I_TaskStartDateTime", "S1_PLBaseTS", "S1_BaseTS", "I_TaskDateTime"
+    )[1]
+    start_datetime = parse_datetime(start_value)
+    if start_datetime is None:
+        task_date = _pick_row_value(row, "I_TaskDate", "TaskDate")[1]
+        task_time = _pick_row_value(row, "I_TaskStartTime", "TaskStartTime")[1]
+        if task_date and task_time:
+            start_datetime = parse_datetime(f"{str(task_date).strip()} {str(task_time).strip()}")
+
+    if is_cancelled:
+        return {"start_datetime": start_datetime, "actual_datetime": None, "extra_busy_minutes": None}
+
+    actual_value = _pick_row_value(
+        row, "S1_ALTimeStamp", "S1_ActualTimestamp", "S1_ActualTimeStamp"
+    )[1]
+    actual_datetime = parse_datetime(actual_value)
+    if actual_datetime is None:
+        return {"start_datetime": start_datetime, "actual_datetime": None, "extra_busy_minutes": None}
+
+    planned_return_value = _pick_row_value(
+        row, "S1_PLTimeStamp", "S1_PlannedTimestamp", "I_ExpectedReturnDateTime"
+    )[1]
+    planned_return_datetime = parse_datetime(planned_return_value)
+    if planned_return_datetime is not None:
+        delta_minutes = int((actual_datetime - planned_return_datetime).total_seconds() // 60)
+        extra_busy_minutes = max(delta_minutes, 0)
+    else:
+        # Compatibility fallback for rows that have start + lead but no planned end.
+        lead_raw = _pick_row_value(row, "S1_LeadTimeMins", "I_LeadTimeMins", "LeadTimeMins")[1]
+        try:
+            lead_minutes = int(float(str(lead_raw).strip()))
+        except (TypeError, ValueError):
+            lead_minutes = None
+        if start_datetime is None or lead_minutes is None:
+            extra_busy_minutes = None
+        else:
+            actual_duration = int((actual_datetime - start_datetime).total_seconds() // 60)
+            extra_busy_minutes = max(actual_duration - lead_minutes, 0)
+
+    return {
+        "start_datetime": start_datetime,
+        "actual_datetime": actual_datetime,
+        "extra_busy_minutes": extra_busy_minutes,
+    }
+
 
 def _value_matches_any(raw_value: Any, selected_values: list[str]) -> bool:
     if raw_value is None:
@@ -241,6 +299,35 @@ def _cache_put(
         max(int(current_page or page), 1),
         time.monotonic(),
     )
+
+
+def invalidate_dashboard_table_cache(table_name: str) -> int:
+    """Invalidate cached raw dashboard pages for one table after a state-changing write."""
+    def canonical_table_name(value: Any) -> str:
+        text = str(value or "").strip().replace("[", "").replace("]", "")
+        # API/FMS metadata can supply either TableName or dbo.TableName.
+        return text.rsplit(".", 1)[-1].strip().casefold()
+
+    target = canonical_table_name(table_name)
+    if not target:
+        return 0
+
+    removed = 0
+    for cache_key in list(_PAGE_CACHE.keys()):
+        cached_table = canonical_table_name(cache_key.split("|", 1)[0])
+        if cached_table == target:
+            _PAGE_CACHE.pop(cache_key, None)
+            removed += 1
+
+    for cache_key, task in list(_PAGE_LOAD_TASKS.items()):
+        cached_table = canonical_table_name(cache_key.split("|", 1)[0])
+        if cached_table != target:
+            continue
+        if not task.done():
+            task.cancel()
+        _PAGE_LOAD_TASKS.pop(cache_key, None)
+
+    return removed
 
 
 def _cancel_obsolete_page_loads(active_cache_keys: set[str]) -> None:
@@ -1056,6 +1143,34 @@ def _build_task_summary(
     has_any_planned = any(_has_value(stage.get("planned")) for stage in timeline)
     lifecycle_status = "Close" if timeline and timeline[-1].get("status") == "Completed" else ("Open" if has_any_planned else "-")
 
+    # Runner360 cancellation is stored in S1_TaskStatus by the Revoke Task action.
+    # The general stage calculator intentionally derives statuses from planned/actual
+    # timestamps, so explicitly honour this custom terminal state for Runner360 only.
+    fms_name = str(fms.get("fms_name") or fms.get("FMS_NAME") or "").strip().casefold()
+    table_name = _normalize_lookup_key(str(fms.get("table_name") or fms.get("TABLE_NAME") or ""))
+    runner_status = (
+        _row_value(row, "S1_TaskStatus")
+        or _row_value(row, "S1_Task_Status")
+        or _row_value(row, "S1_TaskStatus ")
+    )
+    normalized_runner_status = _normalize_lookup_key(str(runner_status or ""))
+    runner_is_cancelled = (
+        (fms_name == "runner360" or table_name == "zrunner360")
+        and normalized_runner_status in {"cancelled", "canceled", "revoked"}
+    )
+    if runner_is_cancelled:
+        status = "Cancelled"
+        lifecycle_status = "Cancelled"
+        for timeline_stage in timeline:
+            if not timeline_stage.get("visible", True):
+                continue
+            if not _has_value(timeline_stage.get("planned")):
+                continue
+            timeline_stage["status"] = "Cancelled"
+            timeline_stage["color"] = "grey"
+            timeline_stage["delay_minutes"] = 0
+            timeline_stage["is_current"] = False
+
     if current:
         stage_no, stage_name, doer = current.get("STAGE_NO"), current.get("STAGE_NAME"), current.get("DOER")
         delay = calculate_delay_minutes(_row_value(row, current.get("PLANNED_COLUMN")), _row_value(row, current.get("ACTUAL_COLUMN")))
@@ -1095,6 +1210,12 @@ def _build_task_summary(
     row_id_value = str(row_value).strip() if _has_value(row_value) else ""
     primary_key_label = row_key or primary_key or "Row ID"
     elapsed = format_duration(_elapsed_minutes(stages, row))
+    is_runner360 = (
+        fms_name == "runner360" or table_name == "zrunner360"
+    )
+    extra_busy_minutes = (
+        runner360_task_metrics(row).get("extra_busy_minutes") if is_runner360 else None
+    )
     return TaskSummary(
         task_id=row_id_value,
         app_id=str(fms["app_id"]),
@@ -1107,6 +1228,7 @@ def _build_task_summary(
         assigned_doer=doer,
         elapsed_display=elapsed,
         delay_minutes=delay,
+        extra_busy_minutes=extra_busy_minutes,
         status=status,
         lifecycle_status=lifecycle_status,
         timeline=timeline,

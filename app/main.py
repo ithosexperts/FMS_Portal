@@ -20,12 +20,16 @@ from fastapi.staticfiles import StaticFiles
 from app.api.client import ApiError, api_client
 from app.config import settings
 from app.middleware.oneportal_auth import OnePortalAuthMiddleware
-from app.routers import dashboard, developer, forms, misc, sso, task
+from app.routers import dashboard, developer, forms, misc, sso, task, runner360
 from app.services.task_service import TaskNotFoundError
 from app.services.stage_service import StageNotFoundError
 from app.templates_config import templates
 
 logging.basicConfig(level=logging.INFO)
+# CEOITBOX's message-create API currently accepts GET query parameters, which
+# include credentials. Suppress httpx INFO request-URL logging so passwords and
+# recipient numbers are not written into ordinary application logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +50,7 @@ app.include_router(task.router)
 app.include_router(forms.router)
 app.include_router(developer.router)
 app.include_router(misc.router)
+app.include_router(runner360.router)
 
 
 @app.get("/")

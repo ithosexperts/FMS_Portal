@@ -7,21 +7,24 @@ HTMX can refresh just the rows without a full page reload.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
+import logging
 from urllib.parse import urlencode
 import re
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
+from app.api import table_api
 from app.services import dashboard_service, form_service, metadata_service, task_service, stage1_custom_service
 from app.templates_config import templates
 from app.utils import route_builder
+from app.utils.delay_calculator import parse_datetime
 
 router = APIRouter(tags=["dashboard"])
 
-STATUSES = ["Completed", "In Progress", "Delayed", "Pending"]
+STATUSES = ["Completed", "In Progress", "Delayed", "Pending", "Cancelled"]
 
 
 PAGE_SIZE = 50
@@ -678,6 +681,285 @@ async def dashboard_busy_pickers():
     })
 
 
+def _r360_dashboard_value(row: dict[str, Any], *names: str) -> Any:
+    """Read a Runner360 value using case- and punctuation-insensitive aliases."""
+    wanted = {re.sub(r"[^a-z0-9]", "", name.casefold()) for name in names}
+    for key, value in row.items():
+        normalized = re.sub(r"[^a-z0-9]", "", str(key).casefold())
+        if normalized in wanted and value not in (None, ""):
+            return value
+    return None
+
+
+def _r360_sunday_start(value: date) -> date:
+    """Return the Sunday on or before a date."""
+    return value - timedelta(days=(value.weekday() + 1) % 7)
+
+
+def _r360_weeks_for_year(year: int) -> list[dict[str, Any]]:
+    """Create Sunday-Saturday weeks overlapping the selected year."""
+    first_day = date(year, 1, 1)
+    last_day = date(year, 12, 31)
+    week_start = _r360_sunday_start(first_day)
+    options: list[dict[str, Any]] = []
+    number = 1
+    while week_start <= last_day:
+        week_end = week_start + timedelta(days=6)
+        options.append({
+            "key": f"{year}-W{number:02d}",
+            "year": year,
+            "number": number,
+            "start": week_start,
+            "end": week_end,
+            "label": f"Week {number:02d} — {week_start.strftime('%d %b %Y')} to {week_end.strftime('%d %b %Y')}",
+        })
+        week_start += timedelta(days=7)
+        number += 1
+    return options
+
+
+@router.get("/runner360/dashboard", response_class=HTMLResponse)
+async def runner360_analytics_dashboard(
+    request: Request,
+    group_by: str = Query("day", pattern="^(day|week)$"),
+    selected_date: str | None = Query(None),
+):
+    """Show actual BusyTimeMins by runner, day, and selected Sunday-Saturday weeks.
+
+    Runner options come from active employee records associated with a Runner team,
+    not only from Z_Runner360 rows. This ensures runners with no assigned task yet
+    are still available in the filter.
+    """
+    today = date.today()
+    try:
+        all_rows = await table_api.get_table("Z_Runner360")
+    except Exception as exc:
+        logging.exception("Unable to load Runner360 rows for analytics")
+        raise HTTPException(status_code=502, detail="Unable to load Runner360 data for the dashboard.") from exc
+
+    runner_names_from_rows: set[str] = set()
+    task_records: list[dict[str, Any]] = []
+    for row in all_rows or []:
+        if not isinstance(row, dict):
+            continue
+        runner_name = str(_r360_dashboard_value(row, "I_Runner", "S1_Doer", "Runner", "RunnerName") or "").strip()
+        if runner_name:
+            runner_names_from_rows.add(runner_name)
+
+        start_raw = _r360_dashboard_value(
+            row, "S1_PLBaseTS", "S1_BaseTS", "I_TaskStartDateTime", "I_TaskDateTime"
+        )
+        if start_raw is None:
+            task_date = _r360_dashboard_value(row, "I_TaskDate", "TaskDate")
+            task_time = _r360_dashboard_value(row, "I_TaskStartTime", "TaskStartTime")
+            if task_date and task_time:
+                start_raw = f"{task_date} {task_time}"
+        start_dt = parse_datetime(start_raw)
+        if start_dt is None:
+            continue
+
+        status_value = str(_r360_dashboard_value(row, "S1_TaskStatus", "S1_Task_Status") or "").strip().casefold()
+        if status_value in {"cancelled", "canceled", "revoked"}:
+            continue
+
+        actual_raw = _r360_dashboard_value(row, "S1_ALTimeStamp", "S1_ActualTimestamp", "S1_ActualTimeStamp")
+        actual_dt = parse_datetime(actual_raw)
+        busy_raw = _r360_dashboard_value(row, "BusyTimeMins", "Busy_Time_Mins", "Busy Time")
+        busy_minutes: int | None = None
+        if actual_dt is not None:
+            try:
+                if busy_raw is not None:
+                    busy_minutes = max(0, int(float(str(busy_raw).strip())))
+            except (TypeError, ValueError, OverflowError):
+                busy_minutes = None
+            if busy_minutes is None:
+                busy_minutes = max(0, int((actual_dt - start_dt).total_seconds() // 60))
+
+        task_records.append({
+            "start_date": start_dt.date(),
+            "runner": runner_name or "Unknown runner",
+            "busy_minutes": busy_minutes,
+            "measured": actual_dt is not None and busy_minutes is not None,
+        })
+
+    # Use the shared Runner360 assignment loader so all active people on teams
+    # identified as Runner appear, even when their names are not in Z_Runner360 yet.
+    master_runner_names: set[str] = set()
+    try:
+        from app.routers.runner360 import _get_runner_assignments
+        assignments = await _get_runner_assignments()
+        master_runner_names = {
+            str(item.get("employee_name") or "").strip()
+            for item in assignments
+            if str(item.get("employee_name") or "").strip()
+        }
+    except Exception:
+        logging.exception("Unable to load active Runner360 options from VM_Team/VM_EmployeeMaster")
+
+    # Retain historical names so old tasks are still filterable if an employee is no
+    # longer on the current Runner team. On success the employee master adds all current runners.
+    runner_names_canonical: dict[str, str] = {}
+    for raw_name in sorted(master_runner_names | runner_names_from_rows, key=str.casefold):
+        runner_names_canonical.setdefault(raw_name.casefold(), raw_name)
+    runner_options = sorted(runner_names_canonical.values(), key=str.casefold)
+    # Use the canonical master spelling for record aggregation so differences in
+    # casing between older task rows and the employee master do not split totals.
+    for record in task_records:
+        canonical_name = runner_names_canonical.get(str(record.get("runner") or "").casefold())
+        if canonical_name:
+            record["runner"] = canonical_name
+
+    query = request.query_params
+    runner_filter_set = "runner_filter_set" in query
+    requested_runners = [str(v).strip() for v in query.getlist("runner") if str(v).strip()]
+    valid_runner_map = {name.casefold(): name for name in runner_options}
+    if runner_filter_set:
+        selected_runners = list(dict.fromkeys(valid_runner_map[v.casefold()] for v in requested_runners if v.casefold() in valid_runner_map))
+    else:
+        # First view shows all active runners so the dashboard immediately compares them.
+        selected_runners = list(runner_options)
+    selected_runner_set = {v.casefold() for v in selected_runners}
+
+    # Current year plus the following ten years are always available, even if no tasks
+    # exist yet in those years. Dates can still be entered manually in Daily mode.
+    year_options = list(range(today.year, today.year + 11))
+    year_filter_set = "year_filter_set" in query
+    requested_years: list[int] = []
+    for raw_year in query.getlist("year"):
+        try:
+            requested_years.append(int(raw_year))
+        except (TypeError, ValueError):
+            continue
+    valid_years = set(year_options)
+    if year_filter_set:
+        selected_years = list(dict.fromkeys(y for y in requested_years if y in valid_years))
+    elif requested_years:
+        selected_years = list(dict.fromkeys(y for y in requested_years if y in valid_years))
+    else:
+        selected_years = [today.year]
+
+    all_week_options = [week for yr in year_options for week in _r360_weeks_for_year(yr)]
+    week_by_key = {item["key"]: item for item in all_week_options}
+    visible_week_options = [item for item in all_week_options if item["year"] in set(selected_years)]
+    week_filter_set = "week_filter_set" in query
+    requested_week_keys = [str(v).strip() for v in query.getlist("week_key") if str(v).strip()]
+
+    # Backward compatibility with links generated by the previous single-week filter.
+    if not requested_week_keys and query.get("week_no"):
+        try:
+            old_year = int(query.get("year") or today.year)
+            old_week_number = int(query.get("week_no") or 1)
+            old_match = next((w for w in all_week_options if w["year"] == old_year and w["number"] == old_week_number), None)
+            if old_match:
+                requested_week_keys = [old_match["key"]]
+        except (TypeError, ValueError):
+            pass
+
+    allowed_week_keys = {item["key"] for item in visible_week_options}
+    if week_filter_set:
+        selected_week_keys = list(dict.fromkeys(k for k in requested_week_keys if k in allowed_week_keys))
+    elif requested_week_keys:
+        selected_week_keys = list(dict.fromkeys(k for k in requested_week_keys if k in allowed_week_keys))
+    else:
+        current_week_start = _r360_sunday_start(today)
+        current_key = next((w["key"] for w in all_week_options if w["start"] == current_week_start), None)
+        selected_week_keys = [current_key] if current_key and current_key in allowed_week_keys else ([visible_week_options[0]["key"]] if visible_week_options else [])
+
+    selected_week_options = [week_by_key[key] for key in selected_week_keys if key in week_by_key]
+    if group_by == "week":
+        selected_dates: set[date] = set()
+        for week in selected_week_options:
+            cursor = week["start"]
+            while cursor <= week["end"]:
+                selected_dates.add(cursor)
+                cursor += timedelta(days=1)
+        ordered_dates = sorted(selected_dates)
+        selected_date_value = today.isoformat()
+        if selected_week_options:
+            period_title = (
+                selected_week_options[0]["label"] if len(selected_week_options) == 1
+                else f"{len(selected_week_options)} selected weeks"
+            )
+        else:
+            period_title = "No weeks selected"
+    else:
+        try:
+            chosen_day = date.fromisoformat(str(selected_date or "").strip())
+        except ValueError:
+            chosen_day = today
+        selected_date_value = chosen_day.isoformat()
+        ordered_dates = [chosen_day]
+        selected_dates = {chosen_day}
+        period_title = chosen_day.strftime("%A, %d %B %Y")
+
+    runner_records = [
+        item for item in task_records
+        if item["start_date"] in selected_dates
+        and item["runner"].casefold() in selected_runner_set
+    ]
+
+    daily_runner_buckets: dict[tuple[date, str], dict[str, int]] = {}
+    for day in ordered_dates:
+        for runner_name in selected_runners:
+            daily_runner_buckets[(day, runner_name)] = {"busy_minutes": 0, "completed_tasks": 0, "task_count": 0}
+
+    for item in runner_records:
+        day = item["start_date"]
+        runner_name = item["runner"]
+        bucket = daily_runner_buckets.setdefault((day, runner_name), {"busy_minutes": 0, "completed_tasks": 0, "task_count": 0})
+        bucket["task_count"] += 1
+        if item["measured"]:
+            bucket["completed_tasks"] += 1
+            bucket["busy_minutes"] += int(item["busy_minutes"] or 0)
+
+    chart_labels = [day.strftime("%a %d %b") if group_by == "week" else day.strftime("%d %b %Y") for day in ordered_dates]
+    chart_series: list[dict[str, Any]] = []
+    for runner_name in selected_runners:
+        chart_series.append({
+            "name": runner_name,
+            "values": [daily_runner_buckets.get((day, runner_name), {}).get("busy_minutes", 0) for day in ordered_dates],
+        })
+    # Flat values are retained for KPI/backward template compatibility: totals across all selected runners.
+    chart_values = [
+        sum(daily_runner_buckets.get((day, runner_name), {}).get("busy_minutes", 0) for runner_name in selected_runners)
+        for day in ordered_dates
+    ]
+
+    chart_details: list[dict[str, Any]] = []
+    for day in ordered_dates:
+        for runner_name in selected_runners:
+            bucket = daily_runner_buckets.get((day, runner_name), {"busy_minutes": 0, "completed_tasks": 0, "task_count": 0})
+            chart_details.append({
+                "date": day.strftime("%A, %d %B %Y"),
+                "runner": runner_name,
+                "busy_minutes": int(bucket["busy_minutes"]),
+                "completed_tasks": int(bucket["completed_tasks"]),
+                "task_count": int(bucket["task_count"]),
+            })
+
+    return templates.TemplateResponse(request, "dashboard/runner360_analytics.html", {
+        "group_by": group_by,
+        "selected_date": selected_date_value,
+        "year_options": year_options,
+        "selected_years": selected_years,
+        "week_options": all_week_options,
+        "selected_week_keys": selected_week_keys,
+        "selected_week_options": selected_week_options,
+        "selected_week_title": period_title,
+        "selected_runners": selected_runners,
+        "runner_options": runner_options,
+        "chart_labels": chart_labels if selected_runners else [],
+        "chart_values": chart_values if selected_runners else [],
+        "chart_series": chart_series if selected_runners else [],
+        "chart_details": chart_details if selected_runners else [],
+        "total_busy_minutes": sum(chart_values) if selected_runners else 0,
+        "completed_tasks": sum(item["completed_tasks"] for item in chart_details) if selected_runners else 0,
+        "tasks_in_range": sum(item["task_count"] for item in chart_details) if selected_runners else 0,
+        "master_runner_list_loaded": bool(master_runner_names),
+        "current_time": datetime.now().strftime("%d-%m-%Y %H:%M"),
+    })
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(
     request: Request,
@@ -741,9 +1023,20 @@ async def my_tasks_page(
 
 
 @router.get("/dashboard/modal/{task_id}", response_class=HTMLResponse)
-async def dashboard_modal(request: Request, task_id: str):
-    """HTMX endpoint to render the row details modal with full metadata formatting."""
-    context = await task_service.get_task_context(task_id)
+async def dashboard_modal(
+    request: Request,
+    task_id: str,
+    table_name: str = "",
+    app_id: str = "",
+    primary_key: str = "",
+):
+    """Render details for the exact dashboard FMS row, even when IDs overlap."""
+    context = await task_service.get_task_context(
+        task_id,
+        table_name=(table_name.strip() or None),
+        app_id=(app_id.strip() or None),
+        primary_key=(primary_key.strip() or None),
+    )
     sections = await form_service.build_dashboard_modal_sections(
         context["fms"]["table_name"],
         context["row"],

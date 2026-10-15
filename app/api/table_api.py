@@ -131,12 +131,56 @@ async def insert_row(table_name: str, payload: dict[str, Any]) -> dict[str, Any]
     )
     result = as_dict(data)
     if isinstance(result, dict):
-        message = str(result.get("message") or result.get("error") or "").strip()
+        # The Hosexperts table gateway returns a successful insert as
+        # {"message": "Record inserted"}. Treating every non-empty message
+        # as an error caused the database insert to succeed while Runner360
+        # displayed a failure to the user. Only explicit error indicators or
+        # unrecognized failure messages should raise ApiError.
+        message = str(result.get("message") or "").strip()
+        error_value = str(result.get("error") or "").strip()
         sql_state = str(result.get("SQLSTATE") or result.get("sqlstate") or "").strip()
         code = result.get("code")
-        has_error_shape = bool(message) or bool(sql_state) or code not in (None, "", 0, "0")
-        if has_error_shape:
-            raise ApiError(message or f"Insert failed for {table_name}")
+        status = result.get("status")
+
+        normalized_message = " ".join(message.casefold().replace("_", " ").split())
+        success_messages = {
+            "record inserted",
+            "record inserted successfully",
+            "inserted",
+            "inserted successfully",
+            "insert successful",
+            "insert success",
+            "success",
+            "successful",
+            "ok",
+        }
+        is_success_message = (
+            normalized_message in success_messages
+            or normalized_message.startswith("record inserted ")
+            or normalized_message.startswith("successfully inserted")
+        )
+
+        status_is_failure = False
+        try:
+            if status not in (None, "") and int(status) >= 400:
+                status_is_failure = True
+        except (TypeError, ValueError):
+            status_is_failure = str(status).strip().casefold() in {
+                "error", "failed", "failure", "false"
+            }
+
+        code_is_failure = code not in (None, "", 0, "0")
+        if error_value or sql_state or status_is_failure or code_is_failure:
+            raise ApiError(
+                error_value
+                or message
+                or sql_state
+                or f"Insert failed for {table_name}"
+            )
+
+        if message and not is_success_message:
+            # Some gateways return HTTP 200 for SQL/application failures.
+            raise ApiError(message)
     return result
 
 

@@ -1,6 +1,20 @@
 {% import "components/macros.html" as macros %}
 {% set table_tasks = section_tasks if section_tasks is defined else tasks %}
 {% set table_stage_headers = section_stage_headers if section_stage_headers is defined else stage_headers %}
+{% set show_runner360_extra_busy = (section is defined and section.fms_name|string|lower == 'runner360') or (section is not defined and active_fms_name is defined and active_fms_name|string|lower == 'runner360') %}
+{% set _runner360_cancelled_style_installed = true %}
+<style>
+  .matrix-table tbody tr.dashboard-row-cancelled { filter: grayscale(1); opacity: .72; }
+  .matrix-table tbody tr.dashboard-row-cancelled > td {
+    background: #e5e7eb !important; color: #6b7280 !important; border-color: #cbd5e1 !important;
+  }
+  .matrix-table tbody tr.dashboard-row-cancelled .badge {
+    background: #d1d5db !important; color: #4b5563 !important; border-color: #cbd5e1 !important;
+  }
+  .matrix-table tbody tr.dashboard-row-cancelled .stage-status,
+  .matrix-table tbody tr.dashboard-row-cancelled .stage-time,
+  .matrix-table tbody tr.dashboard-row-cancelled .task-id-link { color: #6b7280 !important; }
+</style>
 
 <div class="table-wrapper">
   <table class="data-table matrix-table">
@@ -14,11 +28,15 @@
         </th>
         {% endfor %}
         <th style="min-width:190px;">Current Stage / Status</th>
+        {% if show_runner360_extra_busy %}
+        <th style="min-width:155px; text-align:center;">Extra Busy Time</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
       {% for task in table_tasks %}
-      <tr>
+      {% set task_is_cancelled = (task.status|string|lower in ['cancelled', 'canceled', 'revoked']) %}
+      <tr class="{{ 'dashboard-row-cancelled' if task_is_cancelled else '' }}"{% if task_is_cancelled %} title="This Runner360 task has been cancelled."{% endif %}>
         <td class="sticky-col matrix-id task-id-cell" style="left:0;">
           <div>Task Id</div>
           <div>
@@ -55,7 +73,7 @@
         {% if row_task_id %}
         <button type="button" 
            onclick="openStageModal(
-               '{{ routes.stage_form_route(row_task_id, stage.stage_no, task.table_name, task.primary_key_name) }}',
+               '{{ routes.stage_form_route(row_task_id, stage.stage_no, task.table_name, task.primary_key_name, task.app_id) }}',
                'Stage {{ stage.stage_no }}'
            )"
            class="btn btn-sm" 
@@ -101,12 +119,29 @@
 
         <td>
           <div>{% if task.current_stage_no %}{{ task.current_stage_no }} - {{ task.current_stage_name }}{% else %}-{% endif %}</div>
-          <div style="margin-top:4px;">{{ macros.status_badge(task.status) }}</div>
+          <div style="margin-top:4px;">
+            {% if task_is_cancelled %}
+              <span class="badge badge-grey">Cancelled</span>
+            {% else %}
+              {{ macros.status_badge(task.status) }}
+            {% endif %}
+          </div>
           <div style="margin-top:6px; font-size:12px; font-weight:700; color:var(--text-secondary);">{{ task.lifecycle_status }}</div>
         </td>
+        {% if show_runner360_extra_busy %}
+        <td style="text-align:center; font-variant-numeric:tabular-nums; font-weight:700;">
+          {% if task.extra_busy_minutes is not none %}
+            <span class="badge {{ 'badge-grey' if task_is_cancelled else ('badge-red' if task.extra_busy_minutes > 0 else 'badge-green') }}">
+              {{ task.extra_busy_minutes }} min
+            </span>
+          {% else %}
+            <span style="color:var(--text-secondary);">—</span>
+          {% endif %}
+        </td>
+        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="{{ 2 + (table_stage_headers | length) }}">
+      <tr><td colspan="{{ 2 + (table_stage_headers | length) + (1 if show_runner360_extra_busy else 0) }}">
         <div class="empty-state">No tasks match the current filters.</div>
       </td></tr>
       {% endfor %}

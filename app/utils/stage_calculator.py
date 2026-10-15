@@ -109,15 +109,27 @@ def _has_real_value(value: Any) -> bool:
 
 def is_stage1_visible(task_row: dict[str, Any]) -> bool:
     """
-    S1 is visible only when BOTH source fields contain real values:
-      - S1_PLTimeStamp
-      - S1_PickID
+    Decide whether Stage 1 is visible.
 
-    This gate controls stage cells/forms only. It must never remove the
-    complete task row from the dashboard.
+    PickNPack uses S1_PickID as an additional Stage-1 visibility gate.
+    Other FMS processes, such as Runner360, do not have S1_PickID and
+    therefore must not be hidden merely because that column does not exist.
+
+    The gate controls stage visibility only; it must never remove a valid
+    task from the dashboard.
     """
     planned = _row_value(task_row, "S1_PLTimeStamp")
-    pick_id = _row_value(task_row, "S1_PickID")
+
+    # If the row has no PickID field at all, this FMS does not use the
+    # PickNPack visibility rule. Runner360 falls into this path.
+    has_pick_id_field = any(
+        str(key).strip().lower().replace("_", "") in {"s1pickid", "pickid"}
+        for key in task_row.keys()
+    )
+    if not has_pick_id_field:
+        return _has_real_value(planned)
+
+    pick_id = _row_value(task_row, "S1_PickID") or _row_value(task_row, "PickID")
     return _has_real_value(planned) and _has_real_value(pick_id)
 
 

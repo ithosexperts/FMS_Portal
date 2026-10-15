@@ -1,0 +1,865 @@
+{% extends layout_template|default("base.html") %}
+{% import "components/macros.html" as macros %}
+{% set runner_row = context.row or {} %}
+{% set runner_status = (runner_row.get('S1_TaskStatus') or runner_row.get('S1_Task_Status') or '')|string|trim|lower %}
+{% set runner_is_cancelled = runner_status in ['cancelled', 'canceled', 'revoked'] %}
+{# Prefer the combined timestamp when available. Some older rows store the full #}
+{# date/time in I_TaskStartTime, so don't concatenate it with I_TaskDate again. #}
+{% set task_start_display = runner_row.get('I_TaskStartDateTime') %}
+{% if not task_start_display %}
+  {% set raw_start_time = (runner_row.get('I_TaskStartTime') or '')|string|trim %}
+  {% if raw_start_time|length >= 10 and '-' in raw_start_time %}
+    {% set task_start_display = raw_start_time %}
+  {% else %}
+    {% set task_start_display = ((runner_row.get('I_TaskDate') or '')|string ~ ' ' ~ raw_start_time)|trim %}
+  {% endif %}
+{% endif %}
+{% if not task_start_display %}{% set task_start_display = '-' %}{% endif %}
+{% set task_lead_minutes = runner_row.get('I_LeadTimeMins') or runner_row.get('S1_LeadTimeMins') %}
+{% set expected_return_display = runner_row.get('I_ExpectedReturnDateTime') or runner_row.get('S1_PLTimeStamp') %}
+{% if not expected_return_display %}
+  {% set expected_time_value = (runner_row.get('I_ExpectedReturnTime') or '')|string|trim %}
+  {% if expected_time_value|length >= 10 and '-' in expected_time_value %}
+    {% set expected_return_display = expected_time_value %}
+  {% else %}
+    {% set expected_return_display = ((runner_row.get('I_TaskDate') or '')|string ~ ' ' ~ expected_time_value)|trim %}
+  {% endif %}
+{% endif %}
+{% if not expected_return_display %}{% set expected_return_display = '-' %}{% endif %}
+{% set task_start_input_value = '' %}
+{% if task_start_display != '-' %}
+  {% set task_start_input_value = ((task_start_display|string|replace('T', ' '))[:16])|replace(' ', 'T') %}
+{% endif %}
+
+{% block title %}Stage {{ stage_no }} &mdash; Runner360{% endblock %}
+{% block page_title %}Stage Form &mdash; {{ context.stage.STAGE_NAME }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/runner360-s1.css?v=20261010inpagerevoke1" />
+{% endblock %}
+
+{% block header_actions %}
+{% if not embedded %}
+<a class="btn btn-sm" href="{{ routes.task_route(task_id) }}">&larr; Task Details</a>
+<a class="btn btn-sm" href="{{ routes.application_form_route(task_id) }}">Application Form</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="runner360-s1{% if embedded %} is-embedded{% endif %}">
+
+  {% if saved %}
+  <div class="filter-chip" style="margin-bottom:12px; background:var(--color-success-bg); color:var(--color-success);">
+    &#10003; Saved successfully
+  </div>
+  {% endif %}
+
+  {% if cleared %}
+  <div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">
+    Responses cleared. Form reopened.
+  </div>
+  {% endif %}
+
+  {% if clear_error %}
+  <div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">
+    {{ clear_error }}
+  </div>
+  {% endif %}
+
+  {% if ltg_saved %}
+  <div class="filter-chip" style="margin-bottom:12px; background:var(--color-success-bg); color:var(--color-success);">
+    Lead Time Extension saved successfully.
+  </div>
+  {% endif %}
+
+  {% if ltg_error %}
+  <div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">
+    {{ ltg_error }}
+  </div>
+  {% endif %}
+
+  {# Same placement as the standard company Stage Form. #}
+  {% if not embedded and not runner_is_cancelled and (current_role_id|string).strip() in ['', '1', '2', '3'] %}
+  <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+    <form method="post"
+          action="{{ routes.stage_clear_route(task_id, stage_no) }}"
+          style="margin:0;"
+          onsubmit="return confirm('Clear saved responses and reopen this form?');">
+      <button type="submit" class="btn btn-sm btn-ghost" title="Clear responses and reopen">
+        Clear &amp; Reset
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  <section class="card runner360-s1-card" data-task-id="{{ task_id }}" data-stage-locked="{{ 'true' if (not context.editable or runner_is_cancelled) else 'false' }}">
+
+    <!-- ================================================================
+         HEADER — standard Hosexpert Stage S1 format
+         ================================================================ -->
+    <div class="runner360-s1__header">
+      <div class="runner360-s1__title-wrap">
+        <span class="runner360-s1__fms-name">{{ context.fms.fms_name or 'Runner360' }}</span>
+        <span class="runner360-s1__separator">|</span>
+        <span class="runner360-s1__stage-name">
+          {{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}
+        </span>
+
+        <span class="runner360-s1__status-row">
+          {% if runner_is_cancelled %}
+            <span class="badge badge-grey runner360-s1__cancelled-badge">Cancelled</span>
+          {% elif context.timeline_entry %}
+            {{ macros.status_badge(context.timeline_entry.status) }}
+          {% else %}
+            <span class="badge badge-red">Pending</span>
+          {% endif %}
+
+          {% if context.editable and not runner_is_cancelled %}
+            <span class="badge badge-blue">Editable</span>
+          {% else %}
+            <span class="badge badge-grey">Read Only</span>
+          {% endif %}
+
+          {% if context.editable and not embedded and not runner_is_cancelled %}
+            {% if has_pending_ltg %}
+            <button type="button"
+                    class="runner360-s1__ltg-btn lead-time-extension-btn"
+                    disabled
+                    aria-label="Lead Time Extension pending"
+                    title="A Lead Time Extension request is already pending">
+              <span class="runner360-s1__ltg-icon" aria-hidden="true">
+                <svg viewBox="0 0 64 64" role="img" focusable="false">
+                  <circle cx="28" cy="28" r="22"></circle>
+                  <path d="M28 15v14h10"></path>
+                  <circle cx="47" cy="47" r="13"></circle>
+                  <path d="M47 40v14M40 47h14"></path>
+                </svg>
+              </span>
+              <span class="runner360-s1__ltg-tooltip" role="tooltip">Request Pending</span>
+            </button>
+            {% else %}
+            <button type="button"
+                    class="runner360-s1__ltg-btn lead-time-extension-btn"
+                    id="runner360-s1-ltg-open"
+                    aria-label="Lead Time Extension"
+                    title="Lead Time Extension"
+                    onclick="window.__openLeadTimeExtension && window.__openLeadTimeExtension()">
+              <span class="runner360-s1__ltg-icon" aria-hidden="true">
+                <svg viewBox="0 0 64 64" role="img" focusable="false">
+                  <circle cx="28" cy="28" r="22"></circle>
+                  <path d="M28 15v14h10"></path>
+                  <circle cx="47" cy="47" r="13"></circle>
+                  <path d="M47 40v14M40 47h14"></path>
+                </svg>
+              </span>
+              <span class="runner360-s1__ltg-tooltip" role="tooltip">Lead Time Extension</span>
+            </button>
+            {% endif %}
+          {% endif %}
+        </span>
+      </div>
+
+      <img src="/static/logo.png" alt="HoseXperts" class="runner360-s1__logo" />
+    </div>
+
+    <!-- ================================================================
+         PINK BLOCK — generic S1 fields
+         ================================================================ -->
+    <div class="runner360-s1__pink-block">
+      <div class="runner360-s1__grid runner360-s1__grid--5" style="margin-bottom:14px;">
+        <div class="runner360-s1__info-item">
+          <label>S1 Planned Helper</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_PLHelper') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 Base TS</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_PLBaseTS') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 Lead Time Mins</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_LeadTimeMins') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 Planned Timestamp</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_PLTimeStamp') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 Doer</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_Doer') or '-' }}</div>
+        </div>
+      </div>
+
+      <div class="runner360-s1__grid runner360-s1__grid--5">
+        <div class="runner360-s1__info-item">
+          <label>S1 Actual Helper</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_ALHelper') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 LeadTimeGrantMins</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_LeadTimeGrantMins') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 DelayTime</label>
+          <div class="runner360-s1__info-value">
+            {{ runner_row.get('S1_DelayMins') or '-' }}
+          </div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 ActualTimestamp</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_ALTimeStamp') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>S1 Task Status</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('S1_TaskStatus') or runner_row.get('S1_Task_Status') or ('Cancelled' if runner_is_cancelled else '-') }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================
+         GREY BLOCK — Runner360 task summary
+         ================================================================ -->
+    <div class="runner360-s1__grey-block">
+      <h4 class="runner360-s1__section-heading">Runner360 Task Details</h4>
+      <p class="runner360-s1__section-meta">Team Lead assignment details. Only an active manager can change Task Start Date & Time and Lead Time. The action remains visible in Guest/read-only views, but is disabled for non-managers.</p>
+
+      <div class="runner360-s1__grid runner360-s1__grid--5">
+        <div class="runner360-s1__info-item">
+          <label>Branch</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('I_Branch') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>Runner</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('I_Runner') or '-' }}</div>
+        </div>
+        <div class="runner360-s1__info-item runner360-s1__plan-field">
+          <label for="runner360-plan-start-input">Task Start Date &amp; Time</label>
+          <div class="runner360-s1__info-value" id="runner360-plan-start-readonly">{{ task_start_display }}</div>
+          <input
+            class="runner360-s1__plan-control"
+            id="runner360-plan-start-input"
+            type="datetime-local"
+            step="60"
+            value="{{ task_start_input_value }}"
+            autocomplete="off"
+            hidden
+            disabled
+          />
+        </div>
+        <div class="runner360-s1__info-item runner360-s1__plan-field">
+          <label for="runner360-plan-lead-input">Lead Time (Minutes)</label>
+          <div class="runner360-s1__info-value" id="runner360-plan-lead-readonly">{{ task_lead_minutes or '-' }}</div>
+          <input
+            class="runner360-s1__plan-control"
+            id="runner360-plan-lead-input"
+            type="number"
+            min="1"
+            max="10080"
+            step="1"
+            value="{{ task_lead_minutes or '' }}"
+            inputmode="numeric"
+            autocomplete="off"
+            hidden
+            disabled
+          />
+        </div>
+        <div class="runner360-s1__info-item">
+          <label>Expected Return Time</label>
+          <div class="runner360-s1__info-value" id="runner360-plan-expected-display">{{ expected_return_display }}</div>
+        </div>
+        <div class="runner360-s1__info-item runner360-s1__info-item--full">
+          <label>Purpose</label>
+          <div class="runner360-s1__info-value">{{ runner_row.get('I_Purpose') or '-' }}</div>
+        </div>
+      </div>
+
+      <div class="runner360-s1__plan-edit-toolbar" id="runner360-plan-edit-toolbar" hidden>
+        <div class="runner360-s1__plan-edit-copy">
+          <strong>Need to change the planned timing?</strong>
+          <span>Only active managers can change the planned start timestamp and lead time. The button is visible to other viewers but remains disabled for them.</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="runner360-plan-edit">Edit Planned Details</button>
+      </div>
+      <div class="runner360-s1__plan-edit-footer" id="runner360-plan-edit-footer" hidden>
+        <div class="runner360-s1__plan-edit-copy">
+          <strong>Edit planned timing</strong>
+          <span>Expected Return Time recalculates automatically from start date/time plus lead minutes. Only active managers can save changes.</span>
+        </div>
+        <div class="runner360-s1__plan-edit-buttons">
+          <button type="button" class="btn btn-sm" id="runner360-plan-cancel">Cancel</button>
+          <button type="button" class="btn btn-sm btn-primary" id="runner360-plan-save" disabled>Save Changes</button>
+        </div>
+      </div>
+      <div class="runner360-s1__plan-feedback" id="runner360-plan-feedback" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <!-- Single Runner360 task details block; no duplicate assignment form. -->
+
+    <!-- ================================================================
+         FINAL IN ACTION
+         ================================================================ -->
+    <div class="runner360-s1__action-bar">
+      <div class="runner360-s1__action-note">
+        Press <strong>IN</strong> only after the runner has returned to the assigned Hosexpert branch. The action is intended to capture actual time and perform location verification.
+      </div>
+
+      {% if not embedded and not runner_is_cancelled %}
+      <button type="button"
+              id="runner360-revoke-button"
+              class="runner360-s1__revoke-btn"
+              data-runner360-task-id="{{ task_id }}"
+              hidden>
+        Revoke Task
+      </button>
+      {% endif %}
+
+      <button type="button"
+              id="runner360-in-button"
+              class="runner360-s1__in-btn"
+              data-runner360-task-id="{{ task_id }}"
+              {% if not context.editable or runner_is_cancelled %}disabled{% endif %}>
+        Check In
+      </button>
+    </div>
+
+    <div id="runner360-in-status"
+         class="runner360-s1__in-status"
+         data-state="">
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const card = document.querySelector('.runner360-s1-card');
+  const startRead = document.getElementById('runner360-plan-start-readonly');
+  const leadRead = document.getElementById('runner360-plan-lead-readonly');
+  const expectedDisplay = document.getElementById('runner360-plan-expected-display');
+  const startInput = document.getElementById('runner360-plan-start-input');
+  const leadInput = document.getElementById('runner360-plan-lead-input');
+  const toolbar = document.getElementById('runner360-plan-edit-toolbar');
+  const editButton = document.getElementById('runner360-plan-edit');
+  const footer = document.getElementById('runner360-plan-edit-footer');
+  const saveButton = document.getElementById('runner360-plan-save');
+  const cancelButton = document.getElementById('runner360-plan-cancel');
+  const feedback = document.getElementById('runner360-plan-feedback');
+  if (!card || !startInput || !leadInput || !toolbar || !editButton || !footer || !saveButton || !cancelButton) return;
+
+  const taskId = card.dataset.taskId || '';
+  const permissionUrl = '/forms/runner360/' + encodeURIComponent(taskId) + '/plan-edit-permission';
+  const saveUrl = '/forms/runner360/' + encodeURIComponent(taskId) + '/planned-details';
+  const originalStart = startInput.value;
+  const originalLead = leadInput.value;
+  const originalExpected = expectedDisplay ? expectedDisplay.textContent : '';
+  let canEdit = false;
+  let canShowEditButton = false;
+  let isEditing = false;
+  let saving = false;
+
+  function showFeedback(message, state) {
+    if (!feedback) return;
+    feedback.hidden = false;
+    feedback.textContent = message;
+    feedback.dataset.state = state || '';
+  }
+
+  function clearFeedback() {
+    if (!feedback) return;
+    feedback.hidden = true;
+    feedback.textContent = '';
+    feedback.dataset.state = '';
+  }
+
+  function pad(value) { return String(value).padStart(2, '0'); }
+  function toSqlDateTime(date) {
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':00';
+  }
+
+  function getPreview() {
+    const rawStart = String(startInput.value || '').trim();
+    const rawLead = String(leadInput.value || '').trim();
+    const lead = Number(rawLead);
+    if (!rawStart || !rawLead || !Number.isInteger(lead) || lead < 1 || lead > 10080) return null;
+    const start = new Date(rawStart);
+    if (Number.isNaN(start.getTime())) return null;
+    const expected = new Date(start.getTime() + lead * 60000);
+    if (Number.isNaN(expected.getTime())) return null;
+    return { start: toSqlDateTime(start), lead, expected: toSqlDateTime(expected) };
+  }
+
+  function updatePreview() {
+    const preview = getPreview();
+    if (preview && expectedDisplay) expectedDisplay.textContent = preview.expected;
+    // Treat a stale stored expected-return timestamp as a pending change too.
+    // This lets the user save/synchronize older rows where I_TaskStartDateTime
+    // differs from S1_PLBaseTS / S1_PLTimeStamp even without changing the inputs.
+    const storedExpected = String(originalExpected || '').replace('T', ' ').trim().slice(0, 19);
+    const calculatedExpected = preview ? String(preview.expected || '').trim().slice(0, 19) : '';
+    const expectedOutOfSync = Boolean(storedExpected && calculatedExpected && storedExpected !== calculatedExpected);
+    const dirty = startInput.value !== originalStart || leadInput.value !== originalLead || expectedOutOfSync;
+    saveButton.disabled = !canEdit || !isEditing || saving || !preview || !dirty;
+  }
+
+  function setEditMode(enabled) {
+    isEditing = Boolean(enabled);
+    startRead.hidden = isEditing;
+    leadRead.hidden = isEditing;
+    startInput.hidden = !isEditing;
+    leadInput.hidden = !isEditing;
+    startInput.disabled = !isEditing;
+    leadInput.disabled = !isEditing;
+    toolbar.hidden = !canShowEditButton || isEditing;
+    footer.hidden = !isEditing;
+    if (!isEditing) {
+      startInput.value = originalStart;
+      leadInput.value = originalLead;
+      if (expectedDisplay) expectedDisplay.textContent = originalExpected;
+      saveButton.textContent = 'Save Changes';
+      saving = false;
+      clearFeedback();
+    }
+    updatePreview();
+  }
+
+  startInput.addEventListener('input', updatePreview);
+  leadInput.addEventListener('input', updatePreview);
+  startInput.addEventListener('change', updatePreview);
+  leadInput.addEventListener('change', updatePreview);
+  // Keep the preview consistent with the task start + lead-time values even
+  // if older rows contain a stale stored expected-return timestamp.
+  updatePreview();
+
+  editButton.addEventListener('click', function () {
+    if (!canEdit || saving) return;
+    clearFeedback();
+    setEditMode(true);
+    startInput.focus();
+  });
+
+  cancelButton.addEventListener('click', function () {
+    if (saving) return;
+    setEditMode(false);
+  });
+
+  async function loadPermissions() {
+    try {
+      const response = await fetch(permissionUrl + '?_=' + Date.now(), {
+        method: 'GET', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.detail || 'Could not check edit permissions.');
+      canEdit = Boolean(data.can_edit);
+      canShowEditButton = Boolean(data.show_edit_button || data.can_edit);
+      toolbar.hidden = !canShowEditButton;
+      editButton.disabled = !canEdit;
+      editButton.title = canEdit
+        ? 'Edit planned start time and lead time'
+        : 'Only an active manager can edit planned details';
+      editButton.setAttribute('aria-disabled', canEdit ? 'false' : 'true');
+    } catch (error) {
+      // Fail closed: if permission lookup fails, the fields remain read-only.
+      console.warn('[Runner360] Planned timing permission lookup failed:', error);
+    }
+  }
+
+  saveButton.addEventListener('click', async function () {
+    if (!canEdit || !isEditing || saving) return;
+    const preview = getPreview();
+    if (!preview) {
+      showFeedback('Enter a valid start timestamp and a whole-number lead time from 1 to 10080 minutes.', 'error');
+      return;
+    }
+    saving = true;
+    saveButton.disabled = true;
+    cancelButton.disabled = true;
+    saveButton.textContent = 'Saving…';
+    showFeedback('Saving planned details…', '');
+    try {
+      const response = await fetch(saveUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          I_TaskStartDateTime: startInput.value,
+          I_LeadTimeMins: leadInput.value
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.detail || 'Could not save planned details.');
+      showFeedback('Planned details saved. Refreshing S1…', 'success');
+      window.location.reload();
+    } catch (error) {
+      showFeedback(error.message || 'Could not save planned details.', 'error');
+      saving = false;
+      cancelButton.disabled = false;
+      saveButton.textContent = 'Save Changes';
+      updatePreview();
+    }
+  });
+
+  loadPermissions();
+})();
+</script>
+
+{% if context.editable and not runner_is_cancelled %}
+<script>
+(function () {
+  const card = document.querySelector('.runner360-s1-card');
+  const inButton = document.getElementById('runner360-in-button');
+  const status = document.getElementById('runner360-in-status');
+  if (!card || !inButton || !status) return;
+
+  const taskId = inButton.dataset.runner360TaskId || card.dataset.taskId || '';
+  const inUrl = '/forms/runner360/' + encodeURIComponent(taskId) + '/in';
+
+  function showStatus(message, state) {
+    status.hidden = false;
+    status.textContent = message;
+    status.dataset.state = state || '';
+  }
+
+  function getGpsPosition() {
+    return new Promise((resolve, reject) => {
+      if (!window.isSecureContext) {
+        reject(new Error('Location access requires HTTPS or localhost. Open the local portal using 127.0.0.1 or localhost.'));
+        return;
+      }
+      if (!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== 'function') {
+        reject(new Error('This browser does not support GPS location.'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        position => resolve(position),
+        error => {
+          const messages = {
+            1: 'Location permission was denied. Allow location access for this site, then try IN again.',
+            2: 'Your current location could not be determined. Enable device location and try again.',
+            3: 'GPS timed out. Try again with a clear view of the sky or a stronger location signal.'
+          };
+          reject(new Error(messages[error.code] || 'Unable to read GPS location.'));
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    });
+  }
+
+  inButton.addEventListener('click', async function () {
+    if (inButton.disabled || card.dataset.stageLocked === 'true') return;
+    const originalText = inButton.textContent;
+    inButton.disabled = true;
+    inButton.textContent = 'Getting GPS…';
+    showStatus('Requesting your GPS location. Allow the browser location prompt to continue.', '');
+
+    try {
+      const position = await getGpsPosition();
+      showStatus('GPS captured. Verifying the assigned branch and recording IN…', '');
+      const response = await fetch(inUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.detail || data.message || 'Could not record Runner360 IN.');
+      showStatus(data.message || 'IN recorded successfully. Refreshing Stage S1…', 'success');
+      inButton.textContent = 'IN Recorded';
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (error) {
+      showStatus(error.message || 'Could not complete IN. Please try again.', 'error');
+      inButton.disabled = false;
+      inButton.textContent = originalText;
+    }
+  });
+})();
+</script>
+{% endif %}
+
+{% if not embedded and not runner_is_cancelled %}
+<div id="runner360-revoke-confirm-modal" class="runner360-revoke-overlay" hidden aria-hidden="true">
+  <section class="runner360-revoke-dialog" role="dialog" aria-modal="true" aria-labelledby="runner360-revoke-title" aria-describedby="runner360-revoke-description">
+    <header class="runner360-revoke-dialog__head">
+      <h3 id="runner360-revoke-title">Revoke Runner360 Task?</h3>
+      <button type="button" class="runner360-revoke-dialog__close" id="runner360-revoke-close" aria-label="Close confirmation">&times;</button>
+    </header>
+    <p id="runner360-revoke-description">The task status will become <strong>Cancelled</strong>. IN and planned-detail editing will be disabled. This action cannot be undone here.</p>
+    <div class="runner360-revoke-dialog__actions">
+      <button type="button" class="btn" id="runner360-revoke-cancel">Cancel</button>
+      <button type="button" class="runner360-revoke-dialog__confirm" id="runner360-revoke-confirm">Confirm Revoke</button>
+    </div>
+  </section>
+</div>
+<script>
+(function () {
+  const card = document.querySelector('.runner360-s1-card');
+  const button = document.getElementById('runner360-revoke-button');
+  const status = document.getElementById('runner360-in-status');
+  const inButton = document.getElementById('runner360-in-button');
+  const modal = document.getElementById('runner360-revoke-confirm-modal');
+  const cancelModalButton = document.getElementById('runner360-revoke-cancel');
+  const closeModalButton = document.getElementById('runner360-revoke-close');
+  const confirmRevokeButton = document.getElementById('runner360-revoke-confirm');
+  if (!card || !button || !modal || !confirmRevokeButton) return;
+
+  const taskId = button.dataset.runner360TaskId || card.dataset.taskId || '';
+  const permissionUrl = '/forms/runner360/' + encodeURIComponent(taskId) + '/plan-edit-permission';
+  const revokeUrl = '/forms/runner360/' + encodeURIComponent(taskId) + '/revoke';
+  let previousFocus = null;
+
+  function showMessage(message, state) {
+    if (!status) return;
+    status.hidden = false;
+    status.textContent = message;
+    status.dataset.state = state || '';
+  }
+
+  function openModal() {
+    if (button.disabled) return;
+    previousFocus = document.activeElement;
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('runner360-revoke-modal-open');
+    cancelModalButton.focus();
+  }
+
+  function closeModal() {
+    if (!modal || confirmRevokeButton.disabled) return;
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('runner360-revoke-modal-open');
+    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+  }
+
+  fetch(permissionUrl + '?_=' + Date.now(), {
+    method: 'GET', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'Accept': 'application/json' }
+  }).then(async response => {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) return;
+    if (data.can_revoke && !data.cancelled && !data.completed) button.hidden = false;
+  }).catch(error => {
+    // Fail closed: only reveal the revoke action after a successful permission check.
+    console.warn('[Runner360] Revoke permission lookup failed:', error);
+  });
+
+  button.addEventListener('click', openModal);
+  cancelModalButton.addEventListener('click', closeModal);
+  closeModalButton.addEventListener('click', closeModal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', event => {
+    if (modal.hidden) return;
+    if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
+  });
+
+  confirmRevokeButton.addEventListener('click', async function () {
+    if (confirmRevokeButton.disabled || button.disabled) return;
+    confirmRevokeButton.disabled = true;
+    cancelModalButton.disabled = true;
+    closeModalButton.disabled = true;
+    confirmRevokeButton.textContent = 'Cancelling…';
+    button.disabled = true;
+    const oldText = button.textContent;
+    button.textContent = 'Cancelling…';
+    if (inButton) inButton.disabled = true;
+    showMessage('Cancelling Runner360 task…', '');
+
+    try {
+      const response = await fetch(revokeUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.detail || 'Could not cancel Runner360 task.');
+      showMessage('Task Cancelled successfully. Refreshing Stage S1…', 'success');
+      window.location.reload();
+    } catch (error) {
+      showMessage(error.message || 'Could not cancel Runner360 task.', 'error');
+      button.disabled = false;
+      button.textContent = oldText;
+      if (inButton && card.dataset.stageLocked !== 'true') inButton.disabled = false;
+      confirmRevokeButton.disabled = false;
+      cancelModalButton.disabled = false;
+      closeModalButton.disabled = false;
+      confirmRevokeButton.textContent = 'Confirm Revoke';
+    }
+  });
+})();
+</script>
+{% endif %}
+
+{# Runner360-specific Lead Time Extension modal, matching the standard Pick N Pack layout. #}
+{% if context.editable and not embedded and not runner_is_cancelled %}
+<div id="runner360-ltg-modal" class="modal-overlay runner360-ltg-overlay" hidden aria-hidden="true">
+  <div class="modal-card runner360-ltg-card" role="dialog" aria-modal="true" aria-labelledby="runner360-ltg-title">
+    <div class="modal-head runner360-ltg-head">
+      <h3 class="modal-title" id="runner360-ltg-title">Lead Time Extension</h3>
+      <button type="button" class="btn btn-ghost runner360-ltg-close-icon" data-runner360-ltg-close aria-label="Close">&times;</button>
+    </div>
+
+    <form id="runner360-ltg-form"
+          method="post"
+          action="{{ routes.stage_lead_time_grant_route(task_id, stage_no) }}"
+          enctype="multipart/form-data">
+      {%- set r360_ltg_doer = runner_row.get('S1_Doer') or runner_row.get('I_Runner') or '' -%}
+      {%- set r360_ltg_row_id = context.row[context.primary_key] if context.row and context.primary_key and context.primary_key in context.row else task_id -%}
+
+      <div class="runner360-ltg-meta-grid">
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-appid">APPID</label>
+          <input id="runner360-ltg-appid" type="text" value="{{ context.fms.app_id or '' }}" readonly>
+        </div>
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-fms-name">FMS Name</label>
+          <input id="runner360-ltg-fms-name" type="text" value="{{ context.fms.fms_name or '' }}" readonly>
+        </div>
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-stage-no">Stage No</label>
+          <input id="runner360-ltg-stage-no" type="text" value="{{ context.stage.STAGE_NO or stage_no or '' }}" readonly>
+        </div>
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-stage-name">Stage Name</label>
+          <input id="runner360-ltg-stage-name" type="text" value="{{ context.stage.STAGE_NAME or '' }}" readonly>
+        </div>
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-doer">Doer Name</label>
+          <input id="runner360-ltg-doer" type="text" value="{{ r360_ltg_doer }}" readonly>
+        </div>
+        <div class="runner360-ltg-field runner360-ltg-readonly-field">
+          <label for="runner360-ltg-row-id">FMS Row ID</label>
+          <input id="runner360-ltg-row-id" type="text" value="{{ r360_ltg_row_id }}" readonly>
+        </div>
+      </div>
+
+      <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+      <input type="hidden" name="fms_name" value="{{ context.fms.fms_name or '' }}">
+      <input type="hidden" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}">
+      <input type="hidden" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}">
+      <input type="hidden" name="doer_name" value="{{ r360_ltg_doer }}">
+      <input type="hidden" name="fms_row_id" value="{{ r360_ltg_row_id }}">
+
+      <div class="runner360-ltg-field runner360-ltg-section">
+        <label for="runner360-ltg-minutes">Requested Minutes <span aria-hidden="true">*</span></label>
+        <input id="runner360-ltg-minutes" name="requested_minutes" type="number" min="1" max="10080" step="1" required placeholder="10, 20, 120">
+      </div>
+
+      <div class="runner360-ltg-field runner360-ltg-section">
+        <label for="runner360-ltg-files">Attachments</label>
+        <div id="runner360-ltg-dropzone" class="runner360-ltg-dropzone" tabindex="0" role="button" aria-label="Add attachments">
+          <span class="runner360-ltg-dropzone-text">Drag and drop files here, or click to browse. Multiple files are allowed.</span>
+          <button type="button" class="btn btn-sm runner360-ltg-browse" id="runner360-ltg-browse">Choose Files</button>
+          <input id="runner360-ltg-files" name="attachments" type="file" multiple hidden>
+        </div>
+        <div id="runner360-ltg-file-list" class="runner360-ltg-file-list" aria-live="polite"></div>
+      </div>
+
+      <div class="runner360-ltg-field runner360-ltg-section">
+        <label for="runner360-ltg-remarks">Lead Time Grant Remarks <span aria-hidden="true">*</span></label>
+        <textarea id="runner360-ltg-remarks" name="lead_time_grant_remarks" rows="3" maxlength="2000" required placeholder="Enter remarks"></textarea>
+      </div>
+
+      <div class="runner360-ltg-actions">
+        <button type="button" class="btn btn-ghost" data-runner360-ltg-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="runner360-ltg-submit" disabled>Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modal = document.getElementById('runner360-ltg-modal');
+  const form = document.getElementById('runner360-ltg-form');
+  const requested = document.getElementById('runner360-ltg-minutes');
+  const remarks = document.getElementById('runner360-ltg-remarks');
+  const submit = document.getElementById('runner360-ltg-submit');
+  const fileInput = document.getElementById('runner360-ltg-files');
+  const browseButton = document.getElementById('runner360-ltg-browse');
+  const dropzone = document.getElementById('runner360-ltg-dropzone');
+  const fileList = document.getElementById('runner360-ltg-file-list');
+  if (!modal || !form) return;
+
+  function openModal() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('runner360-ltg-modal-open');
+    window.setTimeout(() => requested && requested.focus(), 0);
+  }
+  function closeModal() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('runner360-ltg-modal-open');
+  }
+  window.__openLeadTimeExtension = openModal;
+
+  function updateSubmitState() {
+    const minutes = Number(requested && requested.value);
+    submit.disabled = !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 10080 && remarks && remarks.value.trim());
+  }
+  function setFiles(nextFiles) {
+    const transfer = new DataTransfer();
+    const existing = Array.from(fileInput.files || []);
+    const allFiles = [...existing, ...Array.from(nextFiles || [])];
+    const seen = new Set();
+    allFiles.forEach(file => {
+      const key = [file.name, file.size, file.lastModified].join('|');
+      if (!seen.has(key)) { seen.add(key); transfer.items.add(file); }
+    });
+    fileInput.files = transfer.files;
+    renderFiles();
+  }
+  function renderFiles() {
+    fileList.replaceChildren();
+    Array.from(fileInput.files || []).forEach((file, index) => {
+      const chip = document.createElement('span');
+      chip.className = 'runner360-ltg-file-chip';
+      const name = document.createElement('span');
+      name.textContent = file.name;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'runner360-ltg-chip-remove';
+      remove.setAttribute('aria-label', 'Remove ' + file.name);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        const transfer = new DataTransfer();
+        Array.from(fileInput.files || []).forEach((item, itemIndex) => { if (itemIndex !== index) transfer.items.add(item); });
+        fileInput.files = transfer.files;
+        renderFiles();
+      });
+      chip.append(name, remove);
+      fileList.appendChild(chip);
+    });
+  }
+
+  document.addEventListener('click', event => {
+    if (event.target.closest('[data-runner360-ltg-close]')) { closeModal(); return; }
+    if (event.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !modal.hidden) closeModal();
+    if (!modal.hidden && dropzone && document.activeElement === dropzone && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault(); fileInput.click();
+    }
+  });
+  browseButton.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); fileInput.click(); });
+  dropzone.addEventListener('click', event => { if (!event.target.closest('button')) fileInput.click(); });
+  fileInput.addEventListener('change', () => renderFiles());
+  ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.add('is-dragover'); }));
+  ['dragleave', 'drop'].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.remove('is-dragover'); }));
+  dropzone.addEventListener('drop', event => setFiles(event.dataTransfer.files));
+  requested.addEventListener('input', updateSubmitState);
+  remarks.addEventListener('input', updateSubmitState);
+  form.addEventListener('submit', event => {
+    updateSubmitState();
+    if (submit.disabled) { event.preventDefault(); form.reportValidity(); }
+  });
+  updateSubmitState();
+})();
+</script>
+{% endif %}
+
+{% endblock %}
