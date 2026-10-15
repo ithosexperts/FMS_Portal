@@ -147,18 +147,34 @@
         </form>
       </div>
       {% endif %}
-    </div>
-
-    <div class="filter-chips-row" style="margin-bottom:10px;">
-      <span class="filter-chip">FMS Filters:</span>
-      {% if section.applied_filters %}
-        {% for filter_text in section.applied_filters %}
-        <span class="filter-chip">{{ filter_text }}</span>
-        {% endfor %}
-      {% else %}
-      <span class="filter-chip">None</span>
+      {% if section.fms_name|string|lower == 'runner360' %}
+      <a class="btn btn-sm btn-primary" href="/runner360/dashboard" style="white-space:nowrap; display:inline-flex; align-items:center; gap:7px; margin-left:auto;">
+        <span aria-hidden="true">▥</span> Dashboard
+      </a>
       {% endif %}
     </div>
+
+    <div class="filter-chips-row" style="margin-bottom:10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+  <span class="filter-chip">FMS Filters:</span>
+
+  {% if section.applied_filters %}
+    {% for filter_text in section.applied_filters %}
+    <span class="filter-chip">{{ filter_text }}</span>
+    {% endfor %}
+  {% else %}
+    <span class="filter-chip">None</span>
+  {% endif %}
+
+  {% if section.fms_name == 'Runner360' %}
+  <a
+    href="/forms/runner360/input"
+    class="filter-chip"
+    title="Create Runner360 Task"
+    style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; width:30px; height:26px; padding:0; font-size:18px; font-weight:700; cursor:pointer;"
+    aria-label="Create Runner360 Task"
+  >＋</a>
+  {% endif %}
+</div>
 
     {% set is_multi_fms = (selected_fms_values or [])|length > 1 %}
     {% if section.filter_options or is_multi_fms %}

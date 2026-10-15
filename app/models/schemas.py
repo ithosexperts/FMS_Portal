@@ -67,6 +67,8 @@ class TaskSummary(BaseModel):
     assigned_doer: Optional[str] = None
     elapsed_display: str = "-"
     delay_minutes: int = 0
+    # Computed in the portal for Runner360; it is not a physical DB column.
+    extra_busy_minutes: Optional[int] = None
     status: str = "Pending"
     lifecycle_status: str = "Open"
     so_no: Optional[str] = None

@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}Runner360 Busy Time Dashboard · {{ app_name }}{% endblock %}
+{% block page_title %}{% endblock %}
+{% block content %}
+<style>
+  .r360-dash-wrap{max-width:1600px;margin:0 auto}
+  .r360-dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+  .r360-dash-title{margin:0;color:var(--color-primary);font-size:24px;font-weight:800}
+  .r360-dash-subtitle{color:var(--text-secondary);margin:6px 0 0;font-size:13px}
+  .r360-dash-filter{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:16px;margin-bottom:16px;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;position:relative;z-index:5}
+  .r360-dash-filter .field{min-width:170px;flex:1}
+  .r360-dash-filter .field label.field-label{display:block;margin-bottom:6px;font-size:12px;color:var(--text-secondary);font-weight:700}
+  .r360-dash-filter input[type=date],.r360-dash-filter select{width:100%;min-height:40px}
+  .r360-ms{position:relative;min-width:180px;flex:1}
+  .r360-ms-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-primary);text-align:left;cursor:pointer;font:inherit}
+  .r360-ms-trigger:focus{outline:2px solid var(--color-primary);outline-offset:1px}
+  .r360-ms-summary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .r360-ms-caret{color:var(--text-secondary);flex:0 0 auto}
+  .r360-ms-menu{position:absolute;top:calc(100% + 5px);left:0;width:max(100%,300px);max-width:min(390px,calc(100vw - 34px));background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 12px 28px rgba(15,23,42,.18);z-index:1000;overflow:hidden}
+  .r360-ms-menu[hidden]{display:none}
+  .r360-ms-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-color)}
+  .r360-ms-link{background:none;border:0;padding:2px;color:var(--color-primary);font-weight:700;cursor:pointer;font:inherit;font-size:13px}
+  .r360-ms-search{display:block;width:calc(100% - 24px)!important;min-height:36px!important;margin:10px 12px;padding:7px 10px;border:1px solid var(--border-color);border-radius:7px;background:var(--bg-surface);color:var(--text-primary)}
+  .r360-ms-options{max-height:255px;overflow-y:auto;padding:4px 8px 8px}
+  .r360-ms-option{display:flex;align-items:flex-start;gap:9px;padding:8px 7px;border-radius:6px;cursor:pointer;font-size:13px;line-height:1.35;color:var(--text-primary);overflow-wrap:anywhere}
+  .r360-ms-option:hover{background:var(--bg-subtle)}
+  .r360-ms-option[hidden]{display:none}
+  .r360-ms-option input{width:16px;height:16px;min-height:16px;margin:1px 0 0;flex:0 0 auto;accent-color:var(--color-primary)}
+  .r360-ms-footer{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;background:var(--bg-subtle);border-top:1px solid var(--border-color)}
+  .r360-ms-footer button{min-height:34px}
+  .r360-filter-note{margin:-4px 0 16px;color:var(--text-secondary);font-size:12px}
+  .r360-dash-kpis{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .r360-dash-kpi{border:1px solid var(--border-color);border-radius:12px;padding:15px 16px;background:var(--bg-surface)}
+  .r360-dash-kpi-label{color:var(--text-secondary);font-size:12px;font-weight:700;margin-bottom:8px}
+  .r360-dash-kpi-value{color:var(--text-primary);font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+  .r360-chart-scroll{width:100%;overflow-x:auto}
+  #r360-busy-time-chart{display:block;height:420px}
+  .r360-chart-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:10px 0 4px}
+  .r360-legend-item{display:inline-flex;align-items:center;gap:6px;color:var(--text-secondary);font-size:12px}
+  .r360-legend-swatch{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .r360-chart-note{margin:8px 0 0;color:var(--text-secondary);font-size:12px}
+  .r360-details-table{width:100%;border-collapse:collapse}
+  .r360-details-table th,.r360-details-table td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border-color)}
+  .r360-details-table th{font-size:12px;color:var(--text-secondary);background:var(--bg-subtle)}
+  .r360-details-table td{font-variant-numeric:tabular-nums}
+  .r360-empty{padding:24px 16px;color:var(--text-secondary);text-align:center;border:1px dashed var(--border-color);border-radius:12px}
+  @media(max-width:760px){.r360-dash-kpis{grid-template-columns:1fr}.r360-dash-title{font-size:21px}.r360-dash-filter .field,.r360-ms{min-width:100%}.r360-ms-menu{width:100%}}
+</style>
+<div class="r360-dash-wrap">
+  <div class="r360-dash-head">
+    <div>
+      <h1 class="r360-dash-title">Runner360 Dashboard</h1>
+      <p class="r360-dash-subtitle">Actual busy time by runner · source: <code>Z_Runner360.BusyTimeMins</code></p>
+    </div>
+    <a class="btn" href="/dashboard?fms_name=Runner360">← Back to Workflow</a>
+  </div>
+
+  <form class="r360-dash-filter" method="get" action="/runner360/dashboard" id="r360-dashboard-filter">
+    <input type="hidden" name="runner_filter_set" value="1">
+    <input type="hidden" name="year_filter_set" value="1">
+    <input type="hidden" name="week_filter_set" value="1">
+    <div data-hidden-inputs="runner">
+      {% for item in selected_runners %}<input type="hidden" name="runner" value="{{ item }}">{% endfor %}
+    </div>
+    <div data-hidden-inputs="year">
+      {% for y in selected_years %}<input type="hidden" name="year" value="{{ y }}">{% endfor %}
+    </div>
+    <div data-hidden-inputs="week_key">
+      {% for item in selected_week_keys %}<input type="hidden" name="week_key" value="{{ item }}">{% endfor %}
+    </div>
+    <div class="field" style="max-width:155px;">
+      <label class="field-label" for="r360-group-by">View</label>
+      <select id="r360-group-by" name="group_by" onchange="this.form.submit()">
+        <option value="day" {{ 'selected' if group_by == 'day' else '' }}>Daily</option>
+        <option value="week" {{ 'selected' if group_by == 'week' else '' }}>Weekly</option>
+      </select>
+    </div>
+
+    <div class="field r360-ms" data-ms data-param="runner" data-summary-all="All runners" style="min-width:230px;">
+      <label class="field-label">Runner</label>
+      <button class="r360-ms-trigger" type="button" data-ms-trigger aria-expanded="false"><span class="r360-ms-summary" data-ms-summary></span><span class="r360-ms-caret">▾</span></button>
+      <div class="r360-ms-menu" data-ms-menu hidden>
+        <div class="r360-ms-actions"><button class="r360-ms-link" type="button" data-ms-select-all>Select All</button><button class="r360-ms-link" type="button" data-ms-clear-all>Clear All</button></div>
+        <input class="r360-ms-search" type="search" placeholder="Search options..." data-ms-search aria-label="Search runners">
+        <div class="r360-ms-options">
+          {% for item in runner_options %}
+          <label class="r360-ms-option" data-ms-option><input type="checkbox" data-ms-value value="{{ item }}" {% if item in selected_runners %}checked{% endif %}><span>{{ item }}</span></label>
+          {% endfor %}
+        </div>
+        <div class="r360-ms-footer"><button class="btn" type="button" data-ms-cancel>Cancel</button><button class="btn btn-primary" type="button" data-ms-apply>Apply</button></div>
+      </div>
+    </div>
+
+    <div class="field" id="r360-day-filter" style="max-width:210px;{{ '' if group_by == 'day' else 'display:none;' }}">
+      <label class="field-label" for="r360-selected-date">Date</label>
+      <input id="r360-selected-date" type="date" name="selected_date" value="{{ selected_date }}">
+    </div>
+
+    <div class="field r360-ms" data-ms data-param="year" data-summary-all="Select years" id="r360-year-filter" style="max-width:170px;{{ '' if group_by == 'week' else 'display:none;' }}">
+      <label class="field-label">Year</label>
+      <button class="r360-ms-trigger" type="button" data-ms-trigger aria-expanded="false"><span class="r360-ms-summary" data-ms-summary></span><span class="r360-ms-caret">▾</span></button>
+      <div class="r360-ms-menu" data-ms-menu hidden>
+        <div class="r360-ms-actions"><button class="r360-ms-link" type="button" data-ms-select-all>Select All</button><button class="r360-ms-link" type="button" data-ms-clear-all>Clear All</button></div>
+        <input class="r360-ms-search" type="search" placeholder="Search options..." data-ms-search aria-label="Search years">
+        <div class="r360-ms-options">
+          {% for y in year_options %}
+          <label class="r360-ms-option" data-ms-option><input type="checkbox" data-ms-value value="{{ y }}" {% if y in selected_years %}checked{% endif %}><span>{{ y }}</span></label>
+          {% endfor %}
+        </div>
+        <div class="r360-ms-footer"><button class="btn" type="button" data-ms-cancel>Cancel</button><button class="btn btn-primary" type="button" data-ms-apply>Apply</button></div>
+      </div>
+    </div>
+
+    <div class="field r360-ms" data-ms data-param="week_key" data-summary-all="Select weeks" id="r360-week-filter" style="min-width:285px;{{ '' if group_by == 'week' else 'display:none;' }}">
+      <label class="field-label">Week number (Sunday–Saturday)</label>
+      <button class="r360-ms-trigger" type="button" data-ms-trigger aria-expanded="false"><span class="r360-ms-summary" data-ms-summary></span><span class="r360-ms-caret">▾</span></button>
+      <div class="r360-ms-menu" data-ms-menu hidden>
+        <div class="r360-ms-actions"><button class="r360-ms-link" type="button" data-ms-select-all>Select All</button><button class="r360-ms-link" type="button" data-ms-clear-all>Clear All</button></div>
+        <input class="r360-ms-search" type="search" placeholder="Search week or date..." data-ms-search aria-label="Search weeks">
+        <div class="r360-ms-options">
+          {% for item in week_options %}
+          <label class="r360-ms-option" data-ms-option data-year="{{ item.year }}" {% if item.year not in selected_years %}hidden{% endif %}><input type="checkbox" data-ms-value value="{{ item.key }}" {% if item.key in selected_week_keys %}checked{% endif %}><span>{{ item.label }}</span></label>
+          {% endfor %}
+        </div>
+        <div class="r360-ms-footer"><button class="btn" type="button" data-ms-cancel>Cancel</button><button class="btn btn-primary" type="button" data-ms-apply>Apply</button></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Apply Filters</button>
+  </form>
+  <p class="r360-filter-note">Runner options are loaded from active Runner-team employees in <code>VM_Team</code> and <code>VM_EmployeeMaster</code>, plus names found in historical Runner360 tasks. The chart shows a separate bar for each selected runner.</p>
+
+  <div class="r360-dash-kpis">
+    <div class="r360-dash-kpi"><div class="r360-dash-kpi-label">Total busy time for selected {{ 'day' if group_by == 'day' else 'weeks' }}</div><div class="r360-dash-kpi-value">{{ total_busy_minutes }} min</div></div>
+    <div class="r360-dash-kpi"><div class="r360-dash-kpi-label">Completed tasks measured</div><div class="r360-dash-kpi-value">{{ completed_tasks }}</div></div>
+    <div class="r360-dash-kpi"><div class="r360-dash-kpi-label">Tasks in selected period</div><div class="r360-dash-kpi-value">{{ tasks_in_range }}</div></div>
+  </div>
+
+  <section class="card" style="padding:18px;margin-bottom:16px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+      <div>
+        <h2 style="margin:0;font-size:17px;">{{ 'Busy Time on Selected Day' if group_by == 'day' else 'Daily Busy Time in Selected Weeks' }}</h2>
+        <p class="r360-dash-subtitle" style="margin-top:5px;">Y-axis is fixed from 0 to 480 minutes (8 hours) for each runner per day.</p>
+      </div>
+      <span class="filter-chip">{{ 'Daily view' if group_by == 'day' else 'Weekly view' }} · {{ selected_runners|length }} runner(s)</span>
+    </div>
+    {% if not selected_runners %}
+      <div class="r360-empty">No runners selected. Open the Runner filter, select one or more runners, and press Apply.</div>
+    {% elif group_by == 'week' and not selected_week_keys %}
+      <div class="r360-empty">No weeks selected. Open the Week number filter and select one or more weeks.</div>
+    {% elif chart_labels %}
+      <div id="r360-chart-legend" class="r360-chart-legend" aria-label="Runner chart legend"></div>
+      <div class="r360-chart-scroll"><canvas id="r360-busy-time-chart" role="img" aria-label="Daily Busy Time grouped by runner, with a fixed 0 to 480 minute axis"></canvas></div>
+      <p class="r360-chart-note">Each bar is one runner's Busy Time for that date. Values above 480 minutes are capped and marked 480+. Only completed, non-cancelled tasks contribute to Busy Time.</p>
+    {% else %}
+      <div class="r360-empty">No Runner360 tasks match the selected runners and period.</div>
+    {% endif %}
+  </section>
+
+  <section class="card" style="padding:18px;">
+    <h2 style="margin:0 0 12px;font-size:17px;">Daily breakdown by runner</h2>
+    <div class="table-wrapper" style="border:0;">
+      <table class="r360-details-table">
+        <thead><tr><th>Date</th><th>Runner</th><th>Busy Time (min)</th><th>Completed tasks measured</th><th>Tasks assigned</th></tr></thead>
+        <tbody>
+        {% for item in chart_details %}
+          <tr><td>{{ item.date }}</td><td>{{ item.runner }}</td><td><strong>{{ item.busy_minutes }}</strong>{% if item.busy_minutes > 480 %} <span style="color:var(--color-danger);font-size:11px;">(above 480)</span>{% endif %}</td><td>{{ item.completed_tasks }}</td><td>{{ item.task_count }}</td></tr>
+        {% else %}
+          <tr><td colspan="5">No data for this selection.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<script id="r360-chart-data" type="application/json">{{ {'labels': chart_labels, 'series': chart_series}|tojson }}</script>
+<script>
+(function(){
+  const form=document.getElementById('r360-dashboard-filter');
+  if(!form)return;
+  const multiSelects=Array.from(form.querySelectorAll('[data-ms]'));
+  const hiddenContainer=param=>form.querySelector('[data-hidden-inputs="'+param+'"]');
+
+  function checkedValues(control){
+    return Array.from(control.querySelectorAll('[data-ms-value]:checked')).map(input=>input.value);
+  }
+  function visibleOptions(control){
+    return Array.from(control.querySelectorAll('[data-ms-option]')).filter(label=>!label.hidden && label.style.display!=='none');
+  }
+  function refreshSearch(control){
+    const term=(control.querySelector('[data-ms-search]')?.value||'').trim().toLocaleLowerCase();
+    control.querySelectorAll('[data-ms-option]').forEach(label=>{
+      const yearHidden=label.dataset.year && !selectedYearValues().includes(label.dataset.year);
+      const text=(label.textContent||'').toLocaleLowerCase();
+      label.hidden=Boolean(yearHidden)||(term!==''&&!text.includes(term));
+    });
+  }
+  function selectedYearValues(){
+    const yearControl=multiSelects.find(item=>item.dataset.param==='year');
+    return yearControl?JSON.parse(yearControl.dataset.appliedValues||'[]'):[];
+  }
+  function writeHidden(control){
+    const target=hiddenContainer(control.dataset.param);
+    if(!target)return;
+    target.replaceChildren();
+    JSON.parse(control.dataset.appliedValues||'[]').forEach(value=>{
+      const input=document.createElement('input');input.type='hidden';input.name=control.dataset.param;input.value=value;target.appendChild(input);
+    });
+  }
+  function updateSummary(control){
+    const values=JSON.parse(control.dataset.appliedValues||'[]');
+    const summary=control.querySelector('[data-ms-summary]');
+    const labels=values.map(value=>{
+      const input=Array.from(control.querySelectorAll('[data-ms-value]')).find(item=>item.value===value);
+      return input?(input.closest('[data-ms-option]')?.querySelector('span')?.textContent||value):value;
+    });
+    let text;
+    if(!values.length)text='None selected';
+    else if(values.length===control.querySelectorAll('[data-ms-value]').length && control.dataset.param==='runner')text='All runners';
+    else if(values.length===control.querySelectorAll('[data-ms-value]').length && control.dataset.param==='year')text='All years';
+    else if(control.dataset.param==='week_key' && values.length>2)text=values.length+' weeks selected';
+    else if(labels.length<=2)text=labels.join(', ');
+    else text=values.length+' selected';
+    if(summary)summary.textContent=text;
+    writeHidden(control);
+  }
+  function openMenu(control){
+    multiSelects.forEach(other=>{if(other!==control){other.querySelector('[data-ms-menu]').hidden=true;other.querySelector('[data-ms-trigger]').setAttribute('aria-expanded','false');}});
+    control.dataset.appliedValues=JSON.stringify(JSON.parse(control.dataset.appliedValues||'[]'));
+    control.querySelectorAll('[data-ms-value]').forEach(input=>input.checked=JSON.parse(control.dataset.appliedValues||'[]').includes(input.value));
+    const search=control.querySelector('[data-ms-search]');if(search)search.value='';
+    refreshSearch(control);
+    control.querySelector('[data-ms-menu]').hidden=false;
+    control.querySelector('[data-ms-trigger]').setAttribute('aria-expanded','true');
+  }
+  function closeMenu(control){control.querySelector('[data-ms-menu]').hidden=true;control.querySelector('[data-ms-trigger]').setAttribute('aria-expanded','false');}
+  function commit(control){
+    let values=checkedValues(control);
+    if(control.dataset.param==='week_key'){
+      const years=new Set(selectedYearValues());
+      values=values.filter(value=>years.has(value.slice(0,4)));
+    }
+    control.dataset.appliedValues=JSON.stringify(values);
+    updateSummary(control);closeMenu(control);
+    if(control.dataset.param==='year'){
+      const years=new Set(values);
+      const weekControl=multiSelects.find(item=>item.dataset.param==='week_key');
+      if(weekControl){
+        weekControl.querySelectorAll('[data-ms-option]').forEach(label=>{
+          const year=label.dataset.year;
+          const checkbox=label.querySelector('[data-ms-value]');
+          if(!years.has(year)){checkbox.checked=false;label.hidden=true;}
+          else label.hidden=false;
+        });
+        const weekValues=checkedValues(weekControl).filter(value=>years.has(value.slice(0,4)));
+        weekControl.dataset.appliedValues=JSON.stringify(weekValues);
+        updateSummary(weekControl);
+        const search=weekControl.querySelector('[data-ms-search]');if(search)search.value='';
+        refreshSearch(weekControl);
+      }
+    }
+  }
+  multiSelects.forEach(control=>{
+    const initial=checkedValues(control);
+    control.dataset.appliedValues=JSON.stringify(initial);
+    updateSummary(control);
+    control.querySelector('[data-ms-trigger]').addEventListener('click',()=>{
+      if(control.querySelector('[data-ms-menu]').hidden)openMenu(control);else closeMenu(control);
+    });
+    control.querySelector('[data-ms-select-all]').addEventListener('click',()=>visibleOptions(control).forEach(label=>{const cb=label.querySelector('[data-ms-value]');if(cb)cb.checked=true;}));
+    control.querySelector('[data-ms-clear-all]').addEventListener('click',()=>control.querySelectorAll('[data-ms-value]').forEach(cb=>cb.checked=false));
+    control.querySelector('[data-ms-cancel]').addEventListener('click',()=>{
+      const applied=JSON.parse(control.dataset.appliedValues||'[]');
+      control.querySelectorAll('[data-ms-value]').forEach(cb=>cb.checked=applied.includes(cb.value));closeMenu(control);
+    });
+    control.querySelector('[data-ms-apply]').addEventListener('click',()=>commit(control));
+    control.querySelector('[data-ms-search]').addEventListener('input',()=>refreshSearch(control));
+  });
+
+  document.addEventListener('click',event=>{
+    if(!event.target.closest('[data-ms]'))multiSelects.forEach(closeMenu);
+  });
+
+  const dataElement=document.getElementById('r360-chart-data');
+  const canvas=document.getElementById('r360-busy-time-chart');
+  const legend=document.getElementById('r360-chart-legend');
+  if(!canvas||!dataElement)return;
+  let data;try{data=JSON.parse(dataElement.textContent||'{}')}catch(_){return}
+  const labels=Array.isArray(data.labels)?data.labels:[];
+  const series=Array.isArray(data.series)?data.series.map(item=>({name:String(item.name||''),values:Array.isArray(item.values)?item.values.map(value=>Math.max(0,Number(value)||0)):[]})):[];
+  if(!labels.length||!series.length)return;
+  const palette=['#1766d1','#0f9d77','#8b5cf6','#db7c16','#dc4666','#0e7490','#64748b','#65a30d','#9333ea','#b45309','#0891b2','#c026d3'];
+  const colorFor=index=>palette[index%palette.length];
+  if(legend){legend.replaceChildren();series.forEach((item,index)=>{const entry=document.createElement('span');entry.className='r360-legend-item';const swatch=document.createElement('i');swatch.className='r360-legend-swatch';swatch.style.background=colorFor(index);const label=document.createElement('span');label.textContent=item.name;entry.append(swatch,label);legend.appendChild(entry);});}
+  const height=420;
+  const stepWidth=Math.max(76,Math.min(210,series.length*16));
+  const width=Math.min(18000,Math.max(760,118+labels.length*stepWidth));
+  const dpr=Math.min(1.5,Math.max(1,window.devicePixelRatio||1));
+  canvas.style.width=width+'px';canvas.style.height=height+'px';
+  canvas.width=Math.floor(width*dpr);canvas.height=Math.floor(height*dpr);
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  const styles=getComputedStyle(document.documentElement);
+  const textColor=styles.getPropertyValue('--text-secondary').trim()||'#64748b';
+  const gridColor=styles.getPropertyValue('--border-color').trim()||'#dbe2ea';
+  const left=62,right=22,top=24,bottom=88;
+  const plotWidth=width-left-right,plotHeight=height-top-bottom,baseline=top+plotHeight,maxValue=480;
+  ctx.clearRect(0,0,width,height);ctx.font='12px Segoe UI,Arial,sans-serif';ctx.textBaseline='middle';
+  for(let tick=0;tick<=maxValue;tick+=60){const y=baseline-(tick/maxValue)*plotHeight;ctx.beginPath();ctx.strokeStyle=gridColor;ctx.lineWidth=1;ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();ctx.fillStyle=textColor;ctx.textAlign='right';ctx.fillText(String(tick),left-12,y);}
+  ctx.save();ctx.translate(16,top+plotHeight/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillStyle=textColor;ctx.font='600 12px Segoe UI,Arial,sans-serif';ctx.fillText('Busy Time (minutes)',0,0);ctx.restore();
+  const slot=plotWidth/labels.length,groupWidth=Math.min(slot*.86,Math.max(22,series.length*9)),barWidth=Math.max(2,Math.min(26,groupWidth/Math.max(1,series.length)*.76));
+  for(let dayIndex=0;dayIndex<labels.length;dayIndex++){
+    const groupStart=left+dayIndex*slot+(slot-groupWidth)/2;
+    for(let runnerIndex=0;runnerIndex<series.length;runnerIndex++){
+      const raw=series[runnerIndex].values[dayIndex]||0,capped=Math.min(raw,maxValue),barHeight=(capped/maxValue)*plotHeight;
+      const x=groupStart+runnerIndex*(groupWidth/series.length)+(groupWidth/series.length-barWidth)/2,y=baseline-barHeight;
+      ctx.fillStyle=colorFor(runnerIndex);ctx.fillRect(x,y,barWidth,Math.max(1,barHeight));
+      if(raw>0&&series.length<=5){ctx.fillStyle=textColor;ctx.textAlign='center';ctx.font='10px Segoe UI,Arial,sans-serif';ctx.fillText(raw>maxValue?'480+':String(raw),x+barWidth/2,Math.max(top+8,y-9));}
+    }
+    ctx.fillStyle=textColor;ctx.textAlign='center';ctx.font=labels.length>36?'9px Segoe UI,Arial,sans-serif':(labels.length>18?'10px Segoe UI,Arial,sans-serif':'11px Segoe UI,Arial,sans-serif');
+    if(labels.length<=42||dayIndex%Math.ceil(labels.length/42)===0)ctx.fillText(String(labels[dayIndex]),left+dayIndex*slot+slot/2,baseline+20);
+  }
+  ctx.strokeStyle=gridColor;ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,baseline);ctx.lineTo(width-right,baseline);ctx.stroke();
+})();
+</script>
+{% endblock %}

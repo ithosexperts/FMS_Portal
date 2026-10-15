@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     # Used to build absolute deep-links / QR codes from the Developer Hub.
     public_base_url: str = "http://127.0.0.1:8000"
 
+    # CEOITBOX WhatsApp notifications (secrets belong in .env / host settings).
+    whatsapp_api_url: str = "https://app.ceoitbox.com/api/v1/message/create"
+    whatsapp_api_username: str = ""
+    whatsapp_api_password: str = ""
+    whatsapp_channel_id: str = ""
+    whatsapp_test_mode: bool = True
+    whatsapp_test_number: str = ""
+
     request_timeout: float = 15.0
     port: int = 8000
 
