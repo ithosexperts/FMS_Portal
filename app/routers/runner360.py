@@ -605,43 +605,87 @@ _RUNNER360_MOBILE_FIELD_ALIASES = (
 
 
 async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
-    """Re-fetch one exact employee row when the full master list has a blank mobile.
+    """Fetch a single runner's mobile through the same POST query contract as One Portal.
 
-    Some gateway responses return blank contact fields in the unfiltered list while
-    a direct EmployeeCode lookup returns the full master row. Never accept a mobile
-    value from another employee if the gateway ignores the filter.
+    The generic FMS GET query can return the employee row while omitting populated
+    contact fields. One Portal's master query uses POST JSON with filters, so use
+    that contract first. Always match the returned EmployeeCode before accepting
+    any number; never log the number itself.
     """
     target_code = _column_key(employee_code)
     if not target_code:
         return ""
+
+    target_database = get_current_database_target()
+    if target_database not in {"Test_OperationsDB", "OperationsDB"}:
+        # Runner360 is currently being rolled out in Test_OperationsDB.
+        target_database = "Test_OperationsDB"
+
+    rows: list[dict[str, Any]] = []
+    # Match the One Portal/API Studio contract: POST JSON with a filters object.
+    payload = {
+        "action": "Select",
+        "table": "VM_EmployeeMaster",
+        "database": target_database,
+        "filters": {"EmployeeCode": employee_code},
+        "where": {"EmployeeCode": employee_code},
+        "limit": 100,
+    }
     try:
-        rows = await table_api.get_table(
-            "VM_EmployeeMaster", filters={"EmployeeCode": employee_code}
+        response = await api_client.post("update_row", json_body=payload)
+        rows = table_api.as_list(response)
+        logger.info(
+            "Runner360 mobile lookup response: method=POST target_database=%s employee_code=%s rows=%d",
+            target_database, employee_code, len(rows),
         )
     except Exception as exc:
         logger.warning(
-            "Runner360 targeted mobile lookup failed: target_database=%s employee_code=%s error_type=%s",
-            get_current_database_target() or "environment-default", employee_code, type(exc).__name__
+            "Runner360 POST mobile lookup failed: target_database=%s employee_code=%s error_type=%s",
+            target_database, employee_code, type(exc).__name__,
         )
-        return ""
 
-    for employee in rows or []:
+    # Try the legacy GET contract too, but never use a row unless its employee code
+    # matches exactly. This fallback supports gateways that do not expose POST.
+    try:
+        legacy_rows = await table_api.get_table(
+            "VM_EmployeeMaster", filters={"EmployeeCode": employee_code}
+        )
+        rows.extend(row for row in (legacy_rows or []) if isinstance(row, dict))
+        logger.info(
+            "Runner360 mobile lookup response: method=GET target_database=%s employee_code=%s rows=%d",
+            get_current_database_target() or target_database, employee_code, len(legacy_rows or []),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Runner360 GET mobile lookup failed: target_database=%s employee_code=%s error_type=%s",
+            get_current_database_target() or target_database, employee_code, type(exc).__name__,
+        )
+
+    null_values = {"", "null", "none", "nan", "nat", "n/a", "-"}
+    seen_rows: set[tuple[str, str]] = set()
+    for employee in rows:
         if not isinstance(employee, dict):
             continue
         returned_code = _text(_lookup_case_insensitive(employee, "EmployeeCode", "Employee Code"))
         if _column_key(returned_code) != target_code:
             continue
         mobile = _text(_lookup_case_insensitive(employee, *_RUNNER360_MOBILE_FIELD_ALIASES))
-        if mobile:
-            digits = "".join(ch for ch in mobile if ch.isdigit())
-            logger.info(
-                "Runner360 targeted mobile lookup: target_database=%s employee_code=%s found=%s digit_count=%d",
-                get_current_database_target() or "environment-default", employee_code, bool(mobile), len(digits)
-            )
-            return mobile
+        digits = "".join(ch for ch in mobile if ch.isdigit())
+        normalized_key = (_column_key(returned_code), digits)
+        if normalized_key in seen_rows:
+            continue
+        seen_rows.add(normalized_key)
+        if mobile.casefold() in null_values or not (10 <= len(digits) <= 15):
+            continue
+        logger.info(
+            "Runner360 mobile lookup matched employee: target_database=%s employee_code=%s found=True digit_count=%d",
+            target_database, employee_code, len(digits),
+        )
+        return mobile
+
     logger.warning(
-        "Runner360 targeted mobile lookup returned no populated mobile: target_database=%s employee_code=%s rows=%d",
-        get_current_database_target() or "environment-default", employee_code, len(rows or [])
+        "Runner360 mobile lookup did not find a valid number: target_database=%s employee_code=%s rows_checked=%d",
+        target_database, employee_code, len(rows),
     )
     return ""
 
@@ -3165,7 +3209,11 @@ async def runner360_create_task(request: Request):
     # The bulk VM_EmployeeMaster result can omit a populated mobile in the selected
     # row. Before declaring the recipient missing, re-fetch the exact runner by code.
     runner_mobile = _text(selected_assignment.get("mobile_number"))
-    if not runner_mobile:
+    runner_mobile_digits = "".join(ch for ch in runner_mobile if ch.isdigit())
+    if (
+        runner_mobile.casefold() in {"", "null", "none", "nan", "nat", "n/a", "-"}
+        or not (10 <= len(runner_mobile_digits) <= 15)
+    ):
         runner_mobile = await _get_runner360_mobile_by_employee_code(
             _text(selected_assignment.get("employee_code"))
         )
