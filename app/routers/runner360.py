@@ -50,7 +50,7 @@ from datetime import date, datetime, time as clock_time, timedelta
 import ipaddress
 import math
 import os
-
+import logging
 
 
 from typing import Any
@@ -85,6 +85,7 @@ from app.templates_config import templates
 
 
 router = APIRouter(tags=["runner360"])
+logger = logging.getLogger("fms_portal.runner360")
 
 
 
@@ -400,6 +401,47 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
         ) from exc
 
 
+
+    # Temporary, privacy-safe diagnostic for the live WhatsApp recipient issue.
+    # It never logs the phone number itself; only field names, presence and digit count.
+    for diagnostic_employee in employee_rows or []:
+        if not isinstance(diagnostic_employee, dict):
+            continue
+
+        diagnostic_code = _text(
+            _lookup_case_insensitive(
+                diagnostic_employee, "EmployeeCode", "Employee Code"
+            )
+        )
+        if _column_key(diagnostic_code) != "0195":
+            continue
+
+        mobile_aliases = (
+            "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
+            "MobileNo", "MobileNumber", "Phone", "PhoneNo",
+            "PhoneNumber", "ContactNo", "ContactNumber",
+        )
+        mobile_value = _lookup_case_insensitive(
+            diagnostic_employee, *mobile_aliases
+        )
+        mobile_digits = "".join(
+            character for character in _text(mobile_value) if character.isdigit()
+        )
+        phone_column_names = [
+            str(column_name)
+            for column_name in diagnostic_employee.keys()
+            if "mobile" in _column_key(column_name)
+            or "phone" in _column_key(column_name)
+            or "contactno" in _column_key(column_name)
+        ]
+        logger.info(
+            "Runner360 mobile diagnostic: employee_code=%s columns=%s "
+            "value_present=%s digit_count=%d",
+            diagnostic_code,
+            phone_column_names,
+            bool(_text(mobile_value)),
+            len(mobile_digits),
+        )
 
     employees_by_code: dict[str, dict[str, Any]] = {}
 
