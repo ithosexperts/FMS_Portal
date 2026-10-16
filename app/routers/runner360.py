@@ -571,11 +571,9 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
             # Used only when live-recipient mode is explicitly enabled. Test mode
             # always sends to WHATSAPP_TEST_NUMBER instead.
-            "mobile_number": _text(_lookup_case_insensitive(
-                employee, "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
-                "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
-                "ContactNo", "ContactNumber",
-            )),
+            # Use the first populated mobile field by preference. Do not let a
+            # NULL OffMobile key hide a populated PersonalMobile later in the row.
+            "mobile_number": _text(_first_populated_runner_mobile(employee)),
 
             # Working hours come from the employee master for this assigned runner.
             "shift_start_time": _text(_lookup_case_insensitive(employee, "ShiftStartTime", "Shift Start Time")),
@@ -598,10 +596,31 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
 
 _RUNNER360_MOBILE_FIELD_ALIASES = (
-    "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
-    "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
-    "ContactNo", "ContactNumber",
+    # Prefer a personal number; use the work messaging number as an explicit
+    # fallback because the master row may expose that field instead.
+    "PersonalMobile", "Personal Mobile", "WorkMessagingNo", "Work Messaging No",
+    "OffMobile", "Mobile", "MobileNo", "MobileNumber", "Phone", "PhoneNo",
+    "PhoneNumber", "ContactNo", "ContactNumber",
 )
+
+
+def _first_populated_runner_mobile(row: dict[str, Any]) -> Any:
+    """Return the first non-empty mobile alias, respecting alias priority.
+
+    _lookup_case_insensitive iterates the API row's keys, not the supplied alias
+    order. If OffMobile appears first and is NULL, it returns that NULL even if
+    PersonalMobile or WorkMessagingNo is populated later. Iterate aliases first
+    and skip SQL/API NULL-like values so column ordering cannot hide a number.
+    """
+    null_values = {"", "null", "none", "nan", "nat", "n/a", "-"}
+    for alias in _RUNNER360_MOBILE_FIELD_ALIASES:
+        wanted = _column_key(alias)
+        for key, value in row.items():
+            if _column_key(key) != wanted:
+                continue
+            if _text(value).casefold() not in null_values:
+                return value
+    return ""
 
 
 async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
@@ -669,7 +688,7 @@ async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
         returned_code = _text(_lookup_case_insensitive(employee, "EmployeeCode", "Employee Code"))
         if _column_key(returned_code) != target_code:
             continue
-        mobile = _text(_lookup_case_insensitive(employee, *_RUNNER360_MOBILE_FIELD_ALIASES))
+        mobile = _text(_first_populated_runner_mobile(employee))
         digits = "".join(ch for ch in mobile if ch.isdigit())
         normalized_key = (_column_key(returned_code), digits)
         if normalized_key in seen_rows:
