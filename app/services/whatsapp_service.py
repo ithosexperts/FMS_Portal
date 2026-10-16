@@ -19,10 +19,22 @@ logger = logging.getLogger("fms_portal.whatsapp")
 
 
 def _normalise_mobile(value: Any) -> str:
-    """Return an international mobile number (India default for 10 digits)."""
+    """Return an international mobile number (India default for 10 digits).
+
+    API/SQL gateways sometimes serialize a numeric mobile column as a float-like
+    string, e.g. ``7065376766.0``. Strip only a zero-only decimal suffix before
+    digit validation. Ordinary integers and strings continue to work unchanged.
+    """
     raw = str(value or "").strip()
     if not raw:
         return ""
+
+    # Accept numeric mobile values serialized as 7065376766.0 or +917065376766.0.
+    # Do not turn arbitrary decimals into phone numbers; only discard a suffix
+    # made entirely of zeroes.
+    if re.fullmatch(r"\+?\d+\.0+", raw):
+        raw = raw.split(".", 1)[0]
+
     digits = re.sub(r"\D", "", raw)
     if len(digits) == 10:
         return f"+91{digits}"
@@ -82,116 +94,3 @@ async def send_runner360_task_notification(
     purpose: str,
     task_start_datetime: str,
     expected_return_time: str,
-    lead_time_mins: int,
-    runner_mobile: str = "",
-    checkin_link: str = "",
-) -> dict[str, Any]:
-    """Send a task assignment to the configured test number or runner number."""
-    test_mode = bool(settings.whatsapp_test_mode)
-    mode = "test" if test_mode else "live"
-
-    if not settings.whatsapp_api_username or not settings.whatsapp_api_password:
-        return _result(
-            attempted=False,
-            sent=False,
-            message="WhatsApp is not configured: set WHATSAPP_API_USERNAME and WHATSAPP_API_PASSWORD.",
-            mode=mode,
-        )
-
-    recipient = _normalise_mobile(settings.whatsapp_test_number if test_mode else runner_mobile)
-    if not recipient:
-        requirement = "WHATSAPP_TEST_NUMBER" if test_mode else "the runner's mobile number in FMS_Runner360_WhatsAppContacts or VM_EmployeeMaster"
-        return _result(
-            attempted=False,
-            sent=False,
-            message=f"WhatsApp was not sent because {requirement} is missing or invalid.",
-            mode=mode,
-        )
-
-    message = _task_message(
-        task_id=task_id,
-        runner=runner,
-        branch=branch,
-        purpose=purpose,
-        task_start_datetime=task_start_datetime,
-        expected_return_time=expected_return_time,
-        lead_time_mins=lead_time_mins,
-        test_mode=test_mode,
-        checkin_link=checkin_link,
-    )
-
-    # Use params rather than interpolating a URL. This correctly escapes the +
-    # country prefix and message text containing characters such as &, ?, or #.
-    params: list[tuple[str, str]] = [
-        ("username", settings.whatsapp_api_username),
-        ("password", settings.whatsapp_api_password),
-        ("receiverMobileNo", recipient),
-        ("message", message),
-    ]
-    channel_id = str(settings.whatsapp_channel_id or "").strip()
-    if channel_id:
-        params.append(("channelId", channel_id))
-
-    api_url = str(settings.whatsapp_api_url or "https://app.ceoitbox.com/api/v1/message/create").strip()
-    try:
-        timeout = httpx.Timeout(settings.request_timeout, connect=min(settings.request_timeout, 5.0))
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            response = await client.get(api_url, params=params, headers={"Accept": "application/json"})
-
-        if response.status_code >= 400:
-            if response.status_code == 401:
-                error_message = "WhatsApp API authentication failed (HTTP 401). Check the company API credentials."
-            elif response.status_code == 403:
-                error_message = "WhatsApp API denied this request (HTTP 403). Check account and channel permissions."
-            elif response.status_code == 400:
-                error_message = "WhatsApp API rejected the message (HTTP 400). Check the recipient and request settings."
-            else:
-                error_message = f"WhatsApp API returned HTTP {response.status_code}."
-            logger.warning("Runner360 WhatsApp send failed with HTTP status %s", response.status_code)
-            return _result(attempted=True, sent=False, message=error_message, mode=mode)
-
-        try:
-            data = response.json()
-        except ValueError:
-            logger.warning("Runner360 WhatsApp API returned a non-JSON response")
-            return _result(attempted=True, sent=False, message="WhatsApp API returned an unreadable response.", mode=mode)
-
-        api_status = data.get("status") if isinstance(data, dict) else None
-        api_message = str(data.get("message") or "").strip().casefold() if isinstance(data, dict) else ""
-        success = api_status == 200 and api_message == "success"
-        if not success:
-            logger.warning("Runner360 WhatsApp API did not confirm success; status=%s", api_status)
-            return _result(
-                attempted=True,
-                sent=False,
-                message="WhatsApp API did not confirm that the message was created.",
-                mode=mode,
-            )
-
-        result = data.get("result") if isinstance(data.get("result"), dict) else {}
-        provider_id = str(result.get("id") or result.get("groupId") or "")
-        logger.info("Runner360 WhatsApp message created for task %s (mode=%s)", task_id, mode)
-        success_message = (
-            "WhatsApp test notification accepted by CEOITBOX for the configured test number."
-            if test_mode
-            else "WhatsApp task notification accepted by CEOITBOX."
-        )
-        return _result(
-            attempted=True,
-            sent=True,
-            message=success_message,
-            mode=mode,
-            provider_message_id=provider_id,
-        )
-    except httpx.TimeoutException:
-        logger.warning("Runner360 WhatsApp send timed out for task %s", task_id)
-        return _result(attempted=True, sent=False, message="WhatsApp API timed out. The Runner360 task was still saved.", mode=mode)
-    except httpx.HTTPError as exc:
-        # Do not print exception URL details: query-based auth includes credentials.
-        logger.warning("Runner360 WhatsApp request failed (%s)", type(exc).__name__)
-        return _result(attempted=True, sent=False, message="Could not connect to the WhatsApp API. The Runner360 task was still saved.", mode=mode)
-    except Exception as exc:  # Never let notification failures undo an assignment.
-        # Log only the exception type; never risk writing a query URL or credential
-        # into application logs.
-        logger.error("Unexpected Runner360 WhatsApp failure (%s)", type(exc).__name__)
-        return _result(attempted=True, sent=False, message="Unexpected WhatsApp error. The Runner360 task was still saved.", mode=mode)
