@@ -1,325 +1,124 @@
 {% extends "base.html" %}
 {% import "components/macros.html" as macros %}
-{% block title %}Stage {{ stage_no }} · {{ task_id }}{% endblock %}
+{% block title %}Stage {{ stage_no }}{% endblock %}
 {% block page_title %}Stage Form &mdash; {{ context.stage.STAGE_NAME }}{% endblock %}
-
-{% macro display_value(value) -%}
-  {%- if value is none or value|string|trim|lower in ('', 'none', 'null') -%}
-  {%- else -%}{{ value }}{%- endif -%}
-{%- endmacro %}
-
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/stage1-custom.css?v=20260929s456view" />
+{% endblock %}
 {% block content %}
-{% if cleared %}
-<div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">S3 Packing Slip, Delay Time, Actual Timestamp and Task Status cleared. All other Stage 3 values were kept unchanged.</div>
-{% endif %}
-{% if clear_error %}
-<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ clear_error }}</div>
-{% endif %}
-
-{% if (current_role_id|string).strip() in ['', '1', '2', '3'] %}
-<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-  <form method="post" action="{{ routes.stage_clear_route(task_id, stage_no) }}" style="margin:0;" onsubmit="return confirm('Clear S3 Packing Slip, Delay Time, Actual Timestamp and Task Status only?');">
-    <button type="submit" class="btn btn-sm btn-ghost" title="Clear S3 Packing Slip, Delay Time, Actual Timestamp and Task Status">Clear &amp; Reset</button>
-  </form>
-</div>
-{% endif %}
-
-<section class="card" style="padding:20px;">
-  <h3 style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-    <span style="color:#3E1E68;font-weight:800;">{{ context.fms.fms_name }}</span>
-    <span style="color:var(--text-secondary);">|</span>
-    <span>{{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}</span>
-    {% if context.timeline_entry %}<span style="margin-left:4px;">{{ macros.status_badge(context.timeline_entry.status) }}</span>{% endif %}
-    {% if not custom_stage3.s3_locked %}
-      {% if has_pending_ltg %}
-      <button type="button" class="btn btn-sm s3-lead-time-extension-btn" style="margin-left:2px;opacity:.6;"
-              onclick="alert('Your previous request is being reviewed till then you cannot submit a new request for this FMS, row ID and stage no.')"
-              aria-label="Lead Time Extension Pending">
-        <span class="s3-lead-time-hover-icon" aria-hidden="true">
-          <svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg>
-        </span>
-        <span class="s3-lead-time-tooltip" role="tooltip">Request Pending</span>
-      </button>
-      {% else %}
-      <button type="button" class="btn btn-sm s3-lead-time-extension-btn" id="btn-lead-time-extension-s3" style="margin-left:2px;" aria-label="Lead Time Extension">
-        <span class="s3-lead-time-hover-icon" aria-hidden="true">
-          <svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg>
-        </span>
-        <span class="s3-lead-time-tooltip" role="tooltip">Lead Time Extension</span>
-      </button>
+{% if ltg_saved %}<div class="filter-chip" style="margin-bottom:12px;background:var(--color-success-bg);color:var(--color-success);">Lead Time Extention saved successfully.</div>{% endif %}
+{% if ltg_error %}<div class="filter-chip" style="margin-bottom:12px;background:var(--color-danger-bg);color:var(--color-danger);">{{ ltg_error }}</div>{% endif %}
+<section class="card stage1-custom" style="padding:20px;">
+  <h3 class="card__title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="color:#3E1E68;font-weight:800;font-size:18px;">{{ context.fms.fms_name }}</span>
+      <span style="color:var(--text-secondary);">|</span>
+      <span>{{ context.stage.STAGE_NO }} &middot; {{ context.stage.STAGE_NAME }}</span>
+      {% if context.timeline_entry %}<span style="margin-left:8px;">{{ macros.status_badge(context.timeline_entry.status) }}</span>{% endif %}
+      {% if context.editable %}
+        {% if has_pending_ltg %}
+        <button type="button" class="btn btn-sm lead-time-extension-btn" style="margin-left:8px;opacity:.6;" onclick="alert('Your previous request is being reviewed till then you cannot submit new request for this FMS, row id and stage no.')" aria-label="Lead Time Extension Pending">
+          <span class="lead-time-hover-icon" aria-hidden="true"><svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg></span>
+          <span class="lead-time-tooltip" role="tooltip">Request Pending</span>
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-sm lead-time-extension-btn" id="ltg-open-s4" style="margin-left:8px;" aria-label="Lead Time Extension">
+          <span class="lead-time-hover-icon" aria-hidden="true"><svg viewBox="0 0 64 64" role="img" focusable="false"><circle cx="28" cy="28" r="22"></circle><path d="M28 15v14h10"></path><circle cx="47" cy="47" r="13"></circle><path d="M47 40v14M40 47h14"></path></svg></span>
+          <span class="lead-time-tooltip" role="tooltip">Lead Time Extension</span>
+        </button>
+        {% endif %}
       {% endif %}
-    {% endif %}
+      <span class="badge badge-grey" style="margin-left:8px;">Read Only</span>
+    </div>
+    <img src="/static/logo.png" alt="HoseXperts" style="height:31px;width:auto;object-fit:contain;" />
   </h3>
 
-  <!-- Stage 3 summary: values are read from S3_* columns only. -->
   <div class="pink-box" style="margin-bottom:16px;padding:14px;background:#FBEFEF;border-radius:var(--radius-md);border:1px solid var(--border-color);">
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px 12px;align-items:start;margin-bottom:14px;">
-      {% set s3_1 = custom_stage3.stage3_summary[0] %}
-      {% set s3_2 = custom_stage3.stage3_summary[1] %}
-      {% set s3_3 = custom_stage3.stage3_summary[2] %}
-      {% set s3_4 = custom_stage3.stage3_summary[3] %}
-      {% set s3_5 = custom_stage3.stage3_summary[4] %}
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_1.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_1.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_2.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_2.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_3.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_3.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_4.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_4.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_5.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_5.value) or '-' }}</div></div>
+    <div class="info-grid-5" style="margin-bottom:14px;">
+      {% for item in custom_stage456.summary[:5] %}
+      <div class="info-item"><label>{{ item.caption }}</label><div class="info-text">{{ item.value if item.value is not none and item.value|string|trim|lower not in ('','none','null') else '-' }}</div></div>
+      {% endfor %}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px 12px;align-items:start;">
-      {% set s3_6 = custom_stage3.stage3_summary[5] %}
-      {% set s3_7 = custom_stage3.stage3_summary[6] %}
-      {% set s3_8 = custom_stage3.stage3_summary[7] %}
-      {% set s3_9 = custom_stage3.stage3_summary[8] %}
-      {% set s3_10 = custom_stage3.stage3_summary[9] %}
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_6.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_6.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ custom_stage3.publish_names.get("S3_LTGrantMins", "Lead Time Grant Min") }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">-</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_7.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_7.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_8.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_8.value) or '-' }}</div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;"><label style="font-size:11.5px;font-weight:700;color:#555;">{{ s3_10.label }}</label><div style="font-size:13.5px;font-weight:600;color:#000;word-break:break-word;line-height:1.4;">{{ display_value(s3_10.value) or '-' }}</div></div>
+    <div class="info-grid-5">
+      {% for item in custom_stage456.summary[5:10] %}
+      <div class="info-item"><label>{{ item.caption }}</label><div class="info-text">{{ item.value if item.value is not none and item.value|string|trim|lower not in ('','none','null') else '-' }}</div></div>
+      {% endfor %}
     </div>
   </div>
-
-  <!-- Stage 3 keeps only Pick ID from the inherited S1 information. -->
-  <div class="readonly-grid" style="display:grid;grid-template-columns:1fr;gap:14px 18px;margin-bottom:18px;">
-    <div class="question">
-      <label>{{ custom_stage3.publish_names.get("S1_PickID", "Pick ID") }}</label>
-      <input type="text" value="{{ custom_stage3.pick_id or '-' }}" readonly style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
-    </div>
+  <div class="question-grid" style="margin-bottom:0;">
+    <div class="question question--readonly"><label>{{ custom_stage456.invoice_doc_no.caption }}</label><input type="text" value="{{ custom_stage456.invoice_doc_no.value if custom_stage456.invoice_doc_no.value is not none else '' }}" readonly style="background:#f6f7f9;cursor:not-allowed;font-weight:600;"></div>
+    <div class="question question--readonly"><label>{{ custom_stage456.invoice_line_no.caption }}</label><input type="text" value="{{ custom_stage456.invoice_line_no.value if custom_stage456.invoice_line_no.value is not none else '' }}" readonly style="background:#f6f7f9;cursor:not-allowed;font-weight:600;"></div>
   </div>
+  <div style="margin-top:16px;font-size:12px;color:var(--text-secondary);">Invoice document and line number are backend values and are read-only.</div>
 
-  <form method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data" id="s3-form">
-    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
-    <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:18px;">
-      <div class="question">
-        <label>{{ custom_stage3.del_doc_no.label }} <span style="color:red">*</span></label>
-        <input type="text" name="S3_DelDocNo" value="{{ custom_stage3.del_doc_no.value if custom_stage3.del_doc_no.value is not none else '' }}" readonly style="background:#f6f7f9;cursor:not-allowed;" autocomplete="off" />
-        <div style="margin-top:4px;font-size:11px;color:var(--text-secondary);">Fetched from backend / S3 procedure.</div>
-      </div>
-
-      <div class="question">
-        <label>{{ custom_stage3.del_line_no.label }} <span style="color:red">*</span></label>
-        <input type="text" name="S3_DelLineNo" value="{{ custom_stage3.del_line_no.value if custom_stage3.del_line_no.value is not none else '' }}" readonly style="background:#f6f7f9;cursor:not-allowed;" autocomplete="off" />
-        <div style="margin-top:4px;font-size:11px;color:var(--text-secondary);">Fetched from backend / S3 procedure.</div>
-      </div>
-
-      <div class="question" style="grid-column:1/-1;">
-        <label>{{ custom_stage3.packing_slip.label }} <span style="color:red">*</span></label>
-        {% set existing_packing_urls = custom_stage3.packing_slip.value|string if custom_stage3.packing_slip.value is not none and custom_stage3.packing_slip.value|string|trim|lower not in ('', 'none', 'null') else '' %}
-        {% if existing_packing_urls %}
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 10px;">
-            {% for packing_url in existing_packing_urls.split(',') if packing_url|string|trim %}
-              {% set url = packing_url|string|trim %}
-              <a href="{{ url }}" target="_blank" rel="noopener" title="Open existing S3 Packing Slip" style="display:inline-flex;align-items:center;text-decoration:none;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;background:#fff;">
-                <span style="color:var(--primary-color);">View Attachment</span>
-              </a>
-            {% endfor %}
-          </div>
-        {% endif %}
-        <input type="hidden" name="__existing_attachment_urls_S3_PackingSlip" value="{{ existing_packing_urls }}" />
-        {% if not custom_stage3.s3_locked %}
-          <input type="file" name="S3_PackingSlip" id="s3-packing-slip" multiple accept="image/*,.pdf" />
-          <div style="margin-top:5px;font-size:11px;color:var(--text-secondary);">Multiple files allowed. New files are appended to the existing comma-separated S3_PackingSlip value.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
-      <button type="button" class="btn" id="open-s1-picknpack-s3" data-s1-url="/forms/stage/{{ task_id }}/S1?embedded=1">S1 PickNPack Form</button>
-      {% if not custom_stage3.s3_locked %}
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <button type="submit" name="_action" value="save" class="btn">Save Progress</button>
-          <button type="submit" name="_action" value="submit" class="btn btn-primary" id="s3-submit-btn" disabled aria-disabled="true">Submit Stage</button>
-        </div>
-        <div id="s3-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">S3 Del Doc NO and S3 Del Line NO are fetched from backend. Attach at least one Packing Slip to enable Submit Stage.</div>
-      {% else %}
-        <div style="font-size:12px;color:var(--text-secondary);align-self:center;margin-left:auto;">Stage 3 is completed and the submitted values are read-only.</div>
-      {% endif %}
-    </div>
-  </form>
+  <div style="display:flex;justify-content:flex-start;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
+    <button type="button" class="btn" id="open-s1-picknpack-s4" data-s1-url="/forms/stage/{{ task_id }}/S1?embedded=1">S1 PickNPack Form</button>
+  </div>
+  <div id="s1-embedded-container-s4" hidden style="margin-top:16px;"></div>
 </section>
-
-<div id="s3-s1-embedded-container" hidden style="margin-top:16px;"></div>
-
-
-<style>
-  .s3-lead-time-extension-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;padding:0;position:relative}
-  .s3-lead-time-hover-icon{width:24px;height:24px;display:inline-block;opacity:.35;transform:translateY(2px) scale(.94);transition:opacity .18s ease,transform .18s ease;color:#334155}
-  .s3-lead-time-hover-icon svg{width:24px;height:24px;display:block}
-  .s3-lead-time-hover-icon svg circle,.s3-lead-time-hover-icon svg path{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round}
-  .s3-lead-time-extension-btn:hover .s3-lead-time-hover-icon,.s3-lead-time-extension-btn:focus-visible .s3-lead-time-hover-icon{opacity:1;transform:translateY(0) scale(1)}
-  .s3-lead-time-tooltip{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%) translateY(-4px);opacity:0;pointer-events:none;white-space:nowrap;background:#111827;color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;transition:opacity .15s ease,transform .15s ease;z-index:50}
-  .s3-lead-time-extension-btn:hover .s3-lead-time-tooltip,.s3-lead-time-extension-btn:focus-visible .s3-lead-time-tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
-  .s3-ltg-modal-card{width:min(760px,96vw)}
-  #lead-time-extension-modal-s3{z-index:1100}
-  .s3-ltg-dropzone{border:1px dashed var(--border-color);border-radius:var(--radius-sm);background:var(--bg-body);padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;cursor:pointer}
-  .s3-ltg-dropzone.drag-over{border-color:var(--color-info);box-shadow:inset 0 0 0 1px var(--color-info)}
-  .s3-ltg-dropzone-text{font-size:12.5px;color:var(--text-secondary)}
-  .s3-ltg-attachment-list{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px}
-  .s3-ltg-file-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-primary);background:var(--bg-body);border:1px solid var(--border-color);border-radius:999px;padding:4px 10px}
-  .s3-ltg-chip-remove{border:0;background:transparent;font-size:14px;line-height:1;cursor:pointer;color:var(--text-secondary)}
-  .s3-ltg-remarks{min-height:58px;max-height:200px}
-</style>
-
-{% set s3_ltg_doer = custom_stage3.stage3_summary[4].value if custom_stage3.stage3_summary and custom_stage3.stage3_summary|length > 4 else '' %}
-<div id="lead-time-extension-modal-s3" class="modal-overlay" hidden aria-hidden="true">
-  <div class="modal-card s3-ltg-modal-card">
-    <div class="modal-head">
-      <h3 class="modal-title">Lead Time Extension</h3>
-      <button type="button" class="btn btn-ghost" data-ltg-close-s3>&times;</button>
-    </div>
-    <form id="lead-time-extension-form-s3" method="post" action="{{ routes.stage_lead_time_grant_route(task_id, stage_no) }}" enctype="multipart/form-data">
-      <div class="readonly-grid" style="margin-top:12px;">
-        <div class="readonly-field"><label>APPID</label><input type="text" name="app_id" value="{{ context.fms.app_id or '' }}" readonly /></div>
-        <div class="readonly-field"><label>FMS Name</label><input type="text" name="fms_name" value="{{ context.fms.fms_name or '' }}" readonly /></div>
-        <div class="readonly-field"><label>Stage No</label><input type="text" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}" readonly /></div>
-        <div class="readonly-field"><label>Stage Name</label><input type="text" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}" readonly /></div>
-        <div class="readonly-field"><label>Doer Name</label><input type="text" name="doer_name" value="{{ s3_ltg_doer or '' }}" readonly /></div>
-        <div class="readonly-field"><label>FMS Row ID</label><input type="text" name="fms_row_id" value="{{ context.row.get(context.primary_key) if context.row and context.primary_key else task_id }}" readonly /></div>
-      </div>
-      <div class="question" style="margin-top:12px;"><label>Requested Minutes *</label><input type="number" name="requested_minutes" min="1" step="1" required placeholder="10, 20, 120" oninput="this.value=this.value.replace(/[^0-9]/g,'')" /></div>
-      <div class="question" style="margin-top:12px;">
-        <label>Attachments</label>
-        <div id="s3-ltg-dropzone" class="s3-ltg-dropzone" tabindex="0">
-          <div class="s3-ltg-dropzone-text">Drag and drop files here, or click to browse. Multiple files are allowed.</div>
-          <input id="s3-ltg-attachments" type="file" name="attachments" multiple hidden />
-          <button type="button" class="btn btn-sm" id="s3-ltg-browse-btn">Choose Files</button>
-        </div>
-        <div id="s3-ltg-attachment-list" class="s3-ltg-attachment-list" aria-live="polite"></div>
-      </div>
-      <div class="question" style="margin-top:12px;"><label>Lead Time Grant Remarks *</label><textarea id="s3-ltg-remarks" name="lead_time_grant_remarks" rows="2" class="s3-ltg-remarks" placeholder="Enter remarks" required></textarea></div>
-      <div class="modal-actions">
-        <button type="button" class="btn" data-ltg-close-s3>Cancel</button>
-        <button type="submit" id="s3-ltg-save-btn" class="btn btn-primary" disabled>Save</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <script>
 (function(){
-  const openBtn=document.getElementById('btn-lead-time-extension-s3');
-  const modal=document.getElementById('lead-time-extension-modal-s3');
-  const form=document.getElementById('lead-time-extension-form-s3');
-  if(!openBtn||!modal||!form)return;
-  const dropzone=document.getElementById('s3-ltg-dropzone');
-  const fileInput=document.getElementById('s3-ltg-attachments');
-  const list=document.getElementById('s3-ltg-attachment-list');
-  const browseBtn=document.getElementById('s3-ltg-browse-btn');
-  const remarks=document.getElementById('s3-ltg-remarks');
-  const requested=form.querySelector("input[name='requested_minutes']");
-  const saveBtn=document.getElementById('s3-ltg-save-btn');
-  const selectedFiles=[];
-  const syncFiles=()=>{if(!fileInput)return;const dt=new DataTransfer();selectedFiles.forEach(f=>dt.items.add(f));fileInput.files=dt.files;};
-  const render=()=>{if(!list)return;list.innerHTML='';selectedFiles.forEach((f,i)=>{const chip=document.createElement('span');chip.className='s3-ltg-file-chip';chip.textContent=f.name;const x=document.createElement('button');x.type='button';x.className='s3-ltg-chip-remove';x.textContent='x';x.addEventListener('click',()=>{selectedFiles.splice(i,1);syncFiles();render();});chip.appendChild(x);list.appendChild(chip);});};
-  const addFiles=files=>{Array.from(files||[]).forEach(f=>{if(f&&f.name)selectedFiles.push(f);});syncFiles();render();};
-  const resize=()=>{if(!remarks)return;remarks.style.height='auto';remarks.style.height=Math.min(200,Math.max(58,remarks.scrollHeight))+'px';};
-  const update=()=>{if(!saveBtn)return;const m=String(requested?.value||'').trim();const r=String(remarks?.value||'').trim();saveBtn.disabled=!/^\d+$/.test(m)||Number(m)<=0||!r;};
-  openBtn.addEventListener('click',()=>{modal.hidden=false;modal.setAttribute('aria-hidden','false');resize();update();});
-  document.addEventListener('click',e=>{if(e.target.closest('[data-ltg-close-s3]')||e.target===modal){modal.hidden=true;modal.setAttribute('aria-hidden','true');}});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden){modal.hidden=true;modal.setAttribute('aria-hidden','true');}});
-  if(browseBtn&&fileInput)browseBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();fileInput.click();});
-  if(fileInput)fileInput.addEventListener('change',()=>addFiles(fileInput.files));
-  if(dropzone&&fileInput){dropzone.addEventListener('click',e=>{if(!e.target.closest('#s3-ltg-browse-btn'))fileInput.click();});dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('drag-over');});dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('drag-over'));dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('drag-over');addFiles(e.dataTransfer?.files||[]);});}
-  if(remarks)remarks.addEventListener('input',()=>{resize();update();});
-  if(requested)requested.addEventListener('input',update);
-  form.addEventListener('submit',()=>{syncFiles();if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Processing...';}});
-})();
-</script>
-
-<style>
-  @media (max-width: 980px) {
-    .pink-box > div,
-    .readonly-grid,
-    #s3-form .form-grid {
-      grid-template-columns: 1fr !important;
-    }
-  }
-</style>
-
-<script>
-(function () {
-  const s3Form = document.getElementById('s3-form');
-  const submitBtn = document.getElementById('s3-submit-btn');
-  const hint = document.getElementById('s3-submit-hint');
-  const docInput = s3Form?.querySelector('[name="S3_DelDocNo"]');
-  const lineInput = s3Form?.querySelector('[name="S3_DelLineNo"]');
-  const slipInput = document.getElementById('s3-packing-slip');
-  const existingSlip = s3Form?.querySelector('[name="__existing_attachment_urls_S3_PackingSlip"]');
-
-  const hasText = (el) => !!(el && String(el.value || '').trim());
-  const hasAttachment = () => {
-    const existing = String(existingSlip?.value || '').trim();
-    const selected = !!(slipInput && slipInput.files && slipInput.files.length > 0);
-    return !!existing || selected;
-  };
-
-  const updateSubmitState = () => {
-    if (!submitBtn) return;
-    // Doc/Line are readonly backend values; user supplies only the Packing Slip attachment.
-    const ready = hasText(docInput) && hasText(lineInput) && hasAttachment();
-    submitBtn.disabled = !ready;
-    submitBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
-    if (hint) {
-      hint.textContent = ready
-        ? 'Submit Stage saves the Packing Slip, then SP_FMS_ALTimeStampStatus generates Actual Timestamp, Delay Time, Actual Helper and Task Status. The existing S4 procedure runs only after that SP completes.'
-        : 'S3 Del Doc NO and S3 Del Line NO are fetched from backend. Attach at least one Packing Slip to enable Submit Stage.';
-    }
-  };
-
-  [docInput, lineInput, slipInput].forEach((el) => {
-    if (!el) return;
-    el.addEventListener('input', updateSubmitState);
-    el.addEventListener('change', updateSubmitState);
+  const s1Button=document.getElementById('open-s1-picknpack-s4');
+  const s1Host=document.getElementById('s1-embedded-container-s4');
+  if(!s1Button||!s1Host)return;
+  s1Button.addEventListener('click',async()=>{
+    let url=s1Button.dataset.s1Url||'';
+    if(!url){const taskId={{ task_id|tojson }};url=`/forms/stage/${encodeURIComponent(taskId)}/S1?embedded=1`;}
+    s1Button.disabled=true;s1Button.textContent='Loading S1...';
+    try{
+      const response=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const html=await response.text();
+      s1Host.innerHTML=html;
+      s1Host.querySelectorAll('script').forEach(oldScript=>{const newScript=document.createElement('script');for(const attr of oldScript.attributes)newScript.setAttribute(attr.name,attr.value);newScript.textContent=oldScript.textContent||'';oldScript.replaceWith(newScript);});
+      s1Host.hidden=false;s1Host.scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(error){console.error('Failed to load embedded S1 form:',error);alert('Could not load the S1 PickNPack Form. Please try again.');}
+    finally{s1Button.disabled=false;s1Button.textContent='S1 PickNPack Form';}
   });
-
-  if (s3Form) {
-    s3Form.addEventListener('submit', (event) => {
-      const submitter = event.submitter;
-      if (!submitter || submitter.value !== 'submit') return;
-      updateSubmitState();
-      if (submitBtn && submitBtn.disabled) {
-        event.preventDefault();
-        alert('Please ensure backend S3 Del Doc NO / S3 Del Line NO are available and attach at least one Packing Slip before submitting.');
-      }
-    });
-  }
-
-  // Exactly the same S1 PickNPack embedded view behavior as Stage 2.
-  const s1Button = document.getElementById('open-s1-picknpack-s3');
-  const s1Host = document.getElementById('s3-s1-embedded-container');
-  if (s1Button && s1Host) {
-    s1Button.addEventListener('click', async () => {
-      let url = s1Button.dataset.s1Url || '';
-      if (!url) {
-        const taskId = {{ task_id|tojson }};
-        url = `/forms/stage/${encodeURIComponent(taskId)}/S1?embedded=1`;
-      }
-      s1Button.disabled = true;
-      s1Button.textContent = 'Loading S1...';
-      try {
-        const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const html = await response.text();
-        s1Host.innerHTML = html;
-        s1Host.querySelectorAll('script').forEach((oldScript) => {
-          const newScript = document.createElement('script');
-          for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
-          newScript.textContent = oldScript.textContent || '';
-          oldScript.replaceWith(newScript);
-        });
-        s1Host.hidden = false;
-        s1Host.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } catch (error) {
-        console.error('Failed to load embedded S1 form:', error);
-        alert('Could not load the S1 PickNPack Form. Please try again.');
-      } finally {
-        s1Button.disabled = false;
-        s1Button.textContent = 'S1 PickNPack Form';
-      }
-    });
-  }
-
-  updateSubmitState();
 })();
 </script>
+
+{% if context.editable %}
+<div id="ltg-modal-s4" class="modal-overlay" hidden aria-hidden="true">
+  <div class="modal-card lead-time-extension-modal-card">
+    <div class="modal-head"><h3 class="modal-title">Lead Time Extension</h3><button type="button" class="btn btn-ghost" data-ltg-close-s4>&times;</button></div>
+    <form id="ltg-form-s4" method="post" action="{{ routes.stage_lead_time_grant_route(task_id, stage_no) }}" enctype="multipart/form-data">
+      <div class="readonly-grid" style="margin-top:12px;">
+        <div class="readonly-field"><label>APPID</label><input type="text" value="{{ context.fms.app_id or '' }}" readonly></div>
+        <div class="readonly-field"><label>FMS Name</label><input type="text" value="{{ context.fms.fms_name or '' }}" readonly></div>
+        <div class="readonly-field"><label>Stage No</label><input type="text" value="{{ context.stage.STAGE_NO or stage_no or '' }}" readonly></div>
+        <div class="readonly-field"><label>Stage Name</label><input type="text" value="{{ context.stage.STAGE_NAME or '' }}" readonly></div>
+        <div class="readonly-field"><label>Doer Name</label><input type="text" name="doer_name" value="" readonly></div>
+        <div class="readonly-field"><label>FMS Row ID</label><input type="text" name="fms_row_id" value="{{ context.row.get(context.primary_key) if context.row and context.primary_key else task_id }}" readonly></div>
+      </div>
+      <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+      <input type="hidden" name="fms_name" value="{{ context.fms.fms_name or '' }}">
+      <input type="hidden" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}">
+      <input type="hidden" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}">
+      <div class="question" style="margin-top:12px;"><label>Requested Minutes *</label><input type="number" name="requested_minutes" min="1" step="1" required placeholder="10, 20, 120"></div>
+      <div class="question" style="margin-top:12px;"><label>Attachments</label><div id="ltg-dropzone-s4" class="ltg-dropzone" tabindex="0"><div class="ltg-dropzone-text">Drag and drop files here, or click to browse</div><input id="ltg-files-s4" type="file" name="attachments" multiple hidden><button type="button" class="btn btn-sm" id="ltg-browse-s4">Choose Files</button></div><div id="ltg-list-s4" class="ltg-attachment-list" aria-live="polite"></div></div>
+      <div class="question" style="margin-top:12px;"><label>Lead Time Grant Remarks *</label><textarea id="ltg-remarks-s4" name="lead_time_grant_remarks" rows="2" class="ltg-remarks" required placeholder="Enter remarks"></textarea></div>
+      <div class="modal-actions"><button type="button" class="btn" data-ltg-close-s4>Cancel</button><button type="submit" id="ltg-save-s4" class="btn btn-primary" disabled>Save</button></div>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+  const openBtn=document.getElementById('ltg-open-s4'),modal=document.getElementById('ltg-modal-s4'),form=document.getElementById('ltg-form-s4');
+  if(!openBtn||!modal||!form)return;
+  const mins=form.querySelector('[name="requested_minutes"]'),remarks=document.getElementById('ltg-remarks-s4'),save=document.getElementById('ltg-save-s4');
+  const fileInput=document.getElementById('ltg-files-s4'),drop=document.getElementById('ltg-dropzone-s4'),browse=document.getElementById('ltg-browse-s4'),list=document.getElementById('ltg-list-s4');
+  const files=[];const fp=f=>[f.name,f.size,f.lastModified].join('|');
+  function syncFiles(){if(!fileInput||typeof DataTransfer==='undefined')return;const dt=new DataTransfer();files.forEach(f=>dt.items.add(f));fileInput.files=dt.files;}
+  function renderFiles(){if(!list)return;list.innerHTML='';files.forEach((f,i)=>{const chip=document.createElement('span');chip.className='ltg-file-chip';chip.textContent=f.name;const b=document.createElement('button');b.type='button';b.className='ltg-chip-remove';b.textContent='×';b.onclick=()=>{files.splice(i,1);syncFiles();renderFiles();};chip.appendChild(b);list.appendChild(chip);});}
+  function addFiles(input){const seen=new Set(files.map(fp));Array.from(input||[]).forEach(f=>{if(!f||!f.name)return;const k=fp(f);if(seen.has(k))return;seen.add(k);files.push(f);});syncFiles();renderFiles();}
+  function validate(){const ok=/^\d+$/.test(String(mins?.value||'').trim())&&Number(mins.value)>0&&String(remarks?.value||'').trim();if(save)save.disabled=!ok;}
+  function close(){modal.hidden=true;modal.setAttribute('aria-hidden','true');}
+  openBtn.onclick=()=>{modal.hidden=false;modal.setAttribute('aria-hidden','false');mins?.focus();validate();};
+  document.querySelectorAll('[data-ltg-close-s4]').forEach(b=>b.onclick=close);modal.onclick=e=>{if(e.target===modal)close();};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close();});
+  mins?.addEventListener('input',validate);remarks?.addEventListener('input',validate);browse?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();fileInput?.click();});fileInput?.addEventListener('change',e=>addFiles(e.target.files));drop?.addEventListener('click',e=>{if(e.target.closest('#ltg-browse-s4'))return;fileInput?.click();});drop?.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag-over');});drop?.addEventListener('dragleave',()=>drop.classList.remove('drag-over'));drop?.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('drag-over');addFiles(e.dataTransfer?.files);});form.addEventListener('submit',e=>{validate();if(save?.disabled)e.preventDefault();else{syncFiles();save.disabled=true;save.textContent='Saving...';}});
+})();
+</script>
+{% endif %}
 {% endblock %}
