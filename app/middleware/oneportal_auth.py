@@ -24,6 +24,8 @@ from app.config import settings
 
 
 EXCLUDED_PATH_PREFIXES = (
+    # Public mobile Check In is authorized by its signed, expiring task token.
+    "/runner360/mobile",
     "/static",
     "/docs",
     "/redoc",
