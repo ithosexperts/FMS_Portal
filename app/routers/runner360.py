@@ -51,6 +51,11 @@ import ipaddress
 import math
 import os
 import logging
+import base64
+import hashlib
+import hmac
+import json
+import time
 
 
 from typing import Any
@@ -71,6 +76,7 @@ from app.config import settings
 
 
 from app.api.client import api_client
+from app.auth.request_context import get_current_database_target
 
 
 
@@ -86,6 +92,65 @@ from app.templates_config import templates
 
 router = APIRouter(tags=["runner360"])
 logger = logging.getLogger("fms_portal.runner360")
+
+
+MOBILE_CHECKIN_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
+def _mobile_checkin_secret() -> bytes:
+    """Use the existing SSO secret to sign time-limited public task links."""
+    secret = str(settings.fms_sso_secret or settings.jwt_secret_key or "").strip()
+    if len(secret) < 32:
+        raise ValueError("FMS_SSO_SECRET (or JWT_SECRET_KEY) must contain at least 32 characters to sign mobile Check In links.")
+    return secret.encode("utf-8")
+
+
+def _create_mobile_checkin_token(task_id: str, employee_code: str) -> str:
+    payload = {
+        "task_id": str(task_id),
+        "employee_code": str(employee_code),
+        "exp": int(time.time()) + MOBILE_CHECKIN_TTL_SECONDS,
+    }
+    payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(payload_bytes).decode("ascii").rstrip("=")
+    signature = hmac.new(_mobile_checkin_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    return f"{encoded}.{encoded_signature}"
+
+
+def _read_mobile_checkin_token(token: str) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = str(token or "").split(".", 1)
+        expected_signature = base64.urlsafe_b64encode(
+            hmac.new(_mobile_checkin_secret(), encoded.encode("ascii"), hashlib.sha256).digest()
+        ).decode("ascii").rstrip("=")
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("Invalid Check In link signature.")
+        payload_bytes = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        payload = json.loads(payload_bytes.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid Check In link.")
+        if int(payload.get("exp") or 0) < int(time.time()):
+            raise ValueError("This Check In link has expired. Ask your manager to resend the task notification.")
+        if not str(payload.get("task_id") or "").strip() or not str(payload.get("employee_code") or "").strip():
+            raise ValueError("Invalid Check In link details.")
+        return payload
+    except HTTPException:
+        raise
+    except Exception as exc:
+        message = str(exc) if isinstance(exc, ValueError) and str(exc) else "This Check In link is invalid. Ask your manager to resend the task notification."
+        raise HTTPException(status_code=401, detail=message) from exc
+
+
+def _mobile_checkin_base_url(request: Request) -> str:
+    configured = str(settings.public_base_url or "").strip().rstrip("/")
+    if configured and "localhost" not in configured.casefold() and "127.0.0.1" not in configured:
+        return configured
+    request_url = str(request.base_url).strip().rstrip("/")
+    if settings.is_production and request_url.startswith("http://"):
+        request_url = "https://" + request_url[len("http://"):]
+    return request_url
+
 
 
 
@@ -400,49 +465,6 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
         ) from exc
 
-
-
-    # Temporary, privacy-safe diagnostic for the live WhatsApp recipient issue.
-    # It never logs the phone number itself; only field names, presence and digit count.
-    for diagnostic_employee in employee_rows or []:
-        if not isinstance(diagnostic_employee, dict):
-            continue
-
-        diagnostic_code = _text(
-            _lookup_case_insensitive(
-                diagnostic_employee, "EmployeeCode", "Employee Code"
-            )
-        )
-        if _column_key(diagnostic_code) != "0195":
-            continue
-
-        mobile_aliases = (
-            "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
-            "MobileNo", "MobileNumber", "Phone", "PhoneNo",
-            "PhoneNumber", "ContactNo", "ContactNumber",
-        )
-        mobile_value = _lookup_case_insensitive(
-            diagnostic_employee, *mobile_aliases
-        )
-        mobile_digits = "".join(
-            character for character in _text(mobile_value) if character.isdigit()
-        )
-        phone_column_names = [
-            str(column_name)
-            for column_name in diagnostic_employee.keys()
-            if "mobile" in _column_key(column_name)
-            or "phone" in _column_key(column_name)
-            or "contactno" in _column_key(column_name)
-        ]
-        logger.info(
-            "Runner360 mobile diagnostic: employee_code=%s columns=%s "
-            "value_present=%s digit_count=%d",
-            diagnostic_code,
-            phone_column_names,
-            bool(_text(mobile_value)),
-            len(mobile_digits),
-        )
-
     employees_by_code: dict[str, dict[str, Any]] = {}
 
     employees_by_id: dict[str, dict[str, Any]] = {}
@@ -550,10 +572,10 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
             # Used only when live-recipient mode is explicitly enabled. Test mode
             # always sends to WHATSAPP_TEST_NUMBER instead.
             "mobile_number": _text(_lookup_case_insensitive(
-    employee, "PersonalMobile", "Personal Mobile",
-    "Mobile", "OffMobile", "MobileNo", "MobileNumber",
-    "Phone", "PhoneNo", "PhoneNumber", "ContactNo", "ContactNumber",
-)),
+                employee, "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
+                "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
+                "ContactNo", "ContactNumber",
+            )),
 
             # Working hours come from the employee master for this assigned runner.
             "shift_start_time": _text(_lookup_case_insensitive(employee, "ShiftStartTime", "Shift Start Time")),
@@ -573,6 +595,55 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
     assignments.sort(key=lambda item: (item["branch"].casefold(), item["employee_name"].casefold()))
 
     return assignments
+
+
+_RUNNER360_MOBILE_FIELD_ALIASES = (
+    "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
+    "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
+    "ContactNo", "ContactNumber",
+)
+
+
+async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
+    """Re-fetch one exact employee row when the full master list has a blank mobile.
+
+    Some gateway responses return blank contact fields in the unfiltered list while
+    a direct EmployeeCode lookup returns the full master row. Never accept a mobile
+    value from another employee if the gateway ignores the filter.
+    """
+    target_code = _column_key(employee_code)
+    if not target_code:
+        return ""
+    try:
+        rows = await table_api.get_table(
+            "VM_EmployeeMaster", filters={"EmployeeCode": employee_code}
+        )
+    except Exception as exc:
+        logger.warning(
+            "Runner360 targeted mobile lookup failed: target_database=%s employee_code=%s error_type=%s",
+            get_current_database_target() or "environment-default", employee_code, type(exc).__name__
+        )
+        return ""
+
+    for employee in rows or []:
+        if not isinstance(employee, dict):
+            continue
+        returned_code = _text(_lookup_case_insensitive(employee, "EmployeeCode", "Employee Code"))
+        if _column_key(returned_code) != target_code:
+            continue
+        mobile = _text(_lookup_case_insensitive(employee, *_RUNNER360_MOBILE_FIELD_ALIASES))
+        if mobile:
+            digits = "".join(ch for ch in mobile if ch.isdigit())
+            logger.info(
+                "Runner360 targeted mobile lookup: target_database=%s employee_code=%s found=%s digit_count=%d",
+                get_current_database_target() or "environment-default", employee_code, bool(mobile), len(digits)
+            )
+            return mobile
+    logger.warning(
+        "Runner360 targeted mobile lookup returned no populated mobile: target_database=%s employee_code=%s rows=%d",
+        get_current_database_target() or "environment-default", employee_code, len(rows or [])
+    )
+    return ""
 
 
 # These are common names used for the employee's immediate reporting-manager
@@ -1366,10 +1437,9 @@ async def _persist_runner360_busy_time(
         return busy_minutes, False
 
 
-@router.post("/forms/runner360/{task_id}/in", response_class=JSONResponse)
-async def runner360_mark_in(request: Request, task_id: str):
-    """Capture browser GPS, verify it against branch coordinates, then run the standard actual-time/status SP."""
-    employee_code = _text(getattr(request.state, "employee_code", ""))
+async def _runner360_mark_in_impl(request: Request, task_id: str, token_employee_code: str = ""):
+    """Shared GPS/geofence/status implementation for authenticated and signed-link check-ins."""
+    employee_code = _text(token_employee_code or getattr(request.state, "employee_code", ""))
     local_guest_test = _local_guest_edit_enabled(request) and not employee_code
     employee = None if local_guest_test else await _get_current_employee_row(request)
 
@@ -1602,6 +1672,59 @@ async def runner360_mark_in(request: Request, task_id: str):
         "busy_time_minutes": busy_time_minutes,
         "busy_time_saved": busy_time_saved,
     }, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/forms/runner360/{task_id}/in", response_class=JSONResponse)
+async def runner360_mark_in(request: Request, task_id: str):
+    """Authenticated in-portal check-in (existing route)."""
+    return await _runner360_mark_in_impl(request, task_id)
+
+
+async def _validate_mobile_checkin_task(token: str) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    claims = _read_mobile_checkin_token(token)
+    task_id = str(claims["task_id"]).strip()
+    employee_code = str(claims["employee_code"]).strip()
+    row, row_id = await _get_runner360_row_by_task_id(task_id)
+    if _runner360_row_is_cancelled(row):
+        raise HTTPException(status_code=409, detail="This Runner360 task is Cancelled; Check In is disabled.")
+    if _runner360_row_is_completed(row):
+        raise HTTPException(status_code=409, detail="This Runner360 task is already completed.")
+    runner_name = _text(_lookup_case_insensitive(row, "I_Runner", "S1_Doer", "Doer"))
+    branch_name = _text(_lookup_case_insensitive(row, "I_Branch", "Branch"))
+    assignments = await _get_runner_assignments()
+    matched = next((
+        item for item in assignments
+        if _normalise(item.get("employee_name")) == _normalise(runner_name)
+        and _branch_key(item.get("branch")) == _branch_key(branch_name)
+        and _column_key(item.get("employee_code")) == _column_key(employee_code)
+    ), None)
+    if not matched:
+        raise HTTPException(status_code=403, detail="This Check In link does not match the runner assigned to this task.")
+    return row, row_id, claims
+
+
+@router.get("/runner360/mobile/{token}", response_class=HTMLResponse)
+async def runner360_mobile_checkin_page(request: Request, token: str):
+    """Public, signed, task-specific mobile check-in page for WhatsApp links."""
+    row, row_id, _claims = await _validate_mobile_checkin_task(token)
+    return templates.TemplateResponse(request, "custom_forms/runner360_mobile_checkin.html", {
+        "task_id": str(row_id),
+        "runner": _text(_lookup_case_insensitive(row, "I_Runner", "S1_Doer", "Doer")) or "Runner",
+        "branch": _text(_lookup_case_insensitive(row, "I_Branch", "Branch")) or "-",
+        "purpose": _text(_lookup_case_insensitive(row, "I_Purpose", "Purpose")) or "-",
+        "start": _text(_lookup_case_insensitive(row, "I_TaskStartDateTime", "S1_PLTimeStamp", "PlannedStart")) or "-",
+        "token": token,
+    }, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/runner360/mobile/{token}/in", response_class=JSONResponse)
+async def runner360_mobile_mark_in(request: Request, token: str):
+    """Token-gated mobile endpoint; only permits the employee named in the signed link."""
+    _row, _row_id, claims = await _validate_mobile_checkin_task(token)
+    employee_code = str(claims["employee_code"]).strip()
+    request.state.employee_code = employee_code
+    request.state.role_id = ""
+    return await _runner360_mark_in_impl(request, str(claims["task_id"]), token_employee_code=employee_code)
 
 
 def _is_team_lead_employee(employee: dict[str, Any]) -> bool:
@@ -3027,9 +3150,29 @@ async def runner360_create_task(request: Request):
 
 
 
-    # Notify through CEOITBOX only after the FMS row has been inserted and read
-    # back. This is best-effort: a WhatsApp failure must not turn a saved task
-    # into a reported task-creation failure (which could lead to duplicates).
+    # This rollout is intentionally scoped to Test_OperationsDB. Always create
+    # the signed link for the task in the active SSO database; public link requests
+    # are pinned to Test_OperationsDB by OnePortalAuthMiddleware below.
+    checkin_link = ""
+    try:
+        token = _create_mobile_checkin_token(
+            str(row_id), _text(selected_assignment.get("employee_code"))
+        )
+        checkin_link = f"{_mobile_checkin_base_url(request)}/runner360/mobile/{token}"
+    except Exception as exc:
+        logger.error("Runner360 mobile Check In link could not be created (error_type=%s)", type(exc).__name__)
+
+    # The bulk VM_EmployeeMaster result can omit a populated mobile in the selected
+    # row. Before declaring the recipient missing, re-fetch the exact runner by code.
+    runner_mobile = _text(selected_assignment.get("mobile_number"))
+    if not runner_mobile:
+        runner_mobile = await _get_runner360_mobile_by_employee_code(
+            _text(selected_assignment.get("employee_code"))
+        )
+
+    # Test_OperationsDB is the intended working database for this rollout. When
+    # WhatsApp test mode is off, send to the assigned runner's resolved mobile.
+    # Best effort after task insert/readback; never turn a saved task into a reported create failure.
     whatsapp_notification = await send_runner360_task_notification(
         task_id=str(row_id),
         runner=runner,
@@ -3038,7 +3181,8 @@ async def runner360_create_task(request: Request):
         task_start_datetime=task_start_datetime,
         expected_return_time=expected_return_time,
         lead_time_mins=lead_time_mins,
-        runner_mobile=_text(selected_assignment.get("mobile_number")),
+        runner_mobile=runner_mobile,
+        checkin_link=checkin_link,
     )
 
     # Success response
