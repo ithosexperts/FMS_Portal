@@ -10,6 +10,7 @@ import os
 import json
 import re
 import asyncio
+import html
 from pathlib import Path
 from datetime import datetime
 from typing import Any
@@ -1664,17 +1665,90 @@ async def stage_tutorial_viewer(
     if not load_error and not guide["videos"] and not guide["attachments"]:
         load_error = "No videos or attachments are configured for this App ID and Stage No in FMS_Config.InputGuide."
 
-    return templates.TemplateResponse(request, "forms/tutorial_viewer.html", {
-        "task_id": task_id,
-        "stage_no": matching_stage.get("STAGE_NO") or stage_no,
-        "app_id": matching_stage.get("APP_ID") or requested_app_id,
-        "fms_name": matching_stage.get("FMS_NAME") or "Stage Tutorial",
-        "stage_name": matching_stage.get("STAGE_NAME") or stage_no,
-        "guide_name": guide.get("name") or "",
-        "videos": guide.get("videos") or [],
-        "attachments": guide.get("attachments") or [],
-        "load_error": load_error,
-    })
+    # Return the viewer as HTML directly. This deliberately avoids relying on an
+    # extra Jinja template being copied/deployed; the previous deployed build
+    # failed with TemplateNotFound for forms/tutorial_viewer.html.
+    def esc(value: Any) -> str:
+        return html.escape(str(value or ""), quote=True)
+
+    def resource_rows(items: list[dict[str, str]], kind: str) -> str:
+        if not items:
+            return f'<div class="empty">No {esc(kind.lower())} URLs are configured for this stage.</div>'
+        rendered: list[str] = []
+        for index, item in enumerate(items, 1):
+            name = esc(item.get("name") or f"{kind} {index}")
+            url = esc(item.get("url") or "")
+            rendered.append(
+                '<div class="resource-row">'
+                f'<span class="type-pill">{esc(kind)}</span>'
+                f'<button class="name-button" type="button" data-kind="{esc(kind.lower())}" '
+                f'data-url="{url}" data-title="{name}" onclick="showResource(this)">{name}</button>'
+                f'<a class="url-link" href="{url}" target="_blank" rel="noopener noreferrer">Open URL ↗</a>'
+                '</div>'
+            )
+        return "\n".join(rendered)
+
+    videos_html = resource_rows(guide.get("videos") or [], "Video")
+    attachments_html = resource_rows(guide.get("attachments") or [], "Attachment")
+    error_html = f'<div class="error" role="status">{esc(load_error)}</div>' if load_error else ""
+    display_title = esc(guide.get("name") or "Know-How Viewer")
+    fms_title = esc(matching_stage.get("FMS_NAME") or "Stage Tutorial")
+    stage_display = esc(matching_stage.get("STAGE_NO") or stage_no)
+    stage_name = esc(matching_stage.get("STAGE_NAME") or stage_no)
+    app_display = esc(matching_stage.get("APP_ID") or requested_app_id or "-")
+    task_display = esc(task_id)
+
+    page = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Know-How Viewer · STAGE_LABEL</title>
+<style>
+:root{color-scheme:light;--ink:#17243b;--muted:#64748b;--line:#dbe3ee;--blue:#4169d8;--bg:#f3f6fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,Segoe UI,Arial,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}.brand img{width:48px;height:42px;object-fit:contain}.brand h1{font-size:18px;line-height:1.2;margin:0;font-weight:800}.sub{font-size:11px;color:var(--muted);margin-top:4px}
+.view-only{background:#eef2ff;color:#334da4;border:1px solid #d9e1ff;padding:8px 11px;border-radius:9px;font-size:11px;font-weight:800;white-space:nowrap}
+main{max-width:1180px;width:calc(100% - 32px);margin:22px auto 40px}.notice{background:#edf4ff;border:1px solid #d6e4ff;border-radius:10px;padding:11px 14px;color:#36527f;font-size:12px;margin-bottom:16px}
+.section{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:16px;overflow:hidden;box-shadow:0 2px 8px #12274a0a}.section-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;background:#fbfcfe;border-bottom:1px solid #e8edf4}.section-head h2{font-size:14px;margin:0;font-weight:800}.count{min-width:25px;text-align:center;background:#e9efff;color:#3155b5;border-radius:99px;font-size:11px;font-weight:800;padding:3px 8px}
+.resource-list{padding:10px 14px}.resource-row{display:grid;grid-template-columns:100px minmax(120px,1fr) minmax(100px,auto);align-items:center;gap:12px;padding:11px 8px;border-bottom:1px solid #edf1f6}.resource-row:last-child{border-bottom:0}.type-pill{display:inline-flex;justify-content:center;background:#eef3ff;color:#3655ad;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:900;text-transform:uppercase}.resource-row[data-kind="attachment"] .type-pill{background:#eaf8f0;color:#21734c}
+.name-button{border:0;background:transparent;color:#234db6;font-weight:800;text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:7px 0;overflow-wrap:anywhere}.name-button:hover{color:#17378c}.name-button.active{background:#eef3ff;border-radius:7px;padding:7px 9px}.url-link{font-size:11px;color:#53657d;overflow-wrap:anywhere;text-decoration:none}.url-link:hover{color:#244eb4;text-decoration:underline}
+.viewer-section{margin-top:18px;display:none}.viewer-section.visible{display:block}.viewer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0}.viewer-head h2{font-size:14px;margin:0}.source-btn{font-size:11px;font-weight:800;color:#3155b5;text-decoration:none;border:1px solid #d6e0f0;border-radius:8px;padding:7px 10px;white-space:nowrap}.preview-shell{height:min(66vh,690px);min-height:300px;background:#e6eaf0;border:1px solid var(--line);border-radius:0 0 12px 12px;overflow:hidden;position:relative}.preview-shell iframe{width:100%;height:100%;border:0;background:white}.preview-shell video{width:100%;height:100%;object-fit:contain;background:#101827}.preview-shell img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}.preview-message{padding:32px;text-align:center;color:#596b83}.empty{padding:18px;color:var(--muted);font-size:12px}.error{background:#fff5f3;border:1px solid #ffd5ce;color:#9c382b;border-radius:10px;padding:13px;margin-bottom:16px;font-size:12px}.no-preview{margin:14px;padding:18px;background:white;border:1px solid var(--line);border-radius:10px;color:var(--muted)}
+@media(max-width:650px){header{padding:12px;align-items:flex-start}.brand img{width:36px}.brand h1{font-size:15px}.view-only{font-size:10px;padding:7px}main{width:calc(100% - 16px);margin-top:12px}.resource-row{grid-template-columns:75px minmax(80px,1fr);gap:8px}.url-link{grid-column:2}.preview-shell{height:55vh;min-height:260px}}
+</style></head>
+<body>
+<header><div class="brand"><img src="/static/logo.png" alt="HoseXperts" onerror="this.style.display='none'"><div><h1>TITLE_LABEL</h1><div class="sub">FMS_LABEL · STAGE_LABEL — STAGE_NAME_LABEL · App ID: APP_LABEL · Task ID: TASK_LABEL</div></div></div><div class="view-only">🔒 VIEW ONLY</div></header>
+<main><div class="notice">Choose a video or attachment by its name. The selected item opens in the viewer below. No download button is provided here; source websites may have their own controls.</div>
+ERROR_HTML
+<section class="section"><div class="section-head"><h2>Videos</h2><span class="count">VIDEO_COUNT</span></div><div class="resource-list">VIDEOS_HTML</div></section>
+<section class="section"><div class="section-head"><h2>Attachments</h2><span class="count">ATTACHMENT_COUNT</span></div><div class="resource-list">ATTACHMENTS_HTML</div></section>
+<section id="viewer-section" class="viewer-section"><div class="viewer-head"><h2 id="viewer-title">Selected resource</h2><a id="viewer-source" class="source-btn" href="#" target="_blank" rel="noopener noreferrer">Open source ↗</a></div><div id="preview-shell" class="preview-shell"><div class="preview-message">Select a video or attachment above to view it here.</div></div><div id="embed-note" class="no-preview">If an external website does not permit embedding, use “Open source” to view it on the hosting website.</div></section>
+</main>
+<script>
+document.addEventListener('contextmenu',function(e){e.preventDefault()});
+document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['s','p'].includes(String(e.key).toLowerCase()))e.preventDefault()});
+function safeURL(value){try{var u=new URL(value,location.href);return (u.protocol==='http:'||u.protocol==='https:')?u:null}catch(e){return null}}
+function drivePreview(u){if(!/(^|\.)drive\.google\.com$|(^|\.)docs\.google\.com$/i.test(u.hostname))return '';var m=u.pathname.match(/\/file\/d\/([^/]+)/i);var id=m?m[1]:(u.searchParams.get('id')||'');return id?'https://drive.google.com/file/d/'+encodeURIComponent(id)+'/preview':''}
+function videoEmbed(u){var host=u.hostname.replace(/^www\./i,'').toLowerCase(),id='';if(host==='youtu.be')id=u.pathname.split('/').filter(Boolean)[0]||'';if(host==='youtube.com'||host==='m.youtube.com'){if(u.pathname==='/watch')id=u.searchParams.get('v')||'';else if(/^\/(embed|shorts|live)\//.test(u.pathname))id=u.pathname.split('/')[2]||''}if(id&&/^[\w-]{6,}$/.test(id))return 'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?rel=0&playsinline=1';if(host==='vimeo.com'||host==='player.vimeo.com'){var v=u.pathname.split('/').filter(Boolean).pop()||'';if(/^\d+$/.test(v))return 'https://player.vimeo.com/video/'+v+'?dnt=1'}return ''}
+function showResource(button){var raw=button.dataset.url||'',title=button.dataset.title||'Resource',kind=button.dataset.kind||'attachment',u=safeURL(raw);var section=document.getElementById('viewer-section'),shell=document.getElementById('preview-shell'),src=document.getElementById('viewer-source');document.querySelectorAll('.name-button').forEach(function(b){b.classList.toggle('active',b===button)});section.classList.add('visible');document.getElementById('viewer-title').textContent=kind==='video'?'Video: '+title:'Attachment: '+title;src.href=u?u.href:'#';shell.replaceChildren();if(!u){shell.innerHTML='<div class="preview-message">This URL is invalid. Please check FMS_Config.InputGuide.</div>';section.scrollIntoView({behavior:'smooth',block:'start'});return}var path=u.pathname.toLowerCase(),isVideo=/\.(mp4|webm|ogg|mov|m4v)$/.test(path),isImage=/\.(png|jpe?g|gif|webp|svg|avif)$/.test(path),isPdf=/\.pdf$/.test(path),embed=kind==='video'?videoEmbed(u):'',drive=drivePreview(u);if(isVideo){var v=document.createElement('video');v.controls=true;v.preload='metadata';v.playsInline=true;v.setAttribute('controlsList','nodownload noremoteplayback');v.setAttribute('disablePictureInPicture','');v.src=u.href;shell.appendChild(v)}else if(isImage){var img=document.createElement('img');img.src=u.href;img.alt=title;img.loading='lazy';shell.appendChild(img)}else if(embed||drive||isPdf||kind==='video'||kind==='attachment'){var f=document.createElement('iframe');f.src=embed||drive||u.href;f.title=title;f.loading='lazy';f.referrerPolicy='strict-origin-when-cross-origin';f.setAttribute('allowfullscreen','');f.setAttribute('sandbox','allow-forms allow-scripts allow-same-origin allow-presentation');shell.appendChild(f)}else{shell.innerHTML='<div class="preview-message">Preview is unavailable for this type of link. Use “Open source”.</div>'}section.scrollIntoView({behavior:'smooth',block:'start'})}
+</script></body></html>"""
+    replacements = {
+        "STAGE_LABEL": stage_display,
+        "TITLE_LABEL": display_title,
+        "FMS_LABEL": fms_title,
+        "STAGE_NAME_LABEL": stage_name,
+        "APP_LABEL": app_display,
+        "TASK_LABEL": task_display,
+        "ERROR_HTML": error_html,
+        "VIDEO_COUNT": str(len(guide.get("videos") or [])),
+        "ATTACHMENT_COUNT": str(len(guide.get("attachments") or [])),
+        "VIDEOS_HTML": videos_html,
+        "ATTACHMENTS_HTML": attachments_html,
+    }
+    for token, value in replacements.items():
+        page = page.replace(token, value)
+    return HTMLResponse(content=page)
 
 
 
