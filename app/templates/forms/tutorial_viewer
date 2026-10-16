@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Know-How Viewer · {{ stage_no }}</title>
+  <style>
+    :root { color-scheme: light; --ink:#17243b; --muted:#66758a; --line:#dfe6ef; --panel:#fff; --bg:#f2f5f9; --blue:#315fc6; }
+    * { box-sizing:border-box; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink); font-family:Inter,Segoe UI,Arial,sans-serif; }
+    body { min-height:100vh; }
+    #top-bar { min-height:68px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 22px; position:sticky; top:0; z-index:20; box-shadow:0 2px 8px rgba(30,45,65,.05); }
+    .brand { display:flex; align-items:center; gap:12px; min-width:0; }
+    .brand-icon { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; background:#eaf0ff; color:var(--blue); flex-shrink:0; }
+    .brand-title { font-size:17px; font-weight:850; letter-spacing:.03em; }
+    .brand-sub { margin-top:3px; font-size:12px; color:var(--muted); white-space:normal; }
+    .toolbar { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+    .view-only { display:flex; align-items:center; gap:7px; background:#f0f3f7; border:1px solid #e0e6ed; color:#58687b; border-radius:9px; padding:9px 12px; text-transform:uppercase; letter-spacing:.06em; font-size:10px; font-weight:800; }
+    .tool-btn { border:1px solid var(--line); border-radius:9px; padding:9px 11px; background:white; color:#526174; cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12px; }
+    .notice { margin:18px auto 0; width:min(1440px,calc(100% - 32px)); border:1px solid #dbe7ff; border-radius:10px; background:#f7f9ff; color:#435779; padding:10px 14px; font-size:12px; }
+    main { width:min(1440px,calc(100% - 32px)); margin:20px auto 36px; }
+    .section { margin-top:24px; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; }
+    .section-head h2 { margin:0; font-size:16px; font-weight:850; }
+    .count { min-width:26px; text-align:center; border-radius:999px; background:#e8eefb; color:#315fc6; padding:4px 8px; font-weight:800; font-size:11px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:16px; }
+    .resource-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:0 6px 20px rgba(25,40,62,.045); }
+    .resource-head { display:flex; gap:10px; align-items:center; padding:13px 15px; border-bottom:1px solid #edf1f6; }
+    .type-pill { padding:5px 8px; border-radius:7px; background:#eaf0ff; color:#315fc6; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+    .resource-title { font-size:13px; font-weight:800; line-height:1.35; overflow-wrap:anywhere; }
+    .preview-shell { position:relative; min-height:260px; height:clamp(260px,34vw,490px); background:#e9edf3; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .preview-shell.video-preview { aspect-ratio:16/9; height:auto; min-height:0; }
+    .preview-shell img { width:100%; height:100%; max-height:490px; object-fit:contain; background:#f4f6f8; }
+    .preview-shell video { width:100%; max-height:490px; height:100%; background:#10151d; object-fit:contain; }
+    .preview-shell iframe { width:100%; height:100%; border:0; background:#fff; }
+    .preview-message { padding:24px; text-align:center; color:var(--muted); font-size:12px; line-height:1.5; }
+    .preview-message strong { display:block; margin-bottom:6px; color:#34445b; font-size:13px; }
+    .frame-blocker { position:absolute; z-index:5; top:0; height:58px; background:transparent; }
+    .frame-blocker.popout { right:0; width:58px; }
+    .frame-blocker.download { right:58px; width:122px; }
+    .resource-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 14px; border-top:1px solid #edf1f6; color:var(--muted); font-size:10px; }
+    .source-link { color:var(--blue); font-weight:800; text-decoration:none; font-size:11px; }
+    .source-link:hover { text-decoration:underline; }
+    .empty { background:white; border:1px dashed #cfd8e4; border-radius:12px; padding:24px; color:var(--muted); text-align:center; font-size:12px; }
+    .load-error { margin:18px auto; width:min(1440px,calc(100% - 32px)); padding:16px; border-radius:10px; background:#fff7ed; border:1px solid #fed7aa; color:#9a4d12; font-size:13px; }
+    .guide-name { color:var(--muted); font-size:12px; margin-top:5px; }
+    .fullscreen #top-bar { position:relative; }
+    @media(max-width:640px) { #top-bar { align-items:flex-start; padding:12px; } .brand-title { font-size:14px; } .brand-sub { font-size:11px; } .toolbar { gap:6px; } .view-only { padding:8px; } main,.notice,.load-error { width:calc(100% - 20px); } .preview-shell { height:330px; } }
+  </style>
+</head>
+<body>
+  <header id="top-bar">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H12v18H5.5A2.5 2.5 0 0 0 3 23z"/><path d="M21 5.5A2.5 2.5 0 0 0 18.5 3H12v18h6.5A2.5 2.5 0 0 1 21 23z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">KNOW-HOW VIEWER</div>
+        <div class="brand-sub">{{ fms_name }} · {{ stage_no }}{% if stage_name %} — {{ stage_name }}{% endif %} · App ID: {{ app_id or '-' }} · Task ID: {{ task_id }}</div>
+        {% if guide_name %}<div class="guide-name">{{ guide_name }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="tool-btn" onclick="toggleFullScreen()" title="Full Screen Mode">⛶ Full Screen</button>
+      <div class="view-only" title="Download controls are not provided by this viewer"><span aria-hidden="true">🔒</span> View Only</div>
+    </div>
+  </header>
+
+  <div class="notice">Tutorial links and attachments configured for this exact App ID and Stage No. are shown below. This viewer provides no download button; external hosting sites may still have their own controls.</div>
+  {% if load_error %}<div class="load-error">{{ load_error }}</div>{% endif %}
+
+  <main>
+    <section class="section" aria-labelledby="videos-heading">
+      <div class="section-head"><h2 id="videos-heading">Videos</h2><span class="count">{{ videos|length }}</span></div>
+      {% if videos %}
+      <div class="grid">
+        {% for item in videos %}
+        <article class="resource-card">
+          <div class="resource-head"><span class="type-pill">Video</span><div class="resource-title">{{ item.name }}</div></div>
+          <div class="preview-shell video-preview" data-viewer-kind="video" data-src="{{ item.url }}" data-title="{{ item.name }}"><div class="preview-message">Preparing video preview…</div></div>
+          <div class="resource-foot"><span>View only · {{ loop.index }} of {{ videos|length }}</span><a class="source-link" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Open source page ↗</a></div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty">No video URLs are configured for this stage.</div>{% endif %}
+    </section>
+
+    <section class="section" aria-labelledby="attachments-heading">
+      <div class="section-head"><h2 id="attachments-heading">Attachments</h2><span class="count">{{ attachments|length }}</span></div>
+      {% if attachments %}
+      <div class="grid">
+        {% for item in attachments %}
+        <article class="resource-card">
+          <div class="resource-head"><span class="type-pill">Attachment</span><div class="resource-title">{{ item.name }}</div></div>
+          <div class="preview-shell" data-viewer-kind="attachment" data-src="{{ item.url }}" data-title="{{ item.name }}"><div class="preview-message">Preparing attachment preview…</div></div>
+          <div class="resource-foot"><span>View only · {{ loop.index }} of {{ attachments|length }}</span><a class="source-link" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Open source page ↗</a></div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty">No attachment URLs are configured for this stage.</div>{% endif %}
+    </section>
+  </main>
+
+  <script>
+    // UI-level view-only protections. These are deterrents, not a guarantee against browser tools or screen capture.
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    document.addEventListener('keydown', event => {
+      const key = String(event.key || '').toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && ['s','p','u'].includes(key)) event.preventDefault();
+    });
+
+    function checkedHttpUrl(value) {
+      try { const url = new URL(value, window.location.href); return ['http:', 'https:'].includes(url.protocol) ? url : null; }
+      catch (_) { return null; }
+    }
+    function getVideoEmbed(url) {
+      const host = url.hostname.replace(/^www\./i, '').toLowerCase();
+      let id = '';
+      if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || '';
+      if (host === 'youtube.com' || host === 'm.youtube.com') {
+        if (url.pathname === '/watch') id = url.searchParams.get('v') || '';
+        else if (/^\/(embed|shorts|live)\//.test(url.pathname)) id = url.pathname.split('/')[2] || '';
+      }
+      if (id && /^[\w-]{6,}$/.test(id)) return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id) + '?rel=0&playsinline=1';
+      if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+        const vimeoId = url.pathname.split('/').filter(Boolean).pop() || '';
+        if (/^\d+$/.test(vimeoId)) return 'https://player.vimeo.com/video/' + vimeoId + '?dnt=1';
+      }
+      return '';
+    }
+    function getDrivePreview(url) {
+      const host = url.hostname.toLowerCase();
+      if (!host.endsWith('drive.google.com') && !host.endsWith('docs.google.com')) return '';
+      let match = url.pathname.match(/\/file\/d\/([^/]+)/i);
+      let id = match ? match[1] : (url.searchParams.get('id') || '');
+      if (!id) return '';
+      return 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/preview';
+    }
+    function makeIframe(shell, src, title, protect = false) {
+      shell.classList.remove('video-preview');
+      const frame = document.createElement('iframe');
+      frame.src = src; frame.title = title || 'Resource preview';
+      frame.loading = 'lazy'; frame.referrerPolicy = 'no-referrer-when-downgrade';
+      frame.setAttribute('allowfullscreen', '');
+      frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+      shell.replaceChildren(frame);
+      if (protect) {
+        const popout = document.createElement('div'); popout.className = 'frame-blocker popout'; popout.title = 'Pop-out disabled in view-only mode';
+        const download = document.createElement('div'); download.className = 'frame-blocker download'; download.title = 'Download controls hidden in view-only mode';
+        shell.append(popout, download);
+      }
+    }
+    function renderResource(shell) {
+      const raw = shell.dataset.src || '';
+      const title = shell.dataset.title || 'Resource';
+      const kind = shell.dataset.viewerKind || 'attachment';
+      const url = checkedHttpUrl(raw);
+      if (!url) { shell.innerHTML = '<div class="preview-message"><strong>Invalid resource URL</strong>Ask an administrator to check the InputGuide value.</div>'; return; }
+      const path = url.pathname.toLowerCase();
+      const isVideoFile = /\.(mp4|webm|ogg|mov|m4v)(?:$)/i.test(path);
+      const isImageFile = /\.(png|jpe?g|gif|webp|svg|avif)(?:$)/i.test(path);
+      const isPdfFile = /\.pdf(?:$)/i.test(path);
+      const hostedVideo = kind === 'video' ? getVideoEmbed(url) : '';
+      const drivePreview = getDrivePreview(url);
+
+      if (isVideoFile) {
+        shell.classList.add('video-preview');
+        const video = document.createElement('video');
+        video.controls = true; video.preload = 'metadata'; video.playsInline = true;
+        video.setAttribute('controlsList', 'nodownload noremoteplayback');
+        video.setAttribute('disablePictureInPicture', '');
+        video.src = url.href;
+        shell.replaceChildren(video);
+        return;
+      }
+      if (isImageFile && kind === 'attachment') {
+        const image = document.createElement('img'); image.src = url.href; image.alt = title; image.loading = 'lazy';
+        shell.replaceChildren(image); return;
+      }
+      if (hostedVideo) { makeIframe(shell, hostedVideo, title, true); return; }
+      if (drivePreview) { makeIframe(shell, drivePreview, title, true); return; }
+      // PDFs and other viewable web resources are embedded. Sites that prohibit embedding can be opened via the source link.
+      makeIframe(shell, url.href, title, true);
+    }
+    document.querySelectorAll('.preview-shell').forEach(renderResource);
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+      else document.exitFullscreen?.();
+    }
+  </script>
+</body>
+</html>
