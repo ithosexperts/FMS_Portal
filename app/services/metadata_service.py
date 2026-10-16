@@ -97,6 +97,7 @@ def _normalize_fms_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized["STAGE_FORM_LINK"] = _pick_str(
         row, "Stage_Form_Link", "STAGE_FORM_LINK", "Stage Form Link", "stage_form_link"
     )
+    normalized["INPUT_GUIDE"] = _pick_str(row, "InputGuide", "Input Guide", "INPUT_GUIDE")
     normalized["DISPLAY_ORDER"] = _to_int(_pick(row, "DISPLAY_ORDER", "display_order"), default=0)
     return normalized
 
