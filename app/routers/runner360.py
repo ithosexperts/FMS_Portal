@@ -508,9 +508,10 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
             # Used only when live-recipient mode is explicitly enabled. Test mode
             # always sends to WHATSAPP_TEST_NUMBER instead.
             "mobile_number": _text(_lookup_case_insensitive(
-                employee, "Mobile", "OffMobile", "MobileNo", "MobileNumber",
-                "Phone", "PhoneNo", "PersonalMobile", "ContactNo", "ContactNumber",
-            )),
+    employee, "PersonalMobile", "Personal Mobile",
+    "Mobile", "OffMobile", "MobileNo", "MobileNumber",
+    "Phone", "PhoneNo", "PhoneNumber", "ContactNo", "ContactNumber",
+)),
 
             # Working hours come from the employee master for this assigned runner.
             "shift_start_time": _text(_lookup_case_insensitive(employee, "ShiftStartTime", "Shift Start Time")),
