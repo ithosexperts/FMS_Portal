@@ -45,6 +45,7 @@ def _task_message(
     expected_return_time: str,
     lead_time_mins: int,
     test_mode: bool,
+    checkin_link: str = "",
 ) -> str:
     prefix = "[TEST] " if test_mode else ""
     return "\n".join(
@@ -58,7 +59,7 @@ def _task_message(
             f"Expected return: {expected_return_time}",
             f"Planned duration: {lead_time_mins} minutes",
             "",
-            "The mobile Check In link will be enabled after deployment.",
+            f"Mobile Check In: {checkin_link}" if checkin_link else "Mobile Check In link unavailable. Please contact your FMS administrator.",
         ]
     )
 
@@ -83,6 +84,7 @@ async def send_runner360_task_notification(
     expected_return_time: str,
     lead_time_mins: int,
     runner_mobile: str = "",
+    checkin_link: str = "",
 ) -> dict[str, Any]:
     """Send a task assignment to the configured test number or runner number."""
     test_mode = bool(settings.whatsapp_test_mode)
@@ -98,7 +100,7 @@ async def send_runner360_task_notification(
 
     recipient = _normalise_mobile(settings.whatsapp_test_number if test_mode else runner_mobile)
     if not recipient:
-        requirement = "WHATSAPP_TEST_NUMBER" if test_mode else "the runner's mobile number in VM_EmployeeMaster"
+        requirement = "WHATSAPP_TEST_NUMBER" if test_mode else "the runner's mobile number in FMS_Runner360_WhatsAppContacts or VM_EmployeeMaster"
         return _result(
             attempted=False,
             sent=False,
@@ -115,6 +117,7 @@ async def send_runner360_task_notification(
         expected_return_time=expected_return_time,
         lead_time_mins=lead_time_mins,
         test_mode=test_mode,
+        checkin_link=checkin_link,
     )
 
     # Use params rather than interpolating a URL. This correctly escapes the +
