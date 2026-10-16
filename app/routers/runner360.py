@@ -509,7 +509,7 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
             # always sends to WHATSAPP_TEST_NUMBER instead.
             "mobile_number": _text(_lookup_case_insensitive(
                 employee, "Mobile", "OffMobile", "MobileNo", "MobileNumber",
-                "Phone", "PhoneNo", "PhoneNumber", "ContactNo", "ContactNumber",
+                "Phone", "PhoneNo", "PersonalMobile", "ContactNo", "ContactNumber",
             )),
 
             # Working hours come from the employee master for this assigned runner.
