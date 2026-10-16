@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Runner360 Check In</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 18px; background: #f3f6fa; color: #172b4d; }
+    .card { max-width: 520px; margin: 6vh auto; padding: 24px; background: #fff; border-radius: 14px; box-shadow: 0 6px 24px #102a4330; }
+    h1 { font-size: 23px; margin: 0 0 18px; }
+    .item { margin: 12px 0; line-height: 1.5; overflow-wrap: anywhere; }
+    .label { color: #5e718d; font-size: 12px; text-transform: uppercase; }
+    button { width: 100%; padding: 15px; background: #145da0; color: white; border: 0; border-radius: 8px; font-size: 16px; font-weight: 700; margin-top: 14px; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #status { line-height: 1.5; margin-top: 14px; white-space: pre-wrap; }
+    small { color: #64748b; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Runner360 — Check In</h1>
+    <div class="item"><div class="label">Task ID</div><strong>{{ task_id }}</strong></div>
+    <div class="item"><div class="label">Runner</div><strong>{{ runner }}</strong></div>
+    <div class="item"><div class="label">Branch</div><strong>{{ branch }}</strong></div>
+    <div class="item"><div class="label">Purpose</div><strong>{{ purpose }}</strong></div>
+    <div class="item"><div class="label">Planned start</div><strong>{{ start }}</strong></div>
+    <p><small>Allow location access when prompted. During working hours, Check In is accepted only within the configured branch radius. This link expires after seven days.</small></p>
+    <button id="runner360-in" type="button">Share GPS &amp; Check In</button>
+    <div id="runner360-status" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+    const token = {{ token | tojson }};
+    const button = document.getElementById('runner360-in');
+    const status = document.getElementById('runner360-status');
+    button.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        status.textContent = 'This browser does not support GPS. Open the link in Chrome on your phone.';
+        return;
+      }
+      button.disabled = true;
+      status.textContent = 'Getting your location…';
+      navigator.geolocation.getCurrentPosition(async position => {
+        try {
+          const response = await fetch('/runner360/mobile/' + encodeURIComponent(token) + '/in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            })
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) throw new Error(data.detail || data.message || 'Check In failed.');
+          status.textContent = data.message || 'Check In recorded.';
+          button.textContent = 'Check In Recorded';
+        } catch (error) {
+          status.textContent = error.message || 'Check In failed. Retry or contact your manager.';
+          button.disabled = false;
+        }
+      }, error => {
+        status.textContent = error.code === 1
+          ? 'Location permission was denied. Allow location access in browser settings and retry.'
+          : 'Could not get GPS. Enable Location and retry outdoors.';
+        button.disabled = false;
+      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    });
+  </script>
+</body>
+</html>
