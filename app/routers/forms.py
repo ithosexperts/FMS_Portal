@@ -13,7 +13,7 @@ import asyncio
 from pathlib import Path
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit
 
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -1314,8 +1314,6 @@ async def stage_form_page(
     request: Request,
     task_id: str,
     stage_no: str,
-    table_name: str = "",
-    primary_key: str = "",
     app_id: str = "",
     saved: bool = False,
     embedded: bool = False,
@@ -1358,15 +1356,8 @@ async def stage_form_page(
         except Exception as exc:
             print(f"Embedded S1 PickID resolution failed for PickID {requested_pick_id}: {exc}")
 
-    # Preserve the exact FMS/table context from the dashboard link. This is
-    # essential for Runner360 because another FMS may have a row with the same
-    # task ID; it also ensures shared Comments receives the correct table/app.
     stage_context = await stage_service.get_stage_context(
-        task_id,
-        stage_no,
-        table_name=(str(table_name).strip() or None),
-        app_id=(str(app_id).strip() or None),
-        primary_key=(str(primary_key).strip() or None),
+        task_id, stage_no, app_id=(str(app_id).strip() or None)
     )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
     
@@ -1507,6 +1498,152 @@ async def stage_form_page(
         "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
     })
 
+
+
+
+def _parse_input_guide_value(raw: Any) -> dict[str, Any]:
+    """Parse FMS_Config.InputGuide into named video and attachment URLs.
+
+    Supports the current ``URL@Display Name`` format and older
+    ``Display Name: URL`` text values, as well as JSON payloads from the editor.
+    """
+    result: dict[str, Any] = {"name": "", "videos": [], "attachments": []}
+    if raw is None:
+        return result
+
+    parsed_json = None
+    if isinstance(raw, dict):
+        parsed_json = raw
+    elif isinstance(raw, str):
+        candidate = raw.strip()
+        if candidate.startswith(("{", "[")):
+            try:
+                parsed_json = json.loads(candidate)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                parsed_json = None
+
+    def clean(value: Any) -> str:
+        return str(value or "").strip()
+
+    def add_item(target: list[dict[str, str]], item: Any, fallback: str) -> None:
+        url = ""
+        name = ""
+        if isinstance(item, dict):
+            url = clean(item.get("url") or item.get("videoUrl") or item.get("video_url") or item.get("attachmentUrl") or item.get("attachment_url"))
+            name = clean(item.get("name") or item.get("title") or item.get("displayName") or item.get("display_name"))
+        else:
+            value = clean(item)
+            if not value:
+                return
+            # Canonical editor format: URL@Display Name (use final @ as delimiter).
+            if "@" in value:
+                left, right = value.rsplit("@", 1)
+                if left.strip().lower().startswith(("http://", "https://")) and right.strip():
+                    url, name = left.strip(), right.strip()
+            # Legacy format: Display Name: URL.
+            if not url:
+                m = re.match(r"^(.*?)\s*:\s*(https?://\S+)\s*$", value, flags=re.I)
+                if m:
+                    name, url = m.group(1).strip(), m.group(2).strip()
+            if not url and value.lower().startswith(("http://", "https://")):
+                url = value
+        if not url:
+            return
+        try:
+            if urlsplit(url).scheme.lower() not in ("http", "https"):
+                return
+        except Exception:
+            return
+        target.append({"url": url, "name": name or fallback})
+
+    if isinstance(parsed_json, dict):
+        result["name"] = clean(parsed_json.get("name") or parsed_json.get("guideName") or parsed_json.get("title"))
+        videos = parsed_json.get("videos") or parsed_json.get("videoUrls") or parsed_json.get("video_urls") or []
+        attachments = parsed_json.get("attachments") or parsed_json.get("attachmentUrls") or parsed_json.get("attachment_urls") or []
+        if not isinstance(videos, list): videos = [videos] if videos else []
+        if not isinstance(attachments, list): attachments = [attachments] if attachments else []
+        for idx, item in enumerate(videos, 1): add_item(result["videos"], item, f"Video {idx}")
+        for idx, item in enumerate(attachments, 1): add_item(result["attachments"], item, f"Attachment {idx}")
+        return result
+
+    text_value = clean(raw)
+    if not text_value or text_value == "-":
+        return result
+
+    title_match = re.search(r"(?:^|\n)\s*(?:Name|Guide Name|Title)\s*:\s*([^\n]+)", text_value, flags=re.I)
+    if title_match:
+        result["name"] = title_match.group(1).strip()
+
+    # Section boundaries also work if the two labels have been pasted on one line.
+    section_pattern = re.compile(
+        r"(?:^|\s)(Video URLs?|Attachment URLs?)\s*:\s*",
+        flags=re.I,
+    )
+    matches = list(section_pattern.finditer(text_value))
+    if matches:
+        for index, match in enumerate(matches):
+            label = match.group(1).lower()
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text_value)
+            section = text_value[start:end].strip().strip(" ,;\r\n")
+            # Values are comma-separated URL@Name or Name: URL pairs.
+            parts = re.split(r",\s*(?=https?://|[^,\n]+?:\s*https?://)", section, flags=re.I)
+            target = result["videos"] if label.startswith("video") else result["attachments"]
+            fallback = "Video" if target is result["videos"] else "Attachment"
+            for idx, part in enumerate(parts, 1):
+                add_item(target, part.strip(), f"{fallback} {idx}")
+        return result
+
+    # A legacy single URL is treated as one attachment.
+    add_item(result["attachments"], text_value, "Attachment 1")
+    return result
+
+
+@router.get("/forms/stage/{task_id}/{stage_no}/tutorial", response_class=HTMLResponse)
+async def stage_tutorial_viewer(
+    request: Request,
+    task_id: str,
+    stage_no: str,
+    app_id: str = "",
+):
+    """Open the InputGuide resources belonging to this exact app + stage."""
+    stage_context: dict[str, Any] = {}
+    load_error = ""
+    try:
+        stage_context = await stage_service.get_stage_context(
+            task_id,
+            stage_no,
+            app_id=(str(app_id).strip() or None),
+        )
+    except Exception as exc:
+        print(f"Tutorial viewer could not resolve task={task_id}, app_id={app_id}, stage={stage_no}: {exc}")
+        load_error = "Could not find the matching application/stage configuration. Check the App ID and Stage No."
+
+    fms = stage_context.get("fms") or {}
+    stage = stage_context.get("stage") or {}
+    guide_raw = stage.get("INPUT_GUIDE")
+    if guide_raw in (None, ""):
+        # Fallback for API responses that preserve only the physical column name.
+        for key, value in stage.items():
+            key_norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            if key_norm == "inputguide" and value not in (None, ""):
+                guide_raw = value
+                break
+    guide = _parse_input_guide_value(guide_raw)
+    if not load_error and not guide["videos"] and not guide["attachments"]:
+        load_error = "No videos or attachments are configured for this App ID and Stage No."
+
+    return templates.TemplateResponse(request, "forms/tutorial_viewer.html", {
+        "task_id": task_id,
+        "stage_no": stage.get("STAGE_NO") or stage_no,
+        "app_id": fms.get("app_id") or app_id,
+        "fms_name": fms.get("fms_name") or stage.get("FMS_NAME") or "Stage Tutorial",
+        "stage_name": stage.get("STAGE_NAME") or stage_no,
+        "guide_name": guide.get("name") or "",
+        "videos": guide.get("videos") or [],
+        "attachments": guide.get("attachments") or [],
+        "load_error": load_error,
+    })
 
 
 
