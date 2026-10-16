@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from app.config import settings
 from app.api import table_api, task_api
 from app.api.client import ApiError, api_client
-from app.services import form_service, stage_service, task_service, stage1_custom_service
+from app.services import form_service, stage_service, task_service, stage1_custom_service, metadata_service
 from app.templates_config import templates
 from app.utils import route_builder
 
@@ -1606,39 +1606,70 @@ async def stage_tutorial_viewer(
     stage_no: str,
     app_id: str = "",
 ):
-    """Open the InputGuide resources belonging to this exact app + stage."""
-    stage_context: dict[str, Any] = {}
-    load_error = ""
-    try:
-        stage_context = await stage_service.get_stage_context(
-            task_id,
-            stage_no,
-            app_id=(str(app_id).strip() or None),
-        )
-    except Exception as exc:
-        print(f"Tutorial viewer could not resolve task={task_id}, app_id={app_id}, stage={stage_no}: {exc}")
-        load_error = "Could not find the matching application/stage configuration. Check the App ID and Stage No."
+    """Render the tutorial for the exact FMS_Config App ID + Stage No.
 
-    fms = stage_context.get("fms") or {}
-    stage = stage_context.get("stage") or {}
-    guide_raw = stage.get("INPUT_GUIDE")
+    Do not reload the task row or stage metadata here: the viewer only needs the
+    matching FMS_Config row. Avoiding a second task lookup also prevents an
+    unrelated task-table/API failure from turning the tutorial into a blank 500.
+    """
+    load_error = ""
+    matching_stage: dict[str, Any] = {}
+    requested_app_id = str(app_id or "").strip()
+
+    def _stage_key(value: Any) -> str:
+        text = str(value or "").strip().upper()
+        if text.startswith("STAGE"):
+            text = text[5:].strip()
+        if text.startswith("S") and text[1:].isdigit():
+            return str(int(text[1:]))
+        if text.isdigit():
+            return str(int(text))
+        return text
+
+    try:
+        if not requested_app_id:
+            load_error = "App ID is missing from the tutorial link. Reopen the viewer from the stage form."
+        else:
+            config_rows = await metadata_service.get_fms_config(app_id=requested_app_id)
+            wanted_stage = _stage_key(stage_no)
+            matching_stage = next(
+                (
+                    row for row in config_rows
+                    if str(row.get("APP_ID") or "").strip().casefold() == requested_app_id.casefold()
+                    and _stage_key(row.get("STAGE_NO")) == wanted_stage
+                ),
+                {},
+            )
+            if not matching_stage:
+                load_error = (
+                    f"No FMS_Config row matches App ID {requested_app_id} "
+                    f"and Stage No {stage_no}."
+                )
+    except Exception as exc:
+        print(
+            f"Tutorial FMS_Config lookup failed for app_id={requested_app_id}, "
+            f"stage={stage_no}: {type(exc).__name__}: {exc}"
+        )
+        load_error = "Unable to load the tutorial configuration from FMS_Config right now. Please refresh or try again."
+
+    guide_raw = matching_stage.get("INPUT_GUIDE")
     if guide_raw in (None, ""):
-        # Fallback for API responses that preserve only the physical column name.
-        for key, value in stage.items():
+        for key, value in matching_stage.items():
             key_norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
             if key_norm == "inputguide" and value not in (None, ""):
                 guide_raw = value
                 break
+
     guide = _parse_input_guide_value(guide_raw)
     if not load_error and not guide["videos"] and not guide["attachments"]:
-        load_error = "No videos or attachments are configured for this App ID and Stage No."
+        load_error = "No videos or attachments are configured for this App ID and Stage No in FMS_Config.InputGuide."
 
     return templates.TemplateResponse(request, "forms/tutorial_viewer.html", {
         "task_id": task_id,
-        "stage_no": stage.get("STAGE_NO") or stage_no,
-        "app_id": fms.get("app_id") or app_id,
-        "fms_name": fms.get("fms_name") or stage.get("FMS_NAME") or "Stage Tutorial",
-        "stage_name": stage.get("STAGE_NAME") or stage_no,
+        "stage_no": matching_stage.get("STAGE_NO") or stage_no,
+        "app_id": matching_stage.get("APP_ID") or requested_app_id,
+        "fms_name": matching_stage.get("FMS_NAME") or "Stage Tutorial",
+        "stage_name": matching_stage.get("STAGE_NAME") or stage_no,
         "guide_name": guide.get("name") or "",
         "videos": guide.get("videos") or [],
         "attachments": guide.get("attachments") or [],
