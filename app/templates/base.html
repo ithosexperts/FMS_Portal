@@ -64,9 +64,15 @@
   {% set _comments_row = context.row|default({}, true) %}
   {% set _comments_ref = _comments_row.get(context.primary_key) if context.primary_key else task_id %}
   <script defer src="{{ comments_origin }}/embed.js?v=20261014-inline-comments1&portalOrigin={{ one_portal_origin | urlencode }}&tableName={{ _comments_fms.get('table_name', '') | urlencode }}&fmsRefId={{ (_comments_ref or task_id) | urlencode }}&rowId={{ (_comments_ref or task_id) | urlencode }}&primaryKey={{ (context.primary_key or '') | urlencode }}&taskId={{ task_id | urlencode }}&appId={{ (_comments_fms.get('app_id', '') or '') | urlencode }}&stageNo={{ stage_no | urlencode }}"></script>
+  {% set _tutorial_stage = context.stage|default({}, true) %}
+  {% set _tutorial_guide = _tutorial_stage.get('INPUT_GUIDE') or _tutorial_stage.get('InputGuide') or _tutorial_stage.get('Input Guide') %}
+  {% set _tutorial_guide_text = (_tutorial_guide|string|trim|lower) %}
+  {% set _tutorial_has_guide = _tutorial_guide_text not in ['', 'none', 'null', '-', 'nan'] %}
+  {% if _tutorial_has_guide %}
   <script>
-    // Shared stage tutorial button: automatically follows the Comments icon on every
-    // stage form that loads the Comments launcher, including custom/future templates.
+    // Only add the Tutorial button when the current App ID + Stage No has a
+    // non-empty InputGuide value in the matched FMS_Config stage configuration.
+    // This shared hook applies to both existing and future forms using base.html.
     (function () {
       const tutorialUrl = {{ ('/forms/stage/' ~ (task_id|string|urlencode) ~ '/' ~ (stage_no|string|urlencode) ~ '/tutorial?app_id=' ~ ((_comments_fms.get('app_id', '') or '')|string|urlencode)) | tojson }};
       function addTutorialButton() {
@@ -106,6 +112,7 @@
       }
     })();
   </script>
+  {% endif %}
   {% endif %}
   {% block extra_scripts %}{% endblock %}
 </body>
