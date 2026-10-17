@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from app.api import table_api
+from app.services import employee_availability_service
 from app.utils.delay_calculator import is_blank
 
 
@@ -207,24 +208,36 @@ def _picker_role(row: dict[str, Any]) -> str:
     return ""
 
 
-async def _load_picker_options(location: Any) -> list[dict[str, str]]:
-    """Load picker employees from the location-specific team master.
+async def _load_picker_options(
+    location: Any,
+    *,
+    work_date: Any = None,
+    current_pick_id: Any = "",
+) -> list[dict[str, Any]]:
+    """Load every eligible Picker and calculate attendance/busy status live.
 
-    The Stage-1 picker list is driven by Location -> VM_Team.TeamID ->
-    VM_EmployeeMaster.EmployeeCode/EmployeeName.  This is the same master
-    relationship used by the working Pick/Pack form, and avoids depending on
-    FL_Users role text being populated as "PICKER".
+    Existing location -> VM_Team -> VM_EmployeeMaster eligibility is preserved.
+    Absent takes priority over Busy. Options remain visible; non-selectable states
+    are exposed to the template/JavaScript as ``disabled=True``.
     """
     location_key = _norm(location)
     target_team_id = PICKER_LOCATION_TEAM_MAP.get(location_key)
 
-    employee_rows: list[dict[str, Any]] = []
-    team_rows: list[dict[str, Any]] = []
     try:
         employee_rows = await table_api.get_table("VM_EmployeeMaster")
         team_rows = await table_api.get_table("VM_Team")
     except Exception as exc:
-        print(f"[S1 PICKER] Failed to load picker masters: {exc}")
+        print(f"[S1 PICKER] Failed to load picker masters: {type(exc).__name__}")
+        return [{
+            "name": "Picker list unavailable",
+            "label": "Picker list unavailable — Attendance/availability could not be verified",
+            "employee_code": "",
+            "attendance_status": employee_availability_service.ATTENDANCE_ERROR,
+            "status": "Availability unavailable",
+            "is_absent": False,
+            "is_busy": False,
+            "disabled": True,
+        }]
 
     def field_value(row: dict[str, Any], *names: str) -> Any:
         targets = {_norm(name) for name in names}
@@ -233,67 +246,194 @@ async def _load_picker_options(location: Any) -> list[dict[str, str]]:
                 return value
         return None
 
-    employee_by_code: dict[str, str] = {}
+    employee_by_code: dict[str, dict[str, Any]] = {}
+    employee_by_name: dict[str, dict[str, Any]] = {}
     for employee_row in employee_rows or []:
-        code = _text(field_value(
-            employee_row,
-            "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"
-        ))
-        name = _text(field_value(
-            employee_row,
-            "EmployeeName", "EMPLOYEENAME", "Employee_Name", "Name"
-        ))
+        if not isinstance(employee_row, dict):
+            continue
+        code = _text(field_value(employee_row, "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"))
+        name = _text(field_value(employee_row, "EmployeeName", "EMPLOYEENAME", "Employee_Name", "Name"))
         if code and name:
-            employee_by_code[_norm(code)] = name
+            employee_by_code[_norm(code)] = employee_row
+            employee_by_name[_norm(name)] = employee_row
 
-    names: list[str] = []
+    chosen: list[dict[str, Any]] = []
     seen: set[str] = set()
     if target_team_id:
         for team_row in team_rows or []:
-            team_id = _text(field_value(
-                team_row,
-                "TeamID", "TeamId", "TEAM_ID", "Team_ID", "team_id"
-            ))
+            if not isinstance(team_row, dict):
+                continue
+            team_id = _text(field_value(team_row, "TeamID", "TeamId", "TEAM_ID", "Team_ID", "team_id"))
             if team_id != target_team_id:
                 continue
-            employee_code = _text(field_value(
-                team_row,
-                "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"
-            ))
-            employee_name = employee_by_code.get(_norm(employee_code), "")
-            if not employee_name:
+            employee_code = _text(field_value(team_row, "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"))
+            employee_row = employee_by_code.get(_norm(employee_code))
+            if not employee_row:
                 continue
-            key = _norm(employee_name)
+            name = _text(field_value(employee_row, "EmployeeName", "Employee Name", "Name"))
+            if not name:
+                continue
+            key = _norm(employee_code)
             if key in seen:
                 continue
             seen.add(key)
-            names.append(employee_name)
+            chosen.append({"name": name, "employee_code": employee_code, "employee_row": employee_row})
 
-    # Keep a safe fallback for installations where the VM team masters are not
-    # available.  This fallback is used only when the location/team mapping
-    # produced no names; it preserves compatibility with a dedicated FL_Users
-    # picker master without changing the normal location-based behavior.
-    if not names and PICKER_MASTER_TABLE:
+    # Preserve the FL_Users fallback, but resolve back to VM_EmployeeMaster when
+    # possible so attendance is always checked by EmployeeCode.
+    if not chosen and PICKER_MASTER_TABLE:
         try:
             fallback_rows = await table_api.get_table(PICKER_MASTER_TABLE)
         except Exception as exc:
-            print(f"[S1 PICKER] Fallback picker master read failed: {exc}")
+            print(f"[S1 PICKER] Fallback picker master read failed: {type(exc).__name__}")
             fallback_rows = []
         for row in fallback_rows or []:
+            if not isinstance(row, dict):
+                continue
             name = _picker_name(row)
             if not name:
                 continue
             role = _picker_role(row)
             if role and "picker" not in _norm(role):
                 continue
-            key = _norm(name)
+            employee_row = employee_by_name.get(_norm(name))
+            code = _text(field_value(employee_row or {}, "EmployeeCode", "Employee Code"))
+            key = _norm(code or name)
             if key in seen:
                 continue
             seen.add(key)
-            names.append(name)
+            chosen.append({"name": name, "employee_code": code, "employee_row": employee_row or {}})
 
-    names.sort(key=lambda value: value.casefold())
-    return [{"name": name, "label": name} for name in names]
+    chosen.sort(key=lambda item: item["name"].casefold())
+    if not chosen:
+        return []
+
+    actual_work_date = employee_availability_service.resolve_work_date(work_date)
+    codes = [item.get("employee_code") for item in chosen if item.get("employee_code")]
+    attendance_error = False
+    try:
+        attendance_map = await employee_availability_service.get_attendance_status_map(codes, actual_work_date)
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        print(f"[S1 PICKER] Attendance lookup unavailable: {type(exc).__name__}")
+        attendance_map = {}
+        attendance_error = True
+
+    busy_error = False
+    try:
+        busy_codes = await employee_availability_service.get_busy_employee_codes(employee_rows or [])
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        print(f"[S1 PICKER] Cross-role Busy lookup unavailable: {type(exc).__name__}")
+        busy_codes = set()
+        busy_error = True
+
+    # Preserve the existing PickID-based Busy condition, excluding this PickID
+    # so a saved Picker can continue working on its current order.
+    existing_busy_names: set[str] = set()
+    try:
+        current_busy = await get_busy_picker_assignments(_text(current_pick_id))
+        existing_busy_names = {
+            _norm(name)
+            for assignment in current_busy
+            for name in (assignment.get("pickers") or [])
+            if _norm(name)
+        }
+    except Exception as exc:
+        print(f"[S1 PICKER] Existing Picker Busy lookup unavailable: {type(exc).__name__}")
+        busy_error = True
+
+    result: list[dict[str, Any]] = []
+    for item in chosen:
+        name = item["name"]
+        code = item.get("employee_code") or ""
+        code_key = employee_availability_service.normalize_key(code)
+        attendance = attendance_map.get(code_key, employee_availability_service.ATTENDANCE_ERROR if not code else employee_availability_service.ATTENDANCE_NOT_MARKED)
+        is_absent = attendance == employee_availability_service.ATTENDANCE_ABSENT
+        is_busy = code_key in busy_codes or _norm(name) in existing_busy_names
+
+        # Attendance has priority: an employee who is both Absent and Busy is
+        # labelled only Absent. Data failures fail closed for new assignments.
+        if is_absent:
+            status = "Absent"
+            disabled = True
+        elif attendance == employee_availability_service.ATTENDANCE_ERROR or attendance_error:
+            status = "Attendance unavailable"
+            disabled = True
+        elif is_busy:
+            status = "Busy"
+            disabled = True
+        elif busy_error:
+            status = "Availability unavailable"
+            disabled = True
+        elif attendance == employee_availability_service.ATTENDANCE_PRESENT:
+            status = "Available"
+            disabled = False
+        elif not code:
+            status = "Availability unavailable"
+            disabled = True
+        else:
+            # Missing daily attendance is not absence. It falls through to the
+            # existing eligibility/Busy rules and remains available if not busy.
+            status = "Available"
+            disabled = False
+
+        result.append({
+            "name": name,
+            "label": f"{name} — {status}",
+            "employee_code": code,
+            "attendance_status": attendance,
+            "status": status,
+            "is_absent": is_absent,
+            "is_busy": bool(is_busy and not is_absent),
+            "disabled": bool(disabled),
+        })
+    return result
+
+
+async def validate_picker_changes(
+    selected_pickers: list[str],
+    existing_pickers: list[str],
+    *,
+    location: Any,
+    work_date: Any = None,
+    current_pick_id: Any = "",
+) -> None:
+    """Server-side attendance + all Busy-condition validation for newly added pickers."""
+    existing_keys = {_norm(name) for name in existing_pickers or [] if _norm(name)}
+    added = [name for name in (selected_pickers or []) if _norm(name) and _norm(name) not in existing_keys]
+    if not added:
+        return
+
+    actual_work_date = employee_availability_service.resolve_work_date(work_date)
+    options = await _load_picker_options(
+        location, work_date=actual_work_date, current_pick_id=current_pick_id
+    )
+    by_name = {_norm(option.get("name")): option for option in options if _norm(option.get("name"))}
+    for picker_name in added:
+        option = by_name.get(_norm(picker_name))
+        if not option or not option.get("employee_code"):
+            raise employee_availability_service.EmployeeAvailabilityError(
+                f"Picker '{picker_name}' could not be matched to VM_EmployeeMaster; assignment blocked."
+            )
+        if option.get("is_absent"):
+            raise employee_availability_service.EmployeeAssignmentDenied(
+                "This employee is marked Absent in Z_AttendanceInfo and cannot be assigned work."
+            )
+        if option.get("attendance_status") == employee_availability_service.ATTENDANCE_ERROR:
+            raise employee_availability_service.EmployeeAvailabilityError(
+                f"Attendance records for picker '{picker_name}' cannot be resolved; assignment blocked."
+            )
+        if option.get("status") in {"Attendance unavailable", "Availability unavailable"}:
+            raise employee_availability_service.EmployeeAvailabilityError(
+                f"Attendance and availability could not be verified for picker '{picker_name}'; assignment blocked."
+            )
+        if option.get("is_busy"):
+            raise employee_availability_service.EmployeeAssignmentDenied(
+                f"This Picker is currently Busy and cannot be assigned a new task: {picker_name}."
+            )
+        # Fresh single-employee attendance verification immediately before save.
+        await employee_availability_service.ensure_employee_not_absent(
+            option.get("employee_code"), actual_work_date
+        )
 
 
 def _empty_field(field: str, caption: str, value: Any = None) -> dict[str, Any]:
@@ -690,11 +830,25 @@ async def build_stage1_custom_context(stage_context: dict[str, Any]) -> dict[str
                     break
     picker_values = _parse_list(picker_value)
 
-    picker_options = await _load_picker_options(_value(row, "I_Location", "Location"))
+    picker_work_date = employee_availability_service.resolve_work_date(None, current_row=row)
+    picker_options = await _load_picker_options(
+        _value(row, "I_Location", "Location"),
+        work_date=picker_work_date,
+        current_pick_id=current_pick_id,
+    )
     option_keys = {_norm(x["name"]) for x in picker_options}
     for name in picker_values:
         if _norm(name) not in option_keys:
-            picker_options.append({"name": name, "label": name})
+            picker_options.append({
+                "name": name,
+                "label": f"{name} — Existing assignment",
+                "employee_code": "",
+                "attendance_status": employee_availability_service.ATTENDANCE_NOT_MARKED,
+                "status": "Existing assignment",
+                "is_absent": False,
+                "is_busy": False,
+                "disabled": False,
+            })
 
     batch_groups, batch_weight_total, batch_status = await _build_batch_groups(
         sales_rows, order_no, create_ts
