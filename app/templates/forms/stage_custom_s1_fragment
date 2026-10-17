@@ -142,7 +142,7 @@
             <select class="s1-picker-select" disabled>
               <option value="">Select Picker</option>
               {% for option in picker.options %}
-              <option value="{{ option.name }}" {% if selected_picker|string|trim|lower == option.name|string|trim|lower %}selected{% endif %}>{{ option.name }}</option>
+              <option value="{{ option.name }}" {% if selected_picker|string|trim|lower == option.name|string|trim|lower %}selected{% endif %} {% if option.disabled %}disabled{% endif %}>{{ option.label or option.name }}</option>
               {% endfor %}
             </select>
             <button type="button" class="btn btn-sm s1-picker-save" hidden>S</button>
@@ -156,7 +156,7 @@
             <select class="s1-picker-select" {% if custom_stage1.stage_locked %}disabled{% endif %}>
               <option value="">Select Picker</option>
               {% for option in picker.options %}
-              <option value="{{ option.name }}">{{ option.name }}</option>
+              <option value="{{ option.name }}" {% if option.disabled %}disabled{% endif %}>{{ option.label or option.name }}</option>
               {% endfor %}
             </select>
             <button type="button" class="btn btn-sm s1-picker-save">S</button>
