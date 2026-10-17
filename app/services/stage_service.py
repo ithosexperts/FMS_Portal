@@ -14,7 +14,7 @@ from typing import Any
 from app.api import table_api
 from app.api import task_api
 from app.api.metadata_api import get_metadata
-from app.services import form_service, task_service
+from app.services import form_service, task_service, employee_availability_service
 from app.utils.permission_helper import ACTION_EDIT_CURRENT_STAGE, can
 
 
@@ -137,10 +137,40 @@ def _context_row_id(context: dict[str, Any], fallback_task_id: str) -> Any:
     return fallback_task_id
 
 
+
+def _row_value(row: dict[str, Any], *names: str) -> Any:
+    if not isinstance(row, dict):
+        return None
+    targets = {"".join(ch for ch in str(name).casefold() if ch.isalnum()) for name in names}
+    for key, value in row.items():
+        if "".join(ch for ch in str(key).casefold() if ch.isalnum()) in targets:
+            return value
+    return None
+
 async def save_stage(task_id: str, stage_no: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     context = await get_stage_context(task_id, stage_no)
     if not context["editable"]:
         raise PermissionError("This stage is not currently editable.")
+
+    current_row = context.get("row") or {}
+    work_date = employee_availability_service.resolve_work_date(None, payload, current_row)
+    await employee_availability_service.validate_new_assignment_changes(
+        payload, current_row, work_date=work_date
+    )
+    # S1_Picker has additional Pick/Pack-specific Busy checks; the forms route
+    # validates it before side effects, while this check protects other callers.
+    if any("".join(ch for ch in str(key).casefold() if ch.isalnum()) == "s1picker" for key in (payload or {})):
+        from app.services import stage1_custom_service
+        selected_pickers = stage1_custom_service._parse_list(payload.get("S1_Picker"))
+        custom_context = await stage1_custom_service.build_stage1_custom_context(context)
+        existing_pickers = list((custom_context.get("picker") or {}).get("values") or [])
+        await stage1_custom_service.validate_picker_changes(
+            selected_pickers,
+            existing_pickers,
+            location=_row_value(context.get("row") or {}, "I_Location", "Location"),
+            work_date=work_date,
+            current_pick_id=_row_value(context.get("row") or {}, "S1_PickID", "PickID"),
+        )
 
     row_id = _context_row_id(context, task_id)
     print(
