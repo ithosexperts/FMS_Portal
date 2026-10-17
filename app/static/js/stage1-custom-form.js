@@ -297,11 +297,20 @@
         const key = normPicker(option.value);
         if (!key) return;
         if (usedByOtherRows.has(key)) return;
-        if (root.dataset.pickerAvailabilityReady === "true" && busyPickerKeys.has(key) && key !== selectedKey) return;
+        // Keep Busy and Absent employees visible; disabling, not hiding, is the rule.
+        const label = String(option.label || option.value);
+        const isAbsent = /\s[—-]\s*Absent$/i.test(label);
+        const isBusy = !isAbsent && ( /\s[—-]\s*Busy$/i.test(label) || busyPickerKeys.has(key) );
         const el = document.createElement("option");
         el.value = option.value;
-        el.textContent = option.label || option.value;
-        el.disabled = Boolean(option.disabled);
+        el.textContent = isBusy && !/\s[—-]\s*Busy$/i.test(label)
+          ? `${label} — Busy`
+          : label;
+        el.disabled = Boolean(option.disabled) || isAbsent || isBusy;
+        if (el.disabled) {
+          el.style.color = "#777";
+          el.style.backgroundColor = "#f1f3f5";
+        }
         if (selectedKey && key === selectedKey) el.selected = true;
         select.appendChild(el);
       });
@@ -364,6 +373,15 @@
 
       availabilityPromise = fetchBusyPickerBoard()
         .then((data) => {
+          if (Array.isArray(data.picker_options)) {
+            pickerOptions = data.picker_options
+              .map((option) => ({
+                value: String(option?.value ?? option?.name ?? ""),
+                label: String(option?.label ?? option?.name ?? option?.value ?? ""),
+                disabled: Boolean(option?.disabled),
+              }))
+              .filter((option) => option.value || option.label);
+          }
           busyPickerKeys = new Set((data.busy_picker_names || []).map((name) => normPicker(name)).filter(Boolean));
           setAvailabilityReady(true);
           return data;
@@ -429,6 +447,15 @@
       if (busyBody) busyBody.innerHTML = "";
       try {
         const data = await fetchBusyPickerBoard();
+        if (Array.isArray(data.picker_options)) {
+          pickerOptions = data.picker_options
+            .map((option) => ({
+              value: String(option?.value ?? option?.name ?? ""),
+              label: String(option?.label ?? option?.name ?? option?.value ?? ""),
+              disabled: Boolean(option?.disabled),
+            }))
+            .filter((option) => option.value || option.label);
+        }
         busyPickerKeys = new Set((data.busy_picker_names || []).map((name) => normPicker(name)).filter(Boolean));
         renderBusyPickerBoard(data.assignments || []);
         setAvailabilityReady(true);
@@ -468,11 +495,19 @@
         if (!option.value) return;
         const key = normPicker(option.value);
         if (used.has(key)) return;
-        if (root.dataset.pickerAvailabilityReady === "true" && busyPickerKeys.has(key)) return;
+        const label = String(option.label || option.value);
+        const isAbsent = /\s[—-]\s*Absent$/i.test(label);
+        const isBusy = !isAbsent && ( /\s[—-]\s*Busy$/i.test(label) || busyPickerKeys.has(key) );
         const el = document.createElement("option");
         el.value = option.value;
-        el.textContent = option.label || option.value;
-        el.disabled = option.disabled;
+        el.textContent = isBusy && !/\s[—-]\s*Busy$/i.test(label)
+          ? `${label} — Busy`
+          : label;
+        el.disabled = Boolean(option.disabled) || isAbsent || isBusy;
+        if (el.disabled) {
+          el.style.color = "#777";
+          el.style.backgroundColor = "#f1f3f5";
+        }
         select.appendChild(el);
       });
 
