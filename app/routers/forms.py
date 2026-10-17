@@ -16,13 +16,13 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote_plus, urlsplit
 
-from fastapi import APIRouter, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
 from app.config import settings
 from app.api import table_api, task_api
 from app.api.client import ApiError, api_client
-from app.services import form_service, stage_service, task_service, stage1_custom_service, metadata_service
+from app.services import form_service, stage_service, task_service, stage1_custom_service, metadata_service, employee_availability_service
 from app.templates_config import templates
 from app.utils import route_builder
 
@@ -1793,19 +1793,29 @@ async def stage1_picker_board(request: Request, task_id: str, stage_no: str, cur
         )
 
     resolved_pick_id = str(current_pick_id or "").strip()
-    if not resolved_pick_id:
-        try:
-            context = await stage_service.get_stage_context(task_id, stage_no)
+    try:
+        stage_context = await stage_service.get_stage_context(task_id, stage_no)
+        stage_row = stage_context.get("row") or {}
+        if not resolved_pick_id:
             resolved_pick_id = _to_text(
-                _pick_value_by_suffix(context.get("row") or {}, ("s1pickid", "pickid"), "S1")
+                _pick_value_by_suffix(stage_row, ("s1pickid", "pickid"), "S1")
             )
-        except Exception:
-            resolved_pick_id = ""
+        # Reuse the existing Stage 1 option builder so the refreshed picker list
+        # includes attendance and cross-role Busy states, not only PickID Busy.
+        custom_context = await stage1_custom_service.build_stage1_custom_context(stage_context)
+        picker_context = custom_context.get("picker") or {}
+        picker_options = list(picker_context.get("options") or [])
+    except Exception as exc:
+        print(f"[Picker Board] Failed to load attendance/busy picker options: {type(exc).__name__}")
+        return JSONResponse(
+            {"ok": False, "error": "Unable to verify Picker attendance and availability."},
+            status_code=503,
+        )
 
     try:
         assignments = await stage1_custom_service.get_busy_picker_assignments(resolved_pick_id)
     except Exception as exc:
-        print(f"[Picker Board] Failed to load busy assignments: {exc}")
+        print(f"[Picker Board] Failed to load busy assignments: {type(exc).__name__}")
         return JSONResponse({"ok": False, "error": "Unable to load busy picker board."}, status_code=502)
 
     board_rows: list[dict[str, Any]] = []
@@ -1842,6 +1852,19 @@ async def stage1_picker_board(request: Request, task_id: str, stage_no: str, cur
         "ok": True,
         "current_pick_id": resolved_pick_id,
         "busy_picker_names": busy_picker_names,
+        "picker_options": [
+            {
+                "name": option.get("name", ""),
+                "label": option.get("label", option.get("name", "")),
+                "employee_code": option.get("employee_code", ""),
+                "attendance_status": option.get("attendance_status", "NOT_MARKED"),
+                "status": option.get("status", "Attendance not marked"),
+                "is_absent": bool(option.get("is_absent")),
+                "is_busy": bool(option.get("is_busy")),
+                "disabled": bool(option.get("disabled")),
+            }
+            for option in picker_options
+        ],
         "assignments": board_rows,
     })
 
@@ -1871,6 +1894,26 @@ async def stage1_picker_save(request: Request, task_id: str, stage_no: str):
 
     pick_id = _to_text(_pick_value_by_suffix(row, ("s1pickid",), "S1"))
     current_row_id = _to_text(_pick_value_by_suffix(row, ("rowid", "id", "pk"))) or _to_text(task_id)
+
+    # Validate only new additions. An existing picker may still complete or
+    # remove previously assigned work even if their status later changes.
+    try:
+        custom_picker_context = await stage1_custom_service.build_stage1_custom_context(context)
+        existing_pickers = list((custom_picker_context.get("picker") or {}).get("values") or [])
+        picker_work_date = employee_availability_service.resolve_work_date(
+            None, current_row=row
+        )
+        await stage1_custom_service.validate_picker_changes(
+            pickers,
+            existing_pickers,
+            location=_pick_value_by_suffix(row, ("ilocation", "location")),
+            work_date=picker_work_date,
+            current_pick_id=pick_id,
+        )
+    except employee_availability_service.EmployeeAssignmentDenied as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=503)
 
     if pickers:
         busy_map = await _get_busy_picker_map(pick_id)
@@ -2032,6 +2075,18 @@ async def stage1_weight_save(request: Request, task_id: str, stage_no: str):
         }, status_code=502)
     return JSONResponse({"ok": True, "row_id": row_id, "weight": f"{persisted_num:.3f}"})
 
+async def _save_stage_with_assignment_guard(
+    task_id: str, stage_no: str, payload: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Translate shared assignment-gate failures into clear stage-route responses."""
+    try:
+        return await stage_service.save_stage(task_id, stage_no, payload)
+    except employee_availability_service.EmployeeAssignmentDenied as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.post("/forms/stage/{task_id}/{stage_no}", response_class=HTMLResponse)
 async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     form_data = await request.form()
@@ -2115,6 +2170,36 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
             payload[key] = None
         else:
             payload[key] = val
+
+    # Global server-side attendance gate: validate changed assignment fields
+    # before any child-row or stage write occurs. Existing assignments are not
+    # revalidated while completing current work.
+    current_assignment_row = stage_context.get("row") or {}
+    assignment_work_date = employee_availability_service.resolve_work_date(
+        None, payload, current_assignment_row
+    )
+    try:
+        await employee_availability_service.validate_new_assignment_changes(
+            payload, current_assignment_row, work_date=assignment_work_date
+        )
+        stage1_picker_new = False
+        if _normalize_name(stage_no) == "s1" and "S1_Picker" in payload:
+            staged_picker_values = _parse_picker_list(payload.get("S1_Picker"))
+            custom_picker_context = await stage1_custom_service.build_stage1_custom_context(stage_context)
+            existing_picker_values = list((custom_picker_context.get("picker") or {}).get("values") or [])
+            if {_norm_person(v) for v in staged_picker_values} != {_norm_person(v) for v in existing_picker_values}:
+                stage1_picker_new = True
+                await stage1_custom_service.validate_picker_changes(
+                    staged_picker_values,
+                    existing_picker_values,
+                    location=_pick_value_by_suffix(current_assignment_row, ("ilocation", "location")),
+                    work_date=assignment_work_date,
+                    current_pick_id=_pick_value_by_suffix(current_assignment_row, ("s1pickid", "pickid"), "S1"),
+                )
+    except employee_availability_service.EmployeeAssignmentDenied as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if raw_batch_payload:
         try:
@@ -2290,7 +2375,7 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
         # applicable, but never let it overwrite the explicit S2 mapping.
         generic_payload = {k: v for k, v in payload.items() if k not in s2_fields}
         if generic_payload:
-            await stage_service.save_stage(task_id, stage_no, generic_payload)
+            await _save_stage_with_assignment_guard(task_id, stage_no, generic_payload)
 
         # Refresh the complete stage context after the direct DB update.
         stage_context = await stage_service.get_stage_context(task_id, stage_no)
@@ -2333,11 +2418,11 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
 
         generic_payload = {k: v for k, v in payload.items() if k not in s3_fields}
         if generic_payload:
-            await stage_service.save_stage(task_id, stage_no, generic_payload)
+            await _save_stage_with_assignment_guard(task_id, stage_no, generic_payload)
         stage_context = await stage_service.get_stage_context(task_id, stage_no)
 
     elif payload:
-        await stage_service.save_stage(task_id, stage_no, payload)
+        await _save_stage_with_assignment_guard(task_id, stage_no, payload)
 
     if str(stage_no).strip().upper() == "S2":
         related_row_ids = [rid for rid in await _resolve_salesorder_row_ids_by_pick_id(stage_context, task_id) if str(rid) != str(task_id)]
