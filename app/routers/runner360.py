@@ -609,11 +609,7 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
             # Used only when live-recipient mode is explicitly enabled. Test mode
             # always sends to WHATSAPP_TEST_NUMBER instead.
-            "mobile_number": _text(_lookup_case_insensitive(
-                employee, "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
-                "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
-                "ContactNo", "ContactNumber",
-            )),
+            "mobile_number": _runner360_mobile_value(employee),
 
             # Working hours come from the employee master for this assigned runner.
             "shift_start_time": _text(_lookup_case_insensitive(employee, "ShiftStartTime", "Shift Start Time")),
@@ -636,10 +632,37 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
 
 _RUNNER360_MOBILE_FIELD_ALIASES = (
-    "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
-    "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
-    "ContactNo", "ContactNumber",
+    # PersonalMobile and WorkMessagingNo are the actual contact fields visible in
+    # VM_EmployeeMaster. Try each field separately so a NULL PersonalMobile does
+    # not hide a populated WorkMessagingNo in the same row.
+    "PersonalMobile", "Personal Mobile",
+    "WorkMessagingNo", "Work Messaging No",
+    "Mobile", "OffMobile", "MobileNo", "MobileNumber",
+    "Phone", "PhoneNo", "PhoneNumber", "ContactNo", "ContactNumber",
 )
+
+
+_RUNNER360_NULL_MOBILE_VALUES = {"", "null", "none", "nan", "nat", "n/a", "-"}
+
+
+def _runner360_mobile_value(employee: dict[str, Any]) -> str:
+    """Return the first valid mobile from supported employee-master fields.
+
+    Each alias is checked separately. The general case-insensitive lookup returns
+    the first matching key in row order, which can be NULL even when a later
+    contact field such as WorkMessagingNo contains a usable number.
+    """
+    if not isinstance(employee, dict):
+        return ""
+
+    for field_name in _RUNNER360_MOBILE_FIELD_ALIASES:
+        mobile = _text(_lookup_case_insensitive(employee, field_name))
+        if not mobile or mobile.casefold() in _RUNNER360_NULL_MOBILE_VALUES:
+            continue
+        digits = "".join(ch for ch in mobile if ch.isdigit())
+        if 10 <= len(digits) <= 15:
+            return mobile
+    return ""
 
 
 async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
@@ -699,31 +722,45 @@ async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
             get_current_database_target() or target_database, employee_code, type(exc).__name__,
         )
 
-    null_values = {"", "null", "none", "nan", "nat", "n/a", "-"}
     seen_rows: set[tuple[str, str]] = set()
+    matching_employee_rows = 0
+    candidate_fields_present: set[str] = set()
+    returned_columns: set[str] = set()
+    wanted_mobile_fields = {_column_key(name) for name in _RUNNER360_MOBILE_FIELD_ALIASES}
+
     for employee in rows:
         if not isinstance(employee, dict):
             continue
+        returned_columns.update(str(key) for key in employee.keys())
         returned_code = _text(_lookup_case_insensitive(employee, "EmployeeCode", "Employee Code"))
         if _column_key(returned_code) != target_code:
             continue
-        mobile = _text(_lookup_case_insensitive(employee, *_RUNNER360_MOBILE_FIELD_ALIASES))
+        matching_employee_rows += 1
+        candidate_fields_present.update(
+            str(key) for key in employee.keys() if _column_key(key) in wanted_mobile_fields
+        )
+        mobile = _runner360_mobile_value(employee)
+        if not mobile:
+            continue
         digits = "".join(ch for ch in mobile if ch.isdigit())
         normalized_key = (_column_key(returned_code), digits)
         if normalized_key in seen_rows:
             continue
         seen_rows.add(normalized_key)
-        if mobile.casefold() in null_values or not (10 <= len(digits) <= 15):
-            continue
         logger.info(
-            "Runner360 mobile lookup matched employee: target_database=%s employee_code=%s found=True digit_count=%d",
-            target_database, employee_code, len(digits),
+            "Runner360 mobile lookup matched employee: target_database=%s employee_code=%s found=True digit_count=%d source_fields=%s",
+            target_database, employee_code, len(digits), sorted(candidate_fields_present),
         )
         return mobile
 
     logger.warning(
-        "Runner360 mobile lookup did not find a valid number: target_database=%s employee_code=%s rows_checked=%d",
-        target_database, employee_code, len(rows),
+        "Runner360 mobile lookup did not find a valid number: target_database=%s employee_code=%s rows_checked=%d matching_employee_rows=%d candidate_mobile_fields_present=%s returned_columns=%s",
+        target_database,
+        employee_code,
+        len(rows),
+        matching_employee_rows,
+        sorted(candidate_fields_present),
+        sorted(returned_columns),
     )
     return ""
 
