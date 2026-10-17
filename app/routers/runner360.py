@@ -429,6 +429,143 @@ async def _get_runner_busy_status(assignments: list[dict[str, Any]]) -> None:
         )
 
 
+_ATTENDANCE_ABSENT_VALUES = {
+    "a", "abs", "absent", "notpresent", "noshow", "noattendance",
+    "halfdayabsent", "session1absent", "session2absent",
+}
+_ATTENDANCE_LEAVE_VALUES = {
+    "leave", "onleave", "approvedleave", "leaveapproved", "sickleave",
+    "casualleave", "privilegeleave", "paidleave", "annualleave",
+}
+_ATTENDANCE_PRESENT_VALUES = {
+    "p", "present", "fullpresent", "fulldaypresent", "onduty", "working",
+}
+
+
+def _attendance_token(value: Any) -> str:
+    return _column_key(value)
+
+
+def _attendance_status_for_row(row: dict[str, Any]) -> tuple[str, bool, bool, str]:
+    """Interpret only explicit attendance statuses; times/blank fields aren't absence."""
+    raw_status = _text(_lookup_case_insensitive(row, "Status", "AttendanceStatus", "Attendance Status"))
+    session_values = [
+        _text(_lookup_case_insensitive(row, "Session1", "Session 1")),
+        _text(_lookup_case_insensitive(row, "Session2", "Session 2")),
+    ]
+    raw_values = [raw_status, *session_values]
+    tokens = [_attendance_token(value) for value in raw_values if _attendance_token(value)]
+
+    is_absent = any(
+        token in _ATTENDANCE_ABSENT_VALUES
+        or token.endswith("absent") and not token.startswith("notabsent")
+        or token.endswith("notpresent")
+        or token.endswith("noshow")
+        for token in tokens
+    )
+    is_on_leave = not is_absent and any(
+        token in _ATTENDANCE_LEAVE_VALUES or token.endswith("onleave") or token.endswith("approvedleave")
+        for token in tokens
+    )
+    reason = _text(_lookup_case_insensitive(row, "Reason", "AttendanceReason", "Remarks"))
+
+    if is_absent:
+        return "Absent", True, False, reason
+    if is_on_leave:
+        return "On Leave", False, True, reason
+    if any(token in _ATTENDANCE_PRESENT_VALUES for token in tokens):
+        return "Present", False, False, reason
+
+    # Preserve other source statuses such as Half Day rather than inventing a meaning.
+    if raw_status and raw_status.casefold() not in {"null", "none", "n/a", "na", "-"}:
+        return raw_status, False, False, reason
+    nonempty_sessions = [
+        value for value in session_values
+        if value and value.casefold() not in {"null", "none", "n/a", "na", "-"}
+    ]
+    if nonempty_sessions:
+        return " / ".join(dict.fromkeys(nonempty_sessions)), False, False, reason
+    return "Attendance recorded", False, False, reason
+
+
+async def _apply_runner_attendance_status(
+    assignments: list[dict[str, Any]], attendance_date: date
+) -> bool:
+    """Attach date-specific Z_AttendanceInfo status to runner options.
+
+    Returns False only when the attendance table could not be read. A missing row
+    means 'Not Marked', not 'Absent'; absence is reported only when the table
+    contains an explicit absence status for the selected employee/date.
+    """
+    try:
+        attendance_rows = await table_api.get_table("Z_AttendanceInfo")
+    except Exception as exc:
+        logger.warning(
+            "Runner360 attendance lookup failed: attendance_date=%s error_type=%s",
+            attendance_date.isoformat(), type(exc).__name__,
+        )
+        for assignment in assignments:
+            assignment["attendance_date"] = attendance_date.isoformat()
+            assignment["attendance_status"] = "Attendance unavailable"
+            assignment["attendance_recorded"] = False
+            assignment["is_absent"] = False
+            assignment["is_on_leave"] = False
+            assignment["attendance_reason"] = ""
+        return False
+
+    matches_by_employee: dict[str, list[dict[str, Any]]] = {}
+    for row in attendance_rows or []:
+        if not isinstance(row, dict):
+            continue
+        row_date = _parse_holiday_date(
+            _lookup_case_insensitive(row, "AttendanceDate", "Attendance Date", "Attendance_Date")
+        )
+        if row_date != attendance_date:
+            continue
+        employee_code = _text(_lookup_case_insensitive(row, "EmployeeCode", "Employee Code"))
+        employee_key = _column_key(employee_code)
+        if not employee_key:
+            continue
+        matches_by_employee.setdefault(employee_key, []).append(row)
+
+    for assignment in assignments:
+        assignment["attendance_date"] = attendance_date.isoformat()
+        employee_key = _column_key(assignment.get("employee_code"))
+        matched_rows = matches_by_employee.get(employee_key, [])
+        if not matched_rows:
+            assignment["attendance_status"] = "Attendance not marked"
+            assignment["attendance_recorded"] = False
+            assignment["is_absent"] = False
+            assignment["is_on_leave"] = False
+            assignment["attendance_reason"] = ""
+            continue
+
+        interpreted = [_attendance_status_for_row(row) for row in matched_rows]
+        absent = next((item for item in interpreted if item[1]), None)
+        leave = next((item for item in interpreted if item[2]), None)
+        if absent:
+            status, is_absent, is_on_leave, reason = absent
+        elif leave:
+            status, is_absent, is_on_leave, reason = leave
+        else:
+            status = next((item[0] for item in interpreted if item[0] != "Attendance recorded"), "Attendance recorded")
+            is_absent = False
+            is_on_leave = False
+            reason = next((item[3] for item in interpreted if item[3]), "")
+
+        assignment["attendance_status"] = status
+        assignment["attendance_recorded"] = True
+        assignment["is_absent"] = is_absent
+        assignment["is_on_leave"] = is_on_leave
+        assignment["attendance_reason"] = reason
+
+    logger.info(
+        "Runner360 attendance loaded: attendance_date=%s rows=%d",
+        attendance_date.isoformat(), len(attendance_rows or []),
+    )
+    return True
+
+
 async def _get_runner_assignments() -> list[dict[str, Any]]:
 
     """
@@ -571,9 +708,11 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
             # Used only when live-recipient mode is explicitly enabled. Test mode
             # always sends to WHATSAPP_TEST_NUMBER instead.
-            # Use the first populated mobile field by preference. Do not let a
-            # NULL OffMobile key hide a populated PersonalMobile later in the row.
-            "mobile_number": _text(_first_populated_runner_mobile(employee)),
+            "mobile_number": _text(_lookup_case_insensitive(
+                employee, "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
+                "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
+                "ContactNo", "ContactNumber",
+            )),
 
             # Working hours come from the employee master for this assigned runner.
             "shift_start_time": _text(_lookup_case_insensitive(employee, "ShiftStartTime", "Shift Start Time")),
@@ -596,31 +735,10 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
 
 _RUNNER360_MOBILE_FIELD_ALIASES = (
-    # Prefer a personal number; use the work messaging number as an explicit
-    # fallback because the master row may expose that field instead.
-    "PersonalMobile", "Personal Mobile", "WorkMessagingNo", "Work Messaging No",
-    "OffMobile", "Mobile", "MobileNo", "MobileNumber", "Phone", "PhoneNo",
-    "PhoneNumber", "ContactNo", "ContactNumber",
+    "PersonalMobile", "Personal Mobile", "Mobile", "OffMobile",
+    "MobileNo", "MobileNumber", "Phone", "PhoneNo", "PhoneNumber",
+    "ContactNo", "ContactNumber",
 )
-
-
-def _first_populated_runner_mobile(row: dict[str, Any]) -> Any:
-    """Return the first non-empty mobile alias, respecting alias priority.
-
-    _lookup_case_insensitive iterates the API row's keys, not the supplied alias
-    order. If OffMobile appears first and is NULL, it returns that NULL even if
-    PersonalMobile or WorkMessagingNo is populated later. Iterate aliases first
-    and skip SQL/API NULL-like values so column ordering cannot hide a number.
-    """
-    null_values = {"", "null", "none", "nan", "nat", "n/a", "-"}
-    for alias in _RUNNER360_MOBILE_FIELD_ALIASES:
-        wanted = _column_key(alias)
-        for key, value in row.items():
-            if _column_key(key) != wanted:
-                continue
-            if _text(value).casefold() not in null_values:
-                return value
-    return ""
 
 
 async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
@@ -688,7 +806,7 @@ async def _get_runner360_mobile_by_employee_code(employee_code: str) -> str:
         returned_code = _text(_lookup_case_insensitive(employee, "EmployeeCode", "Employee Code"))
         if _column_key(returned_code) != target_code:
             continue
-        mobile = _text(_first_populated_runner_mobile(employee))
+        mobile = _text(_lookup_case_insensitive(employee, *_RUNNER360_MOBILE_FIELD_ALIASES))
         digits = "".join(ch for ch in mobile if ch.isdigit())
         normalized_key = (_column_key(returned_code), digits)
         if normalized_key in seen_rows:
@@ -2079,12 +2197,14 @@ async def runner360_holidays():
 
 
 @router.get("/forms/runner360/options", response_class=JSONResponse)
-async def runner360_assignment_options(request: Request):
-    # Return active Runner-team members grouped by branch. Authenticated users see
-    # only runner descendants in their own company-wide reporting hierarchy.
+async def runner360_assignment_options(request: Request, attendance_date: str | None = None):
+    # Return active Runner-team members with busy and selected-date attendance status.
+    # Authenticated users see only runner descendants in their reporting hierarchy.
+    selected_attendance_date = _parse_holiday_date(attendance_date) or date.today()
     assignments = await _get_runner_assignments()
     assignments, hierarchy_filtered = await _filter_runner_assignments_for_request(request, assignments)
     await _get_runner_busy_status(assignments)
+    attendance_available = await _apply_runner_attendance_status(assignments, selected_attendance_date)
 
     branches = sorted(
         {item["branch"] for item in assignments if item.get("branch")},
@@ -2096,6 +2216,8 @@ async def runner360_assignment_options(request: Request):
             "ok": True,
             "branches": branches,
             "runners": assignments,
+            "attendance_date": selected_attendance_date.isoformat(),
+            "attendance_available": attendance_available,
             "hierarchy_filtered": hierarchy_filtered,
             "message": (
                 "Runner list is limited to your reporting hierarchy."
@@ -2546,6 +2668,28 @@ async def runner360_create_task(request: Request):
 
     await _validate_runner360_working_date(task_date)
 
+    # Re-check attendance server-side so a disabled dropdown option cannot be
+    # assigned by manually crafting the POST. Missing attendance rows are not
+    # inferred to be absent; only explicit statuses in Z_AttendanceInfo block.
+    attendance_available = await _apply_runner_attendance_status(
+        [selected_assignment], date.fromisoformat(task_date)
+    )
+    if attendance_available and selected_assignment.get("is_absent"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{runner} is marked Absent in Z_AttendanceInfo for {task_date}. "
+                "Select another runner or correct the attendance record."
+            ),
+        )
+    if attendance_available and selected_assignment.get("is_on_leave"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{runner} is marked On Leave in Z_AttendanceInfo for {task_date}. "
+                "Select another runner or correct the attendance record."
+            ),
+        )
 
 
     # ------------------------------------------------------------
