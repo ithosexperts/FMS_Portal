@@ -80,7 +80,7 @@ from app.auth.request_context import get_current_database_target
 
 
 
-from app.services import dashboard_service, metadata_service, stage_service
+from app.services import dashboard_service, metadata_service, stage_service, employee_availability_service
 from app.utils.delay_calculator import parse_datetime
 from app.services.whatsapp_service import send_runner360_task_notification
 
@@ -412,158 +412,59 @@ def _row_has_open_planned_task_for_runner(row: dict[str, Any], assignment: dict[
 
 
 async def _get_runner_busy_status(assignments: list[dict[str, Any]]) -> None:
-    """Mark runners busy using open planned rows in Z_KPI_MasterRecord."""
+    """Apply open KPI + active-trip Busy conditions to the current runner list."""
     try:
-        master_rows = await table_api.get_table("Z_KPI_MasterRecord")
-    except Exception as exc:
-        print(f"[Runner360 busy status] Failed to load Z_KPI_MasterRecord: {exc}")
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to check runner availability in Z_KPI_MasterRecord. Refresh and try again.",
-        ) from exc
+        busy_codes = await employee_availability_service.get_busy_employee_codes()
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        logger.warning("Runner360 Busy lookup unavailable: error_type=%s", type(exc).__name__)
+        for assignment in assignments:
+            assignment["is_busy"] = False
+            assignment["busy_check_available"] = False
+            assignment["availability_error"] = True
+        return
 
     for assignment in assignments:
-        assignment["is_busy"] = any(
-            isinstance(row, dict) and _row_has_open_planned_task_for_runner(row, assignment)
-            for row in (master_rows or [])
-        )
-
-
-_ATTENDANCE_ABSENT_VALUES = {
-    "a", "abs", "absent", "notpresent", "noshow", "noattendance",
-    "halfdayabsent", "session1absent", "session2absent",
-}
-_ATTENDANCE_LEAVE_VALUES = {
-    "leave", "onleave", "approvedleave", "leaveapproved", "sickleave",
-    "casualleave", "privilegeleave", "paidleave", "annualleave",
-}
-_ATTENDANCE_PRESENT_VALUES = {
-    "p", "present", "fullpresent", "fulldaypresent", "onduty", "working",
-}
-
-
-def _attendance_token(value: Any) -> str:
-    return _column_key(value)
-
-
-def _attendance_status_for_row(row: dict[str, Any]) -> tuple[str, bool, bool, str]:
-    """Interpret only explicit attendance statuses; times/blank fields aren't absence."""
-    raw_status = _text(_lookup_case_insensitive(row, "Status", "AttendanceStatus", "Attendance Status"))
-    session_values = [
-        _text(_lookup_case_insensitive(row, "Session1", "Session 1")),
-        _text(_lookup_case_insensitive(row, "Session2", "Session 2")),
-    ]
-    raw_values = [raw_status, *session_values]
-    tokens = [_attendance_token(value) for value in raw_values if _attendance_token(value)]
-
-    is_absent = any(
-        token in _ATTENDANCE_ABSENT_VALUES
-        or token.endswith("absent") and not token.startswith("notabsent")
-        or token.endswith("notpresent")
-        or token.endswith("noshow")
-        for token in tokens
-    )
-    is_on_leave = not is_absent and any(
-        token in _ATTENDANCE_LEAVE_VALUES or token.endswith("onleave") or token.endswith("approvedleave")
-        for token in tokens
-    )
-    reason = _text(_lookup_case_insensitive(row, "Reason", "AttendanceReason", "Remarks"))
-
-    if is_absent:
-        return "Absent", True, False, reason
-    if is_on_leave:
-        return "On Leave", False, True, reason
-    if any(token in _ATTENDANCE_PRESENT_VALUES for token in tokens):
-        return "Present", False, False, reason
-
-    # Preserve other source statuses such as Half Day rather than inventing a meaning.
-    if raw_status and raw_status.casefold() not in {"null", "none", "n/a", "na", "-"}:
-        return raw_status, False, False, reason
-    nonempty_sessions = [
-        value for value in session_values
-        if value and value.casefold() not in {"null", "none", "n/a", "na", "-"}
-    ]
-    if nonempty_sessions:
-        return " / ".join(dict.fromkeys(nonempty_sessions)), False, False, reason
-    return "Attendance recorded", False, False, reason
+        key = employee_availability_service.normalize_key(assignment.get("employee_code"))
+        assignment["is_busy"] = key in busy_codes
+        assignment["busy_check_available"] = True
+        assignment["availability_error"] = False
 
 
 async def _apply_runner_attendance_status(
-    assignments: list[dict[str, Any]], attendance_date: date
-) -> bool:
-    """Attach date-specific Z_AttendanceInfo status to runner options.
-
-    Returns False only when the attendance table could not be read. A missing row
-    means 'Not Marked', not 'Absent'; absence is reported only when the table
-    contains an explicit absence status for the selected employee/date.
-    """
+    assignments: list[dict[str, Any]], work_date: date | None = None
+) -> None:
+    """Add date-specific attendance status; Absent always overrides Busy in display."""
+    actual_date = work_date or date.today()
+    codes = [item.get("employee_code") for item in assignments if item.get("employee_code")]
     try:
-        attendance_rows = await table_api.get_table("Z_AttendanceInfo")
-    except Exception as exc:
-        logger.warning(
-            "Runner360 attendance lookup failed: attendance_date=%s error_type=%s",
-            attendance_date.isoformat(), type(exc).__name__,
-        )
-        for assignment in assignments:
-            assignment["attendance_date"] = attendance_date.isoformat()
-            assignment["attendance_status"] = "Attendance unavailable"
-            assignment["attendance_recorded"] = False
-            assignment["is_absent"] = False
-            assignment["is_on_leave"] = False
-            assignment["attendance_reason"] = ""
-        return False
-
-    matches_by_employee: dict[str, list[dict[str, Any]]] = {}
-    for row in attendance_rows or []:
-        if not isinstance(row, dict):
-            continue
-        row_date = _parse_holiday_date(
-            _lookup_case_insensitive(row, "AttendanceDate", "Attendance Date", "Attendance_Date")
-        )
-        if row_date != attendance_date:
-            continue
-        employee_code = _text(_lookup_case_insensitive(row, "EmployeeCode", "Employee Code"))
-        employee_key = _column_key(employee_code)
-        if not employee_key:
-            continue
-        matches_by_employee.setdefault(employee_key, []).append(row)
+        attendance_map = await employee_availability_service.get_attendance_status_map(codes, actual_date)
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        logger.warning("Runner360 attendance lookup unavailable: error_type=%s", type(exc).__name__)
+        attendance_map = {}
+        attendance_unavailable = True
+    else:
+        attendance_unavailable = False
 
     for assignment in assignments:
-        assignment["attendance_date"] = attendance_date.isoformat()
-        employee_key = _column_key(assignment.get("employee_code"))
-        matched_rows = matches_by_employee.get(employee_key, [])
-        if not matched_rows:
-            assignment["attendance_status"] = "Attendance not marked"
-            assignment["attendance_recorded"] = False
-            assignment["is_absent"] = False
-            assignment["is_on_leave"] = False
-            assignment["attendance_reason"] = ""
-            continue
-
-        interpreted = [_attendance_status_for_row(row) for row in matched_rows]
-        absent = next((item for item in interpreted if item[1]), None)
-        leave = next((item for item in interpreted if item[2]), None)
-        if absent:
-            status, is_absent, is_on_leave, reason = absent
-        elif leave:
-            status, is_absent, is_on_leave, reason = leave
+        code_key = employee_availability_service.normalize_key(assignment.get("employee_code"))
+        attendance = attendance_map.get(code_key, employee_availability_service.ATTENDANCE_NOT_MARKED)
+        assignment["attendance_status"] = attendance
+        assignment["is_absent"] = attendance == employee_availability_service.ATTENDANCE_ABSENT
+        assignment["attendance_work_date"] = actual_date.isoformat()
+        if assignment["is_absent"]:
+            assignment["availability_status"] = "Absent"
+            assignment["availability_error"] = False
+        elif attendance_unavailable or attendance == employee_availability_service.ATTENDANCE_ERROR or not assignment.get("busy_check_available", True):
+            assignment["availability_status"] = "Attendance unavailable" if (attendance_unavailable or attendance == employee_availability_service.ATTENDANCE_ERROR) else "Availability unavailable"
+            assignment["availability_error"] = True
+        elif assignment.get("is_busy"):
+            assignment["availability_status"] = "Busy"
+        elif attendance == employee_availability_service.ATTENDANCE_PRESENT:
+            assignment["availability_status"] = "Available"
         else:
-            status = next((item[0] for item in interpreted if item[0] != "Attendance recorded"), "Attendance recorded")
-            is_absent = False
-            is_on_leave = False
-            reason = next((item[3] for item in interpreted if item[3]), "")
-
-        assignment["attendance_status"] = status
-        assignment["attendance_recorded"] = True
-        assignment["is_absent"] = is_absent
-        assignment["is_on_leave"] = is_on_leave
-        assignment["attendance_reason"] = reason
-
-    logger.info(
-        "Runner360 attendance loaded: attendance_date=%s rows=%d",
-        attendance_date.isoformat(), len(attendance_rows or []),
-    )
-    return True
+            # Missing daily attendance is not absence; if no Busy/error condition
+            # applies, the employee remains Available subject to normal eligibility.
+            assignment["availability_status"] = "Available"
 
 
 async def _get_runner_assignments() -> list[dict[str, Any]]:
@@ -2197,14 +2098,14 @@ async def runner360_holidays():
 
 
 @router.get("/forms/runner360/options", response_class=JSONResponse)
-async def runner360_assignment_options(request: Request, attendance_date: str | None = None):
-    # Return active Runner-team members with busy and selected-date attendance status.
-    # Authenticated users see only runner descendants in their reporting hierarchy.
-    selected_attendance_date = _parse_holiday_date(attendance_date) or date.today()
+async def runner360_assignment_options(request: Request, task_date: str = ""):
+    # Return active Runner-team members grouped by branch. Authenticated users see
+    # only runner descendants in their own company-wide reporting hierarchy.
     assignments = await _get_runner_assignments()
     assignments, hierarchy_filtered = await _filter_runner_assignments_for_request(request, assignments)
     await _get_runner_busy_status(assignments)
-    attendance_available = await _apply_runner_attendance_status(assignments, selected_attendance_date)
+    requested_date = employee_availability_service.resolve_work_date(task_date)
+    await _apply_runner_attendance_status(assignments, requested_date)
 
     branches = sorted(
         {item["branch"] for item in assignments if item.get("branch")},
@@ -2216,8 +2117,6 @@ async def runner360_assignment_options(request: Request, attendance_date: str | 
             "ok": True,
             "branches": branches,
             "runners": assignments,
-            "attendance_date": selected_attendance_date.isoformat(),
-            "attendance_available": attendance_available,
             "hierarchy_filtered": hierarchy_filtered,
             "message": (
                 "Runner list is limited to your reporting hierarchy."
@@ -2596,12 +2495,37 @@ async def runner360_create_task(request: Request):
 
         )
 
+    # Attendance is checked against the selected task's work date and takes
+    # priority over all Busy conditions. This is revalidated on the server even
+    # if the dropdown was stale or a client posts directly to this endpoint.
+    task_work_date = employee_availability_service.resolve_work_date(task_start_datetime)
+    try:
+        attendance_status = await employee_availability_service.get_employee_attendance_status(
+            selected_assignment.get("employee_code"), task_work_date
+        )
+    except employee_availability_service.EmployeeAvailabilityError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if attendance_status == employee_availability_service.ATTENDANCE_ABSENT:
+        raise HTTPException(
+            status_code=409,
+            detail="This employee is marked Absent in Z_AttendanceInfo and cannot be assigned work.",
+        )
+    if attendance_status == employee_availability_service.ATTENDANCE_ERROR:
+        raise HTTPException(
+            status_code=503,
+            detail="Attendance records are conflicting or cannot be resolved for this employee and work date; assignment blocked.",
+        )
+    if selected_assignment.get("availability_error"):
+        raise HTTPException(
+            status_code=503,
+            detail="Employee availability could not be verified (KPI/active-trip status); assignment blocked.",
+        )
     if selected_assignment.get("is_busy"):
         raise HTTPException(
             status_code=409,
             detail=(
-                f"{selected_assignment['employee_name']} is Busy: Z_KPI_MasterRecord has a planned "
-                "timestamp without an actual timestamp. Select another runner or refresh the form."
+                f"{selected_assignment['employee_name']} is Busy: an open KPI task or active trip exists. "
+                "Select another runner or refresh the form."
             ),
         )
 
@@ -2668,28 +2592,6 @@ async def runner360_create_task(request: Request):
 
     await _validate_runner360_working_date(task_date)
 
-    # Re-check attendance server-side so a disabled dropdown option cannot be
-    # assigned by manually crafting the POST. Missing attendance rows are not
-    # inferred to be absent; only explicit statuses in Z_AttendanceInfo block.
-    attendance_available = await _apply_runner_attendance_status(
-        [selected_assignment], date.fromisoformat(task_date)
-    )
-    if attendance_available and selected_assignment.get("is_absent"):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"{runner} is marked Absent in Z_AttendanceInfo for {task_date}. "
-                "Select another runner or correct the attendance record."
-            ),
-        )
-    if attendance_available and selected_assignment.get("is_on_leave"):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"{runner} is marked On Leave in Z_AttendanceInfo for {task_date}. "
-                "Select another runner or correct the attendance record."
-            ),
-        )
 
 
     # ------------------------------------------------------------
