@@ -684,8 +684,9 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
   });
   startDateTime?.addEventListener('change', () => {
     calculateExpectedReturn();
-    refreshAssignButton();
+    // Attendance is date-specific; refresh runner statuses for the chosen work date.
     loadRunner360Options();
+    refreshAssignButton();
   });
   leadTime?.addEventListener('input', () => {
     calculateExpectedReturn();
@@ -778,34 +779,29 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
     available.forEach(item => {
 
       const option = document.createElement('option');
-      const isBusy = item.is_busy === true || item.is_busy === 1 || String(item.is_busy).toLowerCase() === 'true';
-      const isAbsent = item.is_absent === true || item.is_absent === 1 || String(item.is_absent).toLowerCase() === 'true';
-      const isOnLeave = item.is_on_leave === true || item.is_on_leave === 1 || String(item.is_on_leave).toLowerCase() === 'true';
-      const attendanceStatus = String(item.attendance_status || 'Attendance not marked');
-      const unavailable = attendanceStatus.toLowerCase() === 'attendance unavailable';
-      const statusLabel = attendanceStatus === 'Attendance not marked' ? 'Attendance not marked' : attendanceStatus;
-      const suffixes = [];
-      if(isBusy) suffixes.push('Busy');
-      if(statusLabel) suffixes.push(statusLabel);
+      const isAbsent = item.is_absent === true || item.is_absent === 1 || String(item.is_absent).toLowerCase() === 'true' || String(item.availability_status || '').toLowerCase() === 'absent';
+      const isBusy = !isAbsent && (item.is_busy === true || item.is_busy === 1 || String(item.is_busy).toLowerCase() === 'true' || String(item.availability_status || '').toLowerCase() === 'busy');
+      const isUnavailable = !isAbsent && !isBusy && (item.availability_error === true || item.availability_error === 1 || String(item.availability_error).toLowerCase() === 'true' || ['attendance unavailable', 'availability unavailable'].includes(String(item.availability_status || '').toLowerCase()));
+      const status = isAbsent ? 'Absent' : isUnavailable ? (item.availability_status || 'Availability unavailable') : isBusy ? 'Busy' : (item.availability_status || 'Attendance not marked');
 
       option.value = item.employee_name;
 
-      option.textContent = `${item.employee_name} (${item.employee_code})${suffixes.length ? ' — ' + suffixes.join(' · ') : ''}`;
+      option.textContent = `${item.employee_name} (${item.employee_code}) — ${status}`;
 
       option.dataset.employeeCode = item.employee_code;
 
       option.dataset.teamId = item.team_id || '';
       option.dataset.isBusy = isBusy ? 'true' : 'false';
       option.dataset.isAbsent = isAbsent ? 'true' : 'false';
-      option.dataset.isOnLeave = isOnLeave ? 'true' : 'false';
-      option.dataset.attendanceStatus = attendanceStatus;
-      option.disabled = isBusy || isAbsent || isOnLeave;
-      const titleParts = [];
-      if(isBusy) titleParts.push('Busy: planned timestamp exists in Z_KPI_MasterRecord, but actual timestamp is empty.');
-      if(isAbsent || isOnLeave) titleParts.push(`Cannot assign: attendance status is ${attendanceStatus}.`);
-      if(item.attendance_reason) titleParts.push(`Attendance reason: ${item.attendance_reason}`);
-      if(unavailable) titleParts.push('Attendance could not be read from Z_AttendanceInfo.');
-      if(titleParts.length) option.title = titleParts.join(' ');
+      option.dataset.availabilityError = isUnavailable ? 'true' : 'false';
+      option.disabled = isAbsent || isBusy || isUnavailable;
+      if(option.disabled){
+        option.style.color = '#777';
+        option.style.backgroundColor = '#f1f3f5';
+      }
+      if(isAbsent) option.title = 'Absent in Z_AttendanceInfo for the selected task date.';
+      else if(isBusy) option.title = 'Busy: an open KPI task or active trip exists.';
+      else if(isUnavailable) option.title = 'Attendance or availability could not be verified. Assignment is disabled.';
 
       runner.appendChild(option);
 
@@ -830,20 +826,13 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
 
 
 
-  let runnerOptionsRequestVersion = 0;
-
   async function loadRunner360Options(){
-
-    const requestVersion = ++runnerOptionsRequestVersion;
-    const previousBranch = branch?.value || '';
-    const previousEmployeeCode = runnerEmployeeCode?.value || runner?.selectedOptions?.[0]?.dataset?.employeeCode || '';
 
     try{
 
-      const params = new URLSearchParams({ _: String(Date.now()) });
-      const selectedDate = String(startDateTime?.value || '').slice(0, 10);
-      if(selectedDate) params.set('attendance_date', selectedDate);
-      const response = await fetch('/forms/runner360/options?' + params.toString(), {
+      const selectedTaskDate = startDateTime?.value ? startDateTime.value.slice(0, 10) : '';
+      const query = new URLSearchParams({ task_date: selectedTaskDate, _: String(Date.now()) });
+      const response = await fetch('/forms/runner360/options?' + query.toString(), {
 
         method: 'GET',
 
@@ -856,7 +845,6 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
       });
 
       const data = await response.json().catch(() => ({}));
-      if(requestVersion !== runnerOptionsRequestVersion) return;
 
       if(!response.ok || !data.ok){
 
@@ -888,9 +876,6 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
         branch.appendChild(option);
 
       });
-      if(previousBranch && Array.from(branch.options).some(option => option.value === previousBranch)){
-        branch.value = previousBranch;
-      }
 
       if(optionsError){
 
@@ -901,19 +886,9 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
       }
 
       syncRunner();
-      if(previousEmployeeCode){
-        const previousOption = Array.from(runner.options).find(option =>
-          option.dataset.employeeCode === previousEmployeeCode && !option.disabled
-        );
-        if(previousOption){
-          runner.value = previousOption.value;
-          if(runnerEmployeeCode) runnerEmployeeCode.value = previousOption.dataset.employeeCode || '';
-        }
-      }
       refreshAssignButton();
 
     }catch(error){
-      if(requestVersion !== runnerOptionsRequestVersion) return;
       optionsReady = false;
 
       clearRunnerSelection('Runner list unavailable');
@@ -957,7 +932,6 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
         holidayLoadingStatus.classList.remove('is-error');
       }
       setInitialWorkingDateTime();
-      loadRunner360Options();
       renderCalendar();
       calculateExpectedReturn();
       refreshAssignButton();
@@ -1011,8 +985,7 @@ window.closeRunner360InputForm = function closeRunner360InputForm() {
   window.addEventListener('resize', () => { if(pickerPanel && !pickerPanel.hidden) positionPicker(); });
   window.addEventListener('scroll', () => { if(pickerPanel && !pickerPanel.hidden) positionPicker(); }, true);
 
-  loadRunner360Options();
-  loadRunner360Holidays();
+  loadRunner360Holidays().then(() => loadRunner360Options());
   refreshAssignButton();
 
   form?.addEventListener('submit', async function(event){
