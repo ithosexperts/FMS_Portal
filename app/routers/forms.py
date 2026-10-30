@@ -1,4 +1,3 @@
-
 """
 Independent form routes - Application Form (always read-only) and Stage
 Form (editable only when it is the task's current stage). These never
@@ -539,9 +538,27 @@ def _normalize_sql_datetime(value: Any) -> Any:
     return text
 
 
+def _normalize_trip_expense(value: Any) -> str:
+    """Validate S2_TripExpense (non-negative number) and return a clean numeric string."""
+    raw = str(value if value is not None else "").replace(",", "").strip()
+    try:
+        amount = float(raw)
+    except ValueError:
+        raise ValueError("Trip Expense must be a valid number.") from None
+    if amount != amount or amount in (float("inf"), float("-inf")) or amount < 0:
+        raise ValueError("Trip Expense must be a valid non-negative number.")
+    return f"{amount:.2f}"
+
+
 def _same_saved_value(expected: Any, actual: Any, field_name: str = "") -> bool:
     if expected in (None, ""):
         return actual in (None, "") or str(actual).strip().lower() in {"none", "null", ""}
+    if "tripexpense" in "".join(ch for ch in str(field_name).lower() if ch.isalnum()):
+        # Numeric column: "500" must match 500 / 500.0 / 500.00 coming back from SQL.
+        try:
+            return abs(float(str(expected).replace(",", "").strip()) - float(str(actual).replace(",", "").strip())) < 0.005
+        except (TypeError, ValueError):
+            return False
     if "datetime" in str(field_name).lower():
         exp = _normalize_sql_datetime(expected)
         act = _normalize_sql_datetime(actual)
@@ -636,6 +653,16 @@ async def _build_stage2_custom_context(stage_context: dict[str, Any]) -> dict[st
 
     def _blank_if_null(value: Any):
         return None if value is None or str(value).strip().lower() in ("", "none", "null") else value
+
+    def _readonly_source_payload(column_name: str, label: str):
+        """Exact-match lookup of a Z_SalesOrder source column (e.g. I_ContactNo)."""
+        target = _normalize_key(column_name)
+        value = None
+        for key, row_value in row.items():
+            if _normalize_key(key) == target:
+                value = row_value
+                break
+        return {"field": column_name, "label": label, "value": _blank_if_null(value)}
 
     # Stage 2 header: ONLY Stage 2 columns.  Do not fall back to S1 here.
     # NULL/blank values are intentionally preserved as blank in the UI.
@@ -736,6 +763,12 @@ async def _build_stage2_custom_context(stage_context: dict[str, Any]) -> dict[st
         "driver_master_options": driver_master_options,
         "driver_master_table": DRIVER_MASTER_TABLE,
         "pick_id": resolved_pick_id,
+        # Read-only Z_SalesOrder source columns shown above Pick ID.
+        "contact_person": _readonly_source_payload("I_ContactPerson", _publish_label(publish_names, "I_ContactPerson", "Contact Person")),
+        "contact_no": _readonly_source_payload("I_ContactNo", _publish_label(publish_names, "I_ContactNo", "Contact No")),
+        "freight_terms": _readonly_source_payload("I_FreightTerms", _publish_label(publish_names, "I_FreightTerms", "Freight Terms")),
+        # Mandatory doer input -> appended to Z_SalesOrder.S2_TripExpense.
+        "trip_expense": _field_payload("S2_TripExpense", _publish_label(publish_names, "S2_TripExpense", "Trip Expense")),
         "vehicle_master_options": [],
         "vehicle_master_table": VEHICLE_MASTER_TABLE,
         "loading_image_1": _field_payload("S2_LoadingImage1", _publish_label(publish_names, "S2_LoadingImage1", "Stage 2 Loading Image")),
@@ -962,6 +995,10 @@ def _safe_stage2_fallback_context(stage_context: dict[str, Any], publish_names: 
         "driver_master_options": driver_options,
         "driver_master_table": DRIVER_MASTER_TABLE,
         "pick_id": text(value_for("S1_PickID", "PickID")),
+        "contact_person": {"field": "I_ContactPerson", "label": _publish_label(publish_names, "I_ContactPerson", "Contact Person"), "value": blank(value_for("I_ContactPerson"))},
+        "contact_no": {"field": "I_ContactNo", "label": _publish_label(publish_names, "I_ContactNo", "Contact No"), "value": blank(value_for("I_ContactNo"))},
+        "freight_terms": {"field": "I_FreightTerms", "label": _publish_label(publish_names, "I_FreightTerms", "Freight Terms"), "value": blank(value_for("I_FreightTerms"))},
+        "trip_expense": {"field": "S2_TripExpense", "label": _publish_label(publish_names, "S2_TripExpense", "Trip Expense"), "value": value_for("S2_TripExpense")},
         "vehicle_master_options": [],
         "vehicle_master_table": VEHICLE_MASTER_TABLE,
         "loading_image_1": {"field": "S2_LoadingImage1", "label": _publish_label(publish_names, "S2_LoadingImage1", "Stage 2 Loading Image"), "value": value_for("S2_LoadingImage1", "S2_Loading_Image1", "LoadingImage1")},
@@ -1246,6 +1283,7 @@ def _build_stage_clear_payload(stage_context: dict[str, Any], stage_no: str) -> 
             "S2_VehicleType": None,
             "S2_AssignedDriver": None,
             "S2_DriverContact": None,
+            "S2_TripExpense": None,
             "S2_ALHelper": None,
             "S2_ALTimeStamp": None,
             "S2_DelayMins": None,
@@ -2300,8 +2338,14 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
             "S2_DispatchDateTime",
             "S2_LoadingImage1",
             "S2_Remarks",
+            "S2_TripExpense",
         )
         s2_payload = {key: payload.get(key) for key in s2_fields if key in payload}
+
+        # Trip Expense: numeric, non-negative. Normalised before it is appended
+        # to Z_SalesOrder.S2_TripExpense for every row of the PickID.
+        if "S2_TripExpense" in s2_payload and _to_text(s2_payload.get("S2_TripExpense")):
+            s2_payload["S2_TripExpense"] = _normalize_trip_expense(s2_payload.get("S2_TripExpense"))
 
         if "S2_DriverContact" in s2_payload and _to_text(s2_payload.get("S2_DriverContact")):
             mobile_digits = re.sub(r"\D", "", _to_text(s2_payload.get("S2_DriverContact")))
@@ -2490,12 +2534,16 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
             "S2_VehicleNo": _submitted_or_existing("S2_VehicleNo", "S2_Vehicle_No"),
             "S2_DispatchDateTime": _submitted_or_existing("S2_DispatchDateTime", "S2_Dispatch_Date_Time"),
             "S2_Remarks": _submitted_or_existing("S2_Remarks"),
+            "S2_TripExpense": _submitted_or_existing("S2_TripExpense"),
             "S2_LoadingImage1": _submitted_or_existing("S2_LoadingImage1", "S2_Loading_Image1"),
         }
 
         mobile_digits = re.sub(r"\D", "", required_values.get("S2_DriverContact", ""))
         if mobile_digits and len(mobile_digits) != 10:
             raise ValueError("Driver Contact must contain exactly 10 digits.")
+
+        if required_values.get("S2_TripExpense"):
+            _normalize_trip_expense(required_values["S2_TripExpense"])
 
         missing_fields = [name for name, value in required_values.items() if not value]
         if missing_fields:
