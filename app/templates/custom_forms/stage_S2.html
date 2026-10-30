@@ -86,6 +86,19 @@
   </div>
 
   <div class="readonly-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:14px 18px;margin-bottom:18px;">
+    <!-- Non-editable Z_SalesOrder source columns (display only, never submitted). -->
+    <div class="question">
+      <label>{{ custom_stage2.contact_person.label }}</label>
+      <input type="text" value="{{ display_value(custom_stage2.contact_person.value) or '-' }}" readonly tabindex="-1" style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
+    </div>
+    <div class="question">
+      <label>{{ custom_stage2.contact_no.label }}</label>
+      <input type="text" value="{{ display_value(custom_stage2.contact_no.value) or '-' }}" readonly tabindex="-1" style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
+    </div>
+    <div class="question">
+      <label>{{ custom_stage2.freight_terms.label }}</label>
+      <input type="text" value="{{ display_value(custom_stage2.freight_terms.value) or '-' }}" readonly tabindex="-1" style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
+    </div>
     <div class="question">
       <label>{{ custom_stage2.publish_names.get("S1_PickID", "Pick ID") }}</label>
       <input type="text" value="{{ custom_stage2.pick_id or '-' }}" readonly style="background:#f6f7f9;cursor:not-allowed;font-weight:600;" />
@@ -206,6 +219,14 @@
         <input type="datetime-local" name="S2_DispatchDateTime" value="{{ (custom_stage2.dispatch_datetime.value|string).replace(' ', 'T')[:16] if custom_stage2.dispatch_datetime.value else '' }}" {% if custom_stage2.s2_locked %}readonly{% endif %} class="{% if custom_stage2.s2_locked %}s2-locked-field{% endif %}" />
       </div>
 
+      <div class="question">
+        <label>{{ custom_stage2.trip_expense.label }} <span style="color:red">*</span></label>
+        <input type="number" name="S2_TripExpense" class="s2-trip-expense-input{% if custom_stage2.s2_locked %} s2-locked-field{% endif %}"
+               value="{{ display_value(custom_stage2.trip_expense.value) }}"
+               placeholder="Enter trip expense" min="0" step="0.01" inputmode="decimal"
+               {% if custom_stage2.s2_locked %}readonly{% endif %} />
+      </div>
+
       <div class="question" style="grid-column:1/-1;">
         <label>{{ custom_stage2.loading_image_1.label }} <span style="color:red">*</span></label>
         {% set s2_loading_urls = custom_stage2.loading_image_1.value|string if custom_stage2.loading_image_1.value is not none and custom_stage2.loading_image_1.value|string|trim|lower not in ('', 'none', 'null') else '' %}
@@ -236,7 +257,7 @@
       {% if not custom_stage2.s2_locked %}
       <button type="submit" name="_action" value="save" class="btn">Save Progress</button>
       <button type="submit" name="_action" value="submit" class="btn btn-primary s2-submit-btn" disabled aria-disabled="true">Submit Stage</button>
-      <div class="s2-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">Fill the required Stage 2 driver, vehicle, dispatch, remarks and loading-image fields to enable Submit Stage.</div>
+      <div class="s2-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">Fill the required Stage 2 driver, vehicle, dispatch, trip expense, remarks and loading-image fields to enable Submit Stage.</div>
       {% else %}
       <div style="font-size:12px;color:var(--text-secondary);align-self:center;">Stage 2 is completed and the submitted values are read-only.</div>
       {% endif %}
@@ -430,6 +451,11 @@
   };
   const s2Dispatch = document.querySelector('[name="S2_DispatchDateTime"]');
   const s2Remarks = document.querySelector('[name="S2_Remarks"]');
+  const s2TripExpense = document.querySelector('[name="S2_TripExpense"]');
+  const tripExpenseOk = () => {
+    const v = String(s2TripExpense?.value || '').trim();
+    return v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0;
+  };
   const s2ImageInput = document.querySelector('.s2-loading-image-input');
   const s2ExistingImages = document.querySelector('input[name="__existing_attachment_urls_S2_LoadingImage1"]');
   const s2SubmitHint = document.querySelector('.s2-submit-hint');
@@ -448,17 +474,17 @@
       ? /^91\d{10}$/.test(mobileDigits)
       : /^\d{10}$/.test(mobileDigits);
     const ready = hasText(s2Origin) && hasText(s2Type) && !!s2DriverName() && mobileOk
-      && !!s2VehicleNo() && hasText(s2Dispatch) && hasText(s2Remarks) && hasImage();
+      && !!s2VehicleNo() && hasText(s2Dispatch) && tripExpenseOk() && hasText(s2Remarks) && hasImage();
     s2SubmitBtn.disabled = !ready;
     s2SubmitBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
     if (s2SubmitHint) {
       s2SubmitHint.textContent = ready
         ? 'All required Stage 2 fields are ready. Submit Stage will update every row with the same PickID and run the backend workflow.'
-        : 'Fill the Stage 2 vehicle, driver, mobile (10 digits), dispatch, remarks and loading image fields to enable Submit Stage.';
+        : 'Fill the Stage 2 vehicle, driver, mobile (10 digits), dispatch, trip expense, remarks and loading image fields to enable Submit Stage.';
     }
   };
 
-  [s2Origin, s2Type, driverSelect, driverNumberInput, vehicleNoSelect, vehicleThirdInput, s2Dispatch, s2Remarks].forEach((el) => {
+  [s2Origin, s2Type, driverSelect, driverNumberInput, vehicleNoSelect, vehicleThirdInput, s2Dispatch, s2TripExpense, s2Remarks].forEach((el) => {
     if (!el) return;
     el.addEventListener('input', updateS2SubmitState);
     el.addEventListener('change', updateS2SubmitState);
@@ -472,7 +498,7 @@
       updateS2SubmitState();
       if (s2SubmitBtn && s2SubmitBtn.disabled) {
         event.preventDefault();
-        alert('Please fill all Stage 2 required fields, use a 10-digit Driver Mobile No, and attach at least one Loading Image before submitting.');
+        alert('Please fill all Stage 2 required fields (including Trip Expense), use a 10-digit Driver Mobile No, and attach at least one Loading Image before submitting.');
       }
     });
   }
