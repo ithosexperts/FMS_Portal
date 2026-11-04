@@ -1,0 +1,651 @@
+{# Reusable Generic Cases Integration Component for FMS Portal.
+   Automatically injects the Cases Icon & Count Badge into EVERY form toolbar
+   and provides the Linked Cases Modal with full two-way navigation. #}
+
+{% set _c_fms = context.fms if (context is defined and context.fms) else {} %}
+{% set _c_stage = context.stage if (context is defined and context.stage) else {} %}
+{% set _c_task_id = (task_id if task_id is defined else '') | string %}
+{% set _c_stage_no = (stage_no if stage_no is defined else '') | string %}
+{% set _c_app_id = (_c_fms.get('app_id', '') or '') | string %}
+{% set _c_form_name = (_c_fms.get('fms_name', '') or '') | string %}
+{% set _c_stage_name = (_c_stage.get('STAGE_NAME', '') or '') | string %}
+{% set _c_form_url = (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request is defined else '' %}
+
+<style>
+.fms-cases-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 34px;
+  height: 30px;
+  min-width: 34px;
+  padding: 0;
+  margin-left: 6px;
+  color: #4f46e5;
+  border: 1px solid #dce6ff;
+  background: #f5f8ff;
+  border-radius: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 0 0 auto;
+}
+.fms-cases-trigger-btn:hover {
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+.fms-cases-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 17px;
+  color: #ffffff;
+  background: #4f46e5;
+  border-radius: 9px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.fms-cases-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.fms-cases-modal-container {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e2e8f0;
+  width: 100%;
+  max-width: 860px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px;
+  box-sizing: border-box;
+  animation: fmsCasesFadeIn 0.15s ease-out;
+}
+@keyframes fmsCasesFadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+.fms-cases-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.fms-cases-icon-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #4f46e5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fms-cases-modal-close {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+.fms-cases-modal-close:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.fms-cases-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.fms-cases-context-item label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.fms-cases-context-item .val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  word-break: break-word;
+}
+.fms-cases-table-wrap {
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  flex: 1;
+  min-height: 160px;
+}
+.fms-cases-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.fms-cases-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.fms-cases-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+.fms-cases-table tbody tr:hover {
+  background: #f8fafc;
+}
+.fms-cases-loc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+.fms-cases-loc-live {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+.fms-cases-loc-snooze {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+.fms-cases-loc-archive {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+</style>
+
+<!-- Linked Cases Modal -->
+<div id="fms-linked-cases-modal" class="fms-cases-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="fms-cases-modal-title">
+  <div class="fms-cases-modal-container">
+    <div class="fms-cases-modal-header">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="fms-cases-icon-circle">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </span>
+        <h2 id="fms-cases-modal-title" style="margin:0; font-size:18px; font-weight:800; color:#1e293b;">Linked Cases</h2>
+      </div>
+      <button type="button" class="fms-cases-modal-close" onclick="closeLinkedCasesModal()" aria-label="Close modal">&times;</button>
+    </div>
+
+    <!-- Dynamic Context Header -->
+    <div class="fms-cases-context-grid">
+      <div class="fms-cases-context-item">
+        <label>FMS Form Name</label>
+        <div id="fms-cases-ctx-form" class="val">-</div>
+      </div>
+      <div class="fms-cases-context-item">
+        <label>App ID</label>
+        <div id="fms-cases-ctx-appid" class="val">-</div>
+      </div>
+      <div class="fms-cases-context-item">
+        <label>Task ID</label>
+        <div id="fms-cases-ctx-taskid" class="val">-</div>
+      </div>
+      <div class="fms-cases-context-item">
+        <label>Stage Number</label>
+        <div id="fms-cases-ctx-stageno" class="val">-</div>
+      </div>
+      <div class="fms-cases-context-item">
+        <label>Stage Name</label>
+        <div id="fms-cases-ctx-stagename" class="val">-</div>
+      </div>
+    </div>
+
+    <!-- Actions Toolbar: Status & + Create New Case -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;">
+      <div style="font-size:13px; color:#64748b; font-weight:600;">
+        <span id="fms-cases-count-label">0</span> cases associated with this form
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="refreshLinkedCasesModal(true)" title="Refresh list" style="display:inline-flex; align-items:center; gap:4px;">
+          <span>&#x21bb;</span> Refresh
+        </button>
+        <button type="button" id="btn-create-fms-case" class="btn btn-sm btn-primary" onclick="launchCreateCaseFromFMS()" style="background:#4f46e5; border-color:#4f46e5; color:#fff; display:inline-flex; align-items:center; gap:6px; font-weight:700;">
+          <span>+</span> Create New Case
+        </button>
+      </div>
+    </div>
+
+    <!-- Cases Table Container -->
+    <div class="fms-cases-table-wrap">
+      <table class="fms-cases-table" id="fms-cases-table">
+        <thead>
+          <tr>
+            <th>Case ID</th>
+            <th>Subject</th>
+            <th>Location</th>
+            <th>Created By</th>
+            <th>Created On</th>
+            <th style="text-align:right;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="fms-cases-tbody">
+          <!-- Rows dynamically rendered -->
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div id="fms-cases-empty-state" style="display:none; text-align:center; padding:36px 16px;">
+        <div style="width:48px; height:48px; border-radius:50%; background:#f1f5f9; display:inline-flex; align-items:center; justify-content:center; color:#94a3b8; margin-bottom:12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <p style="margin:0 0 12px 0; font-size:14px; font-weight:600; color:#475569;">No cases linked to this form yet.</p>
+        <button type="button" class="btn btn-sm btn-primary" onclick="launchCreateCaseFromFMS()" style="background:#4f46e5; border-color:#4f46e5; color:#fff; font-weight:700;">
+          + Create First Case
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="fms-cases-loading-state" style="display:none; text-align:center; padding:32px 16px;">
+        <p style="margin:0; font-size:13px; font-weight:600; color:#64748b;">Loading linked cases...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const SERVER_CTX = {
+    taskId: {{ _c_task_id | tojson }},
+    stageNo: {{ _c_stage_no | tojson }},
+    appId: {{ _c_app_id | tojson }},
+    formName: {{ _c_form_name | tojson }},
+    stageName: {{ _c_stage_name | tojson }},
+    formUrl: {{ _c_form_url | tojson }}
+  };
+
+  // Resolve form context safely (combining server context with client URL fallbacks)
+  function resolveFormContext() {
+    let taskId = SERVER_CTX.taskId || '';
+    let stageNo = SERVER_CTX.stageNo || '';
+    let appId = SERVER_CTX.appId || '';
+    let formName = SERVER_CTX.formName || '';
+    let stageName = SERVER_CTX.stageName || '';
+    let formUrl = SERVER_CTX.formUrl || (window.location.pathname + window.location.search);
+
+    const path = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+
+    if (!appId && searchParams.get('app_id')) {
+      appId = searchParams.get('app_id');
+    }
+
+    // Try extracting from form hidden inputs if available
+    const appInput = document.querySelector('input[name="app_id"]');
+    if (!appId && appInput && appInput.value) {
+      appId = appInput.value;
+    }
+
+    if (!taskId) {
+      const stageMatch = path.match(/\/forms\/stage\/([^\/]+)\/([^\/]+)/);
+      if (stageMatch) {
+        taskId = decodeURIComponent(stageMatch[1]);
+        if (!stageNo) stageNo = decodeURIComponent(stageMatch[2]);
+      } else {
+        const appMatch = path.match(/\/forms\/application\/([^\/]+)/);
+        if (appMatch) taskId = decodeURIComponent(appMatch[1]);
+      }
+    }
+
+    // Custom stage element attributes
+    const customSection = document.querySelector('[data-task-id]');
+    if (customSection) {
+      if (!taskId && customSection.dataset.taskId) taskId = customSection.dataset.taskId;
+      if (!stageNo && customSection.dataset.stageNo) stageNo = customSection.dataset.stageNo;
+    }
+
+    return {
+      taskId: taskId.trim(),
+      stageNo: stageNo.trim(),
+      appId: appId.trim(),
+      formName: formName.trim() || 'FMS Form',
+      stageName: stageName.trim() || (stageNo ? `Stage ${stageNo}` : ''),
+      formUrl: formUrl
+    };
+  }
+
+  // Inject Cases button into the toolbar
+  function injectCasesButton() {
+    if (document.getElementById('fms-cases-trigger-btn')) return;
+
+    const ctx = resolveFormContext();
+    if (!ctx.taskId) return; // Not a form page with task ID
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'fms-cases-trigger-btn';
+    btn.className = 'btn btn-sm fms-cases-trigger-btn';
+    btn.title = 'Linked Cases';
+    btn.setAttribute('aria-label', 'Open Linked Cases');
+    btn.innerHTML = `
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+      </svg>
+      <span id="fms-cases-badge-count" class="fms-cases-count-badge">0</span>
+    `;
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.openLinkedCasesModal();
+    });
+
+    // Placement strategy:
+    // 1. After Tutorial trigger if present
+    const tutBtn = document.getElementById('task-tutorial-trigger');
+    if (tutBtn && tutBtn.parentNode) {
+      tutBtn.insertAdjacentElement('afterend', btn);
+      updateBadgeCount(ctx);
+      return;
+    }
+
+    // 2. After Comments trigger if present
+    const commBtn = document.getElementById('task-comments-trigger');
+    if (commBtn && commBtn.parentNode) {
+      commBtn.insertAdjacentElement('afterend', btn);
+      updateBadgeCount(ctx);
+      return;
+    }
+
+    // 3. After Lead Time Extension button if present
+    const ltgBtn = document.getElementById('btn-lead-time-extension') ||
+                   document.getElementById('btn-lead-time-extension-s2') ||
+                   document.querySelector('.lead-time-extension-btn') ||
+                   document.querySelector('.s2-lead-time-extension-btn');
+    if (ltgBtn && ltgBtn.parentNode) {
+      ltgBtn.insertAdjacentElement('afterend', btn);
+      updateBadgeCount(ctx);
+      return;
+    }
+
+    // 4. Header title h3 container (before logo image if logo is floated/margin-left:auto)
+    const titleH3 = document.querySelector('.card__title') ||
+                    document.querySelector('.card h3') ||
+                    document.querySelector('.stage1-custom h3') ||
+                    document.querySelector('main.content h3');
+    if (titleH3) {
+      const logo = titleH3.querySelector('img[src*="logo"]');
+      if (logo && logo.parentNode === titleH3) {
+        titleH3.insertBefore(btn, logo);
+      } else {
+        titleH3.appendChild(btn);
+      }
+      updateBadgeCount(ctx);
+      return;
+    }
+
+    // 5. Fallback: header actions
+    const headerActions = document.querySelector('.header_actions') || document.querySelector('.topbar__actions');
+    if (headerActions) {
+      headerActions.prepend(btn);
+      updateBadgeCount(ctx);
+    }
+  }
+
+  // Update badge count
+  function updateBadgeCount(ctx) {
+    if (!ctx) ctx = resolveFormContext();
+    if (!ctx.taskId) return;
+
+    const query = new URLSearchParams({
+      app_id: ctx.appId,
+      task_id: ctx.taskId,
+      stage_no: ctx.stageNo
+    });
+
+    fetch(`/api/fms/cases/linked?${query.toString()}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.status === 'success') {
+          const badge = document.getElementById('fms-cases-badge-count');
+          if (badge) {
+            badge.innerText = String(data.count || 0);
+          }
+          const modalCount = document.getElementById('fms-cases-count-label');
+          if (modalCount) {
+            modalCount.innerText = String(data.count || 0);
+          }
+        }
+      })
+      .catch(err => console.warn('Could not fetch linked cases count:', err));
+  }
+
+  // Open modal
+  window.openLinkedCasesModal = function() {
+    const modal = document.getElementById('fms-linked-cases-modal');
+    if (!modal) return;
+
+    const ctx = resolveFormContext();
+    document.getElementById('fms-cases-ctx-form').innerText = ctx.formName || '-';
+    document.getElementById('fms-cases-ctx-appid').innerText = ctx.appId || '-';
+    document.getElementById('fms-cases-ctx-taskid').innerText = ctx.taskId || '-';
+    document.getElementById('fms-cases-ctx-stageno').innerText = ctx.stageNo || (ctx.stageName ? '-' : 'Application');
+    document.getElementById('fms-cases-ctx-stagename').innerText = ctx.stageName || '-';
+
+    modal.style.display = 'flex';
+    refreshLinkedCasesModal();
+
+    // Auto-refresh when tab is focused
+    window.removeEventListener('focus', onWindowFocusRefresh);
+    window.addEventListener('focus', onWindowFocusRefresh);
+  };
+
+  function onWindowFocusRefresh() {
+    const modal = document.getElementById('fms-linked-cases-modal');
+    if (modal && modal.style.display !== 'none') {
+      refreshLinkedCasesModal();
+    }
+  }
+
+  // Close modal
+  window.closeLinkedCasesModal = function() {
+    const modal = document.getElementById('fms-linked-cases-modal');
+    if (modal) modal.style.display = 'none';
+    window.removeEventListener('focus', onWindowFocusRefresh);
+  };
+
+  // Keyboard Escape & Click outside
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') window.closeLinkedCasesModal();
+  });
+  const modalEl = document.getElementById('fms-linked-cases-modal');
+  if (modalEl) {
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) window.closeLinkedCasesModal();
+    });
+  }
+
+  // Refresh cases list in modal
+  window.refreshLinkedCasesModal = function(showLoading = false) {
+    const ctx = resolveFormContext();
+    const tbody = document.getElementById('fms-cases-tbody');
+    const emptyState = document.getElementById('fms-cases-empty-state');
+    const loadingState = document.getElementById('fms-cases-loading-state');
+    const table = document.getElementById('fms-cases-table');
+
+    if (showLoading && loadingState && tbody) {
+      loadingState.style.display = 'block';
+      emptyState.style.display = 'none';
+      table.style.display = 'none';
+    }
+
+    const query = new URLSearchParams({
+      app_id: ctx.appId,
+      task_id: ctx.taskId,
+      stage_no: ctx.stageNo
+    });
+
+    fetch(`/api/fms/cases/linked?${query.toString()}`)
+      .then(r => r.json())
+      .then(data => {
+        if (loadingState) loadingState.style.display = 'none';
+        if (data && data.status === 'success') {
+          const count = data.count || 0;
+          const badge = document.getElementById('fms-cases-badge-count');
+          if (badge) badge.innerText = String(count);
+          const modalCount = document.getElementById('fms-cases-count-label');
+          if (modalCount) modalCount.innerText = String(count);
+
+          if (!data.cases || data.cases.length === 0) {
+            if (tbody) tbody.innerHTML = '';
+            if (table) table.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'block';
+          } else {
+            if (emptyState) emptyState.style.display = 'none';
+            if (table) table.style.display = 'table';
+            if (tbody) {
+              tbody.innerHTML = data.cases.map(c => {
+                const locClass = c.location === 'Live' ? 'fms-cases-loc-live' :
+                                 (c.location === 'Snooze' ? 'fms-cases-loc-snooze' : 'fms-cases-loc-archive');
+                return `
+                  <tr>
+                    <td style="font-weight:700; font-family:monospace; color:#4f46e5;">
+                      <a href="${c.open_url}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                        ${escapeHtml(c.case_id)}
+                      </a>
+                    </td>
+                    <td style="max-width:280px; word-break:break-word;">
+                      ${escapeHtml(c.subject || '-')}
+                    </td>
+                    <td>
+                      <span class="fms-cases-loc-badge ${locClass}">${escapeHtml(c.location)}</span>
+                    </td>
+                    <td style="color:#475569; font-size:12px;">
+                      ${escapeHtml(c.created_by || '-')}
+                    </td>
+                    <td style="color:#64748b; font-size:12px; white-space:nowrap;">
+                      ${escapeHtml(c.created_on || '-')}
+                    </td>
+                    <td style="text-align:right;">
+                      <a href="${c.open_url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px;">
+                        Open &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                `;
+              }).join('');
+            }
+          }
+        }
+      })
+      .catch(err => {
+        if (loadingState) loadingState.style.display = 'none';
+        console.error('Failed to refresh linked cases:', err);
+      });
+  };
+
+  // Launch Create Case from FMS
+  window.launchCreateCaseFromFMS = function() {
+    const ctx = resolveFormContext();
+    const btn = document.getElementById('btn-create-fms-case');
+    if (btn) btn.disabled = true;
+
+    fetch('/api/fms/cases/launch-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_id: ctx.appId,
+        task_id: ctx.taskId,
+        stage_no: ctx.stageNo,
+        stage_name: ctx.stageName,
+        form_name: ctx.formName,
+        form_url: ctx.formUrl
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (btn) btn.disabled = false;
+      if (data && data.status === 'success' && data.launch_url) {
+        window.open(data.launch_url, '_blank');
+        // Start polling while user is in the other tab
+        let pollCount = 0;
+        const pollInterval = setInterval(() => {
+          pollCount++;
+          refreshLinkedCasesModal();
+          if (pollCount > 60) clearInterval(pollInterval);
+        }, 3000);
+      } else {
+        alert('Failed to generate launch token: ' + (data.detail || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      if (btn) btn.disabled = false;
+      alert('Error launching Cases System: ' + err);
+    });
+  };
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Initialize and observe DOM for deferred toolbar elements
+  function init() {
+    injectCasesButton();
+    const observer = new MutationObserver(() => {
+      injectCasesButton();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    setTimeout(() => observer.disconnect(), 15000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+})();
+</script>

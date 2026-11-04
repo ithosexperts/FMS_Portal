@@ -4006,3 +4006,16 @@ async def dropdown_options(table: str, select_col: str, filter_col: str = "", fi
     }
     data = await api_client.get("get_dependent_list", query_params=params)
     return data.get("data", []) if isinstance(data, dict) else []
+
+
+def ensure_stage_actual_helper_fields(payload: dict, stage_context: dict, action: str):
+    stage_no = str((stage_context.get("stage") or {}).get("STAGE_NO") or "").strip()
+    fields = stage_context.get("fields") or []
+    field_names = [f.get("field") if isinstance(f, dict) else getattr(f, "field", "") for f in fields]
+    ts_field = f"{stage_no}_ALTimeStamp"
+    helper_field = f"{stage_no}_ALHelper"
+    if ts_field in field_names:
+        payload[ts_field] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if helper_field in field_names:
+        payload[helper_field] = "FMS Submission"
+

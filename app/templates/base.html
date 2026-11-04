@@ -114,6 +114,10 @@
   </script>
   {% endif %}
   {% endif %}
+    {# Generic Two-Way Cases Integration for EVERY form #}
+  {% if request.url.path.startswith('/forms/') or task_id is defined %}
+  {% include "components/cases_widget.html" %}
+  {% endif %}
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

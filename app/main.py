@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.client import ApiError, api_client
 from app.config import settings
 from app.middleware.oneportal_auth import OnePortalAuthMiddleware
-from app.routers import dashboard, developer, forms, misc, sso, task, runner360
+from app.routers import dashboard, developer, forms, misc, sso, task, runner360, cases_integration
 from app.services.task_service import TaskNotFoundError
 from app.services.stage_service import StageNotFoundError
 from app.templates_config import templates
@@ -51,6 +51,7 @@ app.include_router(forms.router)
 app.include_router(developer.router)
 app.include_router(misc.router)
 app.include_router(runner360.router)
+app.include_router(cases_integration.router)
 
 
 @app.get("/")
