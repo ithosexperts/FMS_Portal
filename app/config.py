@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # "none" is required when FMS is shown in an iframe on a different site.
     sso_cookie_samesite: str = "none"
 
+    # FMS <-> Cases System integration. Keep this secret separate from FMS_SSO_SECRET.
+    cases_system_url: str = ""
+    fms_cases_shared_secret: str = ""
+    cases_proxy_secret: str = ""
+
     # Comments widget configuration (rendered only when both URLs are set).
     comments_origin: str = ""
     one_portal_origin: str = ""
