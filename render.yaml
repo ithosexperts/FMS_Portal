@@ -22,3 +22,9 @@ services:
         value: "15"
       - key: PYTHON_VERSION
         value: 3.11.9
+        # FMS - Cases Integration
+      - key: CASES_SYSTEM_URL
+        sync: false
+
+      - key: FMS_CASES_SHARED_SECRET
+        sync: false
