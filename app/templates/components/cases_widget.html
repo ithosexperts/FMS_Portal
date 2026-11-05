@@ -84,6 +84,9 @@
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
 }
+@keyframes fmsCasesSpin {
+  to { transform: rotate(360deg); }
+}
 .fms-cases-modal-header {
   display: flex;
   align-items: center;
@@ -290,6 +293,31 @@
   </div>
 </div>
 
+<!-- Embedded Case Viewer / Add Form Modal (Exact Case System Modal Size, No URL Exposed) -->
+<div id="fms-case-viewer-modal" class="fms-cases-modal-backdrop" style="display:none; z-index:1000000;" role="dialog" aria-modal="true" aria-labelledby="fms-case-viewer-title">
+  <div class="fms-case-viewer-container" style="background:#ffffff; border-radius:18px; box-shadow:0 25px 60px -15px rgba(0,0,0,0.35); border:1px solid #cbd5e1; width:95%; max-width:1040px; height:90vh; max-height:880px; display:flex; flex-direction:column; overflow:hidden; position:relative; animation:fmsCasesFadeIn 0.18s ease-out;">
+    <div class="fms-case-viewer-header" style="display:flex; align-items:center; justify-content:space-between; padding:12px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="fms-cases-icon-circle" style="width:32px; height:32px; border-radius:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </span>
+        <h3 id="fms-case-viewer-title" style="margin:0; font-size:16px; font-weight:800; color:#1e293b;">Create New Case</h3>
+        <span id="fms-case-viewer-badge" style="font-size:11px; font-weight:700; color:#4f46e5; background:#eef2ff; border:1px solid #c7d2fe; padding:2px 8px; border-radius:10px;">CaseSys</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button type="button" class="fms-cases-modal-close" onclick="closeCaseViewerModal()" aria-label="Close modal" style="font-size:24px; padding:2px 8px;">&times;</button>
+      </div>
+    </div>
+    <div style="position:relative; flex:1; width:100%; height:100%; background:#fff; overflow:hidden;">
+      <div id="fms-case-viewer-spinner" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#ffffff; z-index:10; gap:10px;">
+        <div style="width:36px; height:36px; border:3px solid #e2e8f0; border-top-color:#4f46e5; border-radius:50%; animation:fmsCasesSpin 0.75s linear infinite;"></div>
+        <span style="font-size:13px; font-weight:600; color:#64748b;">Loading Case System...</span>
+      </div>
+      <iframe id="fms-case-viewer-iframe" src="about:blank" style="width:100%; height:100%; border:none; display:block;" allow="clipboard-write; camera; microphone;"></iframe>
+    </div>
+  </div>
+</div>
+
 <script>
 (function() {
   const SERVER_CTX = {
@@ -458,7 +486,7 @@
       .catch(err => console.warn('Could not fetch linked cases count:', err));
   }
 
-  // Open modal
+  // Open Linked Cases list modal
   window.openLinkedCasesModal = function() {
     const modal = document.getElementById('fms-linked-cases-modal');
     if (!modal) return;
@@ -485,21 +513,88 @@
     }
   }
 
-  // Close modal
+  // Close Linked Cases list modal
   window.closeLinkedCasesModal = function() {
     const modal = document.getElementById('fms-linked-cases-modal');
     if (modal) modal.style.display = 'none';
     window.removeEventListener('focus', onWindowFocusRefresh);
   };
 
-  // Keyboard Escape & Click outside
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') window.closeLinkedCasesModal();
+  // Open Embedded Case Viewer Modal (Add Form or Case Details)
+  window.openCaseViewerModal = function(url, title = 'Create New Case') {
+    const modal = document.getElementById('fms-case-viewer-modal');
+    const iframe = document.getElementById('fms-case-viewer-iframe');
+    const titleEl = document.getElementById('fms-case-viewer-title');
+    const spinner = document.getElementById('fms-case-viewer-spinner');
+    if (!modal || !iframe) return;
+
+    if (titleEl) titleEl.innerText = title;
+    if (spinner) spinner.style.display = 'flex';
+
+    iframe.onload = function() {
+      if (spinner) spinner.style.display = 'none';
+    };
+
+    iframe.src = url;
+    modal.style.display = 'flex';
+  };
+
+  // Close Embedded Case Viewer Modal
+  window.closeCaseViewerModal = function() {
+    const modal = document.getElementById('fms-case-viewer-modal');
+    const iframe = document.getElementById('fms-case-viewer-iframe');
+    if (modal) modal.style.display = 'none';
+    if (iframe) iframe.src = 'about:blank';
+    refreshLinkedCasesModal(true);
+  };
+
+  // Open existing case inside modal
+  window.openCaseInModal = function(openUrl, caseId) {
+    window.openCaseViewerModal(openUrl, 'Case: ' + (caseId || 'Details'));
+  };
+
+  // Listen for messages from Cases System iframe
+  window.addEventListener('message', function(event) {
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'FMS_CASE_CREATED') {
+      const caseId = data.caseId || '';
+      const titleEl = document.getElementById('fms-case-viewer-title');
+      if (titleEl && caseId) {
+        titleEl.innerText = 'Case: ' + caseId;
+      }
+      refreshLinkedCasesModal(true);
+    }
+
+    if (data.type === 'FMS_CASE_MODAL_CLOSE') {
+      window.closeCaseViewerModal();
+    }
   });
+
+  // Keyboard Escape & Click outside handlers
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const viewerModal = document.getElementById('fms-case-viewer-modal');
+      if (viewerModal && viewerModal.style.display !== 'none') {
+        window.closeCaseViewerModal();
+        return;
+      }
+      window.closeLinkedCasesModal();
+    }
+  });
+
   const modalEl = document.getElementById('fms-linked-cases-modal');
   if (modalEl) {
     modalEl.addEventListener('click', (e) => {
       if (e.target === modalEl) window.closeLinkedCasesModal();
+    });
+  }
+
+  const viewerModalEl = document.getElementById('fms-case-viewer-modal');
+  if (viewerModalEl) {
+    viewerModalEl.addEventListener('click', (e) => {
+      if (e.target === viewerModalEl) window.closeCaseViewerModal();
     });
   }
 
@@ -548,7 +643,7 @@
                 return `
                   <tr>
                     <td style="font-weight:700; font-family:monospace; color:#4f46e5;">
-                      <a href="${c.open_url}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                      <a href="javascript:void(0)" onclick="openCaseInModal('${c.open_url}', '${escapeHtml(c.case_id)}')" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                         ${escapeHtml(c.case_id)}
                       </a>
                     </td>
@@ -565,9 +660,9 @@
                       ${escapeHtml(c.created_on || '-')}
                     </td>
                     <td style="text-align:right;">
-                      <a href="${c.open_url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px;">
+                      <button type="button" onclick="openCaseInModal('${c.open_url}', '${escapeHtml(c.case_id)}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;">
                         Open &rarr;
-                      </a>
+                      </button>
                     </td>
                   </tr>
                 `;
@@ -582,7 +677,7 @@
       });
   };
 
-  // Launch Create Case from FMS
+  // Launch Create Case from FMS into the embedded modal without exposing the real URL
   window.launchCreateCaseFromFMS = function() {
     const ctx = resolveFormContext();
     const btn = document.getElementById('btn-create-fms-case');
@@ -604,14 +699,7 @@
     .then(data => {
       if (btn) btn.disabled = false;
       if (data && data.status === 'success' && data.launch_url) {
-        window.open(data.launch_url, '_blank');
-        // Start polling while user is in the other tab
-        let pollCount = 0;
-        const pollInterval = setInterval(() => {
-          pollCount++;
-          refreshLinkedCasesModal();
-          if (pollCount > 60) clearInterval(pollInterval);
-        }, 3000);
+        window.openCaseViewerModal(data.launch_url, 'Create New Case');
       } else {
         alert('Failed to generate launch token: ' + (data.detail || 'Unknown error'));
       }

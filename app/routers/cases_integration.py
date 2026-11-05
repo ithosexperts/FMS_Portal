@@ -91,7 +91,7 @@ async def create_launch_token(
 
     token = cases_integration.create_fms_launch_token(context)
     cases_base = settings.cases_system_url.rstrip("/")
-    launch_url = f"{cases_base}?fms_token={token}"
+    launch_url = f"{cases_base}/create-case?fms_token={token}"
 
     return {
         "status": "success",

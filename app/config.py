@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     sso_cookie_samesite: str = "none"
 
     # FMS <-> Cases System integration. Keep this secret separate from FMS_SSO_SECRET.
-    cases_system_url: str = "https://cases-system.onrender.com"
+    cases_system_url: str = "https://my-cases.curly-wind-1035.workers.dev"
     fms_cases_shared_secret: str = ""
     cases_proxy_secret: str = ""
 
