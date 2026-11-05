@@ -458,6 +458,13 @@
     }
   }
 
+  function setCasesBadge(count) {
+    const badge = document.getElementById('fms-cases-badge-count');
+    if (badge) badge.innerText = String(count || 0);
+    const modalCount = document.getElementById('fms-cases-count-label');
+    if (modalCount) modalCount.innerText = String(count || 0);
+  }
+
   // Update badge count
   function updateBadgeCount(ctx) {
     if (!ctx) ctx = resolveFormContext();
@@ -472,18 +479,30 @@
     fetch(`/api/fms/cases/linked?${query.toString()}`)
       .then(r => r.json())
       .then(data => {
-        if (data && data.status === 'success') {
-          const badge = document.getElementById('fms-cases-badge-count');
-          if (badge) {
-            badge.innerText = String(data.count || 0);
-          }
-          const modalCount = document.getElementById('fms-cases-count-label');
-          if (modalCount) {
-            modalCount.innerText = String(data.count || 0);
-          }
+        if (data && data.status === 'success' && data.count > 0) {
+          setCasesBadge(data.count);
+        } else {
+          // Direct fallback to Cases System
+          fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+            .then(r => r.json())
+            .then(csData => {
+              if (csData && csData.status === 'success') {
+                setCasesBadge(csData.count || 0);
+              } else {
+                setCasesBadge(0);
+              }
+            })
+            .catch(() => setCasesBadge(0));
         }
       })
-      .catch(err => console.warn('Could not fetch linked cases count:', err));
+      .catch(() => {
+        fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+          .then(r => r.json())
+          .then(csData => {
+            if (csData && csData.status === 'success') setCasesBadge(csData.count || 0);
+          })
+          .catch(() => {});
+      });
   }
 
   // Open Linked Cases list modal
