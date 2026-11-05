@@ -545,11 +545,13 @@
     const iframe = document.getElementById('fms-case-viewer-iframe');
     if (modal) modal.style.display = 'none';
     if (iframe) iframe.src = 'about:blank';
-    refreshLinkedCasesModal(true);
+    window.openLinkedCasesModal();
   };
 
   // Open existing case inside modal
   window.openCaseInModal = function(openUrl, caseId) {
+    const linkedModal = document.getElementById('fms-linked-cases-modal');
+    if (linkedModal) linkedModal.style.display = 'none';
     window.openCaseViewerModal(openUrl, 'Case: ' + (caseId || 'Details'));
   };
 
@@ -683,6 +685,8 @@
     const btn = document.getElementById('btn-create-fms-case');
     if (btn) btn.disabled = true;
 
+    const absoluteFormUrl = (window.location.origin || '') + (ctx.formUrl || '');
+
     fetch('/api/fms/cases/launch-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -692,14 +696,21 @@
         stage_no: ctx.stageNo,
         stage_name: ctx.stageName,
         form_name: ctx.formName,
-        form_url: ctx.formUrl
+        form_url: absoluteFormUrl
       })
     })
     .then(r => r.json())
     .then(data => {
       if (btn) btn.disabled = false;
       if (data && data.status === 'success' && data.launch_url) {
-        window.openCaseViewerModal(data.launch_url, 'Create New Case');
+        let launchUrl = data.launch_url;
+        if (!launchUrl.includes('/create-case')) {
+          launchUrl = launchUrl.replace(/(\.(?:workers\.dev|onrender\.com))(\/?\?|\/?$)/, '$1/create-case$2');
+        }
+        const linkedModal = document.getElementById('fms-linked-cases-modal');
+        if (linkedModal) linkedModal.style.display = 'none';
+
+        window.openCaseViewerModal(launchUrl, 'Create New Case');
       } else {
         alert('Failed to generate launch token: ' + (data.detail || 'Unknown error'));
       }
