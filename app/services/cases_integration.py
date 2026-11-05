@@ -195,7 +195,7 @@ async def get_linked_cases_for_form(
         import httpx
         cs_url = f"{cases_base}/api/fms/cases-for-task"
         params = {"task_id": clean_task, "app_id": clean_app, "stage_no": clean_stage}
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(cs_url, params=params)
             if resp.status_code == 200:
                 data = resp.json()
