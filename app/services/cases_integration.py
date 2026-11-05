@@ -16,7 +16,11 @@ from urllib.parse import quote
 
 from app.config import settings
 from app.api import table_api
-from app.auth.request_context import get_current_database_target
+from app.auth.request_context import (
+    get_current_database_target,
+    set_current_database_target,
+    reset_current_database_target,
+)
 
 TOKEN_TTL_SECONDS = 300
 
@@ -157,38 +161,44 @@ async def get_linked_cases_for_form(
     cases_by_id: dict[str, dict[str, Any]] = {}
     cases_base = settings.cases_system_url.rstrip("/")
 
-    # 1. Query FMS_Case_Link locally via table_api
-    try:
-        filters: dict[str, Any] = {
-            "FMSTaskID": clean_task,
-        }
-        if clean_app:
-            filters["FMSAppID"] = clean_app
+    # 1. Query FMS_Case_Link locally via table_api across production and test DB
+    filters: dict[str, Any] = {
+        "FMSTaskID": clean_task,
+    }
+    if clean_app:
+        filters["FMSAppID"] = clean_app
 
-        # First attempt with stage filter if provided
-        links: list[dict[str, Any]] = []
-        if clean_stage:
-            try:
-                links = await table_api.get_table("FMS_Case_Link", filters={**filters, "FMSStageNo": clean_stage})
-            except Exception:
-                links = []
+    target_dbs = ["OperationsDB", "Test_OperationsDB"]
+    for db in target_dbs:
+        db_token = set_current_database_target(db)
+        try:
+            links: list[dict[str, Any]] = []
+            if clean_stage:
+                try:
+                    links = await table_api.get_table("FMS_Case_Link", filters={**filters, "FMSStageNo": clean_stage})
+                except Exception:
+                    links = []
 
-        if not links:
-            links = await table_api.get_table("FMS_Case_Link", filters=filters)
+            if not links:
+                links = await table_api.get_table("FMS_Case_Link", filters=filters)
 
-        for link in (links or []):
-            cid = str(link.get("CaseID", "")).strip()
-            if cid and cid not in cases_by_id:
-                cases_by_id[cid] = {
-                    "case_id": cid,
-                    "stage_no": link.get("FMSStageNo", clean_stage),
-                    "stage_name": link.get("FMSStageName", f"Stage {clean_stage}" if clean_stage else ""),
-                    "form_name": link.get("FMSFormName", "Linked FMS Form"),
-                    "linked_at": str(link.get("LinkedAt", "")),
-                    "open_url": f"{cases_base}?caseId={quote(cid, safe='')}",
-                }
-    except Exception as exc:
-        print(f"[get_linked_cases_for_form] local FMS_Case_Link note: {exc}")
+            for link in (links or []):
+                cid = str(link.get("CaseID", "")).strip()
+                if cid and cid not in cases_by_id:
+                    cases_by_id[cid] = {
+                        "case_id": cid,
+                        "stage_no": link.get("FMSStageNo", clean_stage),
+                        "stage_name": link.get("FMSStageName", f"Stage {clean_stage}" if clean_stage else ""),
+                        "form_name": link.get("FMSFormName", "Linked FMS Form"),
+                        "linked_at": str(link.get("LinkedAt", "")),
+                        "open_url": f"{cases_base}?caseId={quote(cid, safe='')}",
+                    }
+            if cases_by_id:
+                break
+        except Exception as exc:
+            print(f"[get_linked_cases_for_form] local FMS_Case_Link in {db} note: {exc}")
+        finally:
+            reset_current_database_target(db_token)
 
     # 2. Query Cases System server directly for cases associated with this task ID
     try:
@@ -217,41 +227,45 @@ async def get_linked_cases_for_form(
 
     results: list[dict[str, Any]] = []
 
-    for case_id, item in cases_by_id.items():
-        case_subject = item.get("subject") or "-"
-        created_by = item.get("created_by") or "-"
-        created_on = item.get("created_on") or "-"
-        if case_subject == "-" or created_by == "-":
+    db_enrich_token = set_current_database_target("OperationsDB")
+    try:
+        for case_id, item in cases_by_id.items():
+            case_subject = item.get("subject") or "-"
+            created_by = item.get("created_by") or "-"
+            created_on = item.get("created_on") or "-"
+            if case_subject == "-" or created_by == "-":
+                try:
+                    case_rows = await table_api.get_table("Case_Master", filters={"CaseID": case_id})
+                    if case_rows:
+                        case_row = case_rows[0]
+                        case_subject = str(case_row.get("Subject") or "-").strip()
+                        created_by = str(case_row.get("CreatedBy") or "-").strip()
+                        created_on = str(case_row.get("Timestamp") or "-").strip()
+                except Exception as exc:
+                    print(f"[get_linked_cases_for_form] Failed to fetch Case_Master for {case_id}: {exc}")
+
+            location = item.get("location") or "Live"
             try:
-                case_rows = await table_api.get_table("Case_Master", filters={"CaseID": case_id})
-                if case_rows:
-                    case_row = case_rows[0]
-                    case_subject = str(case_row.get("Subject") or "-").strip()
-                    created_by = str(case_row.get("CreatedBy") or "-").strip()
-                    created_on = str(case_row.get("Timestamp") or "-").strip()
+                sa_rows = await table_api.get_table("Case_SnoozeArchive", filters={"CaseID": case_id})
+                location = compute_case_location_from_records(sa_rows or [], employee_code=employee_code)
             except Exception as exc:
-                print(f"[get_linked_cases_for_form] Failed to fetch Case_Master for {case_id}: {exc}")
+                print(f"[get_linked_cases_for_form] Failed to fetch Case_SnoozeArchive for {case_id}: {exc}")
 
-        location = item.get("location") or "Live"
-        try:
-            sa_rows = await table_api.get_table("Case_SnoozeArchive", filters={"CaseID": case_id})
-            location = compute_case_location_from_records(sa_rows or [], employee_code=employee_code)
-        except Exception as exc:
-            print(f"[get_linked_cases_for_form] Failed to fetch Case_SnoozeArchive for {case_id}: {exc}")
+            open_url = item.get("open_url") or f"{cases_base}?caseId={quote(case_id, safe='')}"
 
-        open_url = item.get("open_url") or f"{cases_base}?caseId={quote(case_id, safe='')}"
-
-        results.append({
-            "case_id": case_id,
-            "subject": case_subject,
-            "location": location,
-            "created_by": created_by,
-            "created_on": created_on,
-            "stage_no": item.get("stage_no", clean_stage),
-            "stage_name": item.get("stage_name", f"Stage {clean_stage}" if clean_stage else ""),
-            "form_name": item.get("form_name", "Linked FMS Form"),
-            "open_url": open_url,
-            "linked_at": item.get("linked_at", ""),
-        })
+            results.append({
+                "case_id": case_id,
+                "subject": case_subject,
+                "location": location,
+                "created_by": created_by,
+                "created_on": created_on,
+                "stage_no": item.get("stage_no", clean_stage),
+                "stage_name": item.get("stage_name", f"Stage {clean_stage}" if clean_stage else ""),
+                "form_name": item.get("form_name", "Linked FMS Form"),
+                "open_url": open_url,
+                "linked_at": item.get("linked_at", ""),
+            })
+    finally:
+        reset_current_database_target(db_enrich_token)
 
     return results

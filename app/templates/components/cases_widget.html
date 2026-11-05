@@ -583,14 +583,21 @@
 
     if (data.type === 'FMS_CASE_CREATED') {
       const caseId = data.caseId || '';
-      if (lastLaunchToken && caseId) {
+      const token = data.token || lastLaunchToken;
+      if (token && caseId) {
         fetch('/api/fms/cases/link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: lastLaunchToken, case_id: caseId })
+          body: JSON.stringify({ token: token, case_id: caseId })
         }).catch(function(e) { console.warn('Case link sync note:', e); });
       }
       window.closeCaseViewerModal();
+      window.openLinkedCasesModal();
+      setTimeout(function() {
+        if (typeof window.refreshLinkedCasesModal === 'function') {
+          window.refreshLinkedCasesModal(true);
+        }
+      }, 300);
     }
 
     if (data.type === 'FMS_CASE_MODAL_CLOSE') {
@@ -624,6 +631,61 @@
     });
   }
 
+  function renderCasesTableRows(cases) {
+    const tbody = document.getElementById('fms-cases-tbody');
+    const emptyState = document.getElementById('fms-cases-empty-state');
+    const table = document.getElementById('fms-cases-table');
+    const count = Array.isArray(cases) ? cases.length : 0;
+
+    const badge = document.getElementById('fms-cases-badge-count');
+    if (badge) badge.innerText = String(count);
+    const modalCount = document.getElementById('fms-cases-count-label');
+    if (modalCount) modalCount.innerText = String(count);
+
+    if (!cases || cases.length === 0) {
+      if (tbody) tbody.innerHTML = '';
+      if (table) table.style.display = 'none';
+      if (emptyState) emptyState.style.display = 'block';
+    } else {
+      if (emptyState) emptyState.style.display = 'none';
+      if (table) table.style.display = 'table';
+      if (tbody) {
+        tbody.innerHTML = cases.map(c => {
+          const locClass = c.location === 'Live' ? 'fms-cases-loc-live' :
+                           (c.location === 'Snooze' ? 'fms-cases-loc-snooze' : 'fms-cases-loc-archive');
+          const safeCaseId = escapeHtml(c.case_id || '');
+          const openUrl = c.open_url || `https://my-cases.curly-wind-1035.workers.dev?caseId=${encodeURIComponent(c.case_id || '')}`;
+          return `
+            <tr>
+              <td style="font-weight:700; font-family:monospace; color:#4f46e5;">
+                <a href="javascript:void(0)" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                  ${safeCaseId}
+                </a>
+              </td>
+              <td style="max-width:280px; word-break:break-word;">
+                ${escapeHtml(c.subject || '-')}
+              </td>
+              <td>
+                <span class="fms-cases-loc-badge ${locClass}">${escapeHtml(c.location || 'Live')}</span>
+              </td>
+              <td style="color:#475569; font-size:12px;">
+                ${escapeHtml(c.created_by || '-')}
+              </td>
+              <td style="color:#64748b; font-size:12px; white-space:nowrap;">
+                ${escapeHtml(c.created_on || '-')}
+              </td>
+              <td style="text-align:right;">
+                <button type="button" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;">
+                  Open &rarr;
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  }
+
   // Refresh cases list in modal
   window.refreshLinkedCasesModal = function(showLoading = false) {
     const ctx = resolveFormContext();
@@ -644,62 +706,42 @@
       stage_no: ctx.stageNo
     });
 
+    const fallbackDirectFetch = () => {
+      if (!ctx.taskId) {
+        if (loadingState) loadingState.style.display = 'none';
+        renderCasesTableRows([]);
+        return;
+      }
+      fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+        .then(r => r.json())
+        .then(csData => {
+          if (loadingState) loadingState.style.display = 'none';
+          if (csData && csData.status === 'success' && Array.isArray(csData.cases)) {
+            renderCasesTableRows(csData.cases);
+          } else {
+            renderCasesTableRows([]);
+          }
+        })
+        .catch(() => {
+          if (loadingState) loadingState.style.display = 'none';
+          renderCasesTableRows([]);
+        });
+    };
+
     fetch(`/api/fms/cases/linked?${query.toString()}`)
       .then(r => r.json())
       .then(data => {
-        if (loadingState) loadingState.style.display = 'none';
-        if (data && data.status === 'success') {
-          const count = data.count || 0;
-          const badge = document.getElementById('fms-cases-badge-count');
-          if (badge) badge.innerText = String(count);
-          const modalCount = document.getElementById('fms-cases-count-label');
-          if (modalCount) modalCount.innerText = String(count);
-
-          if (!data.cases || data.cases.length === 0) {
-            if (tbody) tbody.innerHTML = '';
-            if (table) table.style.display = 'none';
-            if (emptyState) emptyState.style.display = 'block';
-          } else {
-            if (emptyState) emptyState.style.display = 'none';
-            if (table) table.style.display = 'table';
-            if (tbody) {
-              tbody.innerHTML = data.cases.map(c => {
-                const locClass = c.location === 'Live' ? 'fms-cases-loc-live' :
-                                 (c.location === 'Snooze' ? 'fms-cases-loc-snooze' : 'fms-cases-loc-archive');
-                return `
-                  <tr>
-                    <td style="font-weight:700; font-family:monospace; color:#4f46e5;">
-                      <a href="javascript:void(0)" onclick="openCaseInModal('${c.open_url}', '${escapeHtml(c.case_id)}')" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                        ${escapeHtml(c.case_id)}
-                      </a>
-                    </td>
-                    <td style="max-width:280px; word-break:break-word;">
-                      ${escapeHtml(c.subject || '-')}
-                    </td>
-                    <td>
-                      <span class="fms-cases-loc-badge ${locClass}">${escapeHtml(c.location)}</span>
-                    </td>
-                    <td style="color:#475569; font-size:12px;">
-                      ${escapeHtml(c.created_by || '-')}
-                    </td>
-                    <td style="color:#64748b; font-size:12px; white-space:nowrap;">
-                      ${escapeHtml(c.created_on || '-')}
-                    </td>
-                    <td style="text-align:right;">
-                      <button type="button" onclick="openCaseInModal('${c.open_url}', '${escapeHtml(c.case_id)}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;">
-                        Open &rarr;
-                      </button>
-                    </td>
-                  </tr>
-                `;
-              }).join('');
-            }
-          }
+        if (data && data.status === 'success' && Array.isArray(data.cases) && data.cases.length > 0) {
+          if (loadingState) loadingState.style.display = 'none';
+          renderCasesTableRows(data.cases);
+        } else {
+          // Direct fallback to Cases System
+          fallbackDirectFetch();
         }
       })
       .catch(err => {
-        if (loadingState) loadingState.style.display = 'none';
-        console.error('Failed to refresh linked cases:', err);
+        console.warn('Backend cases/linked failed, using direct fallback:', err);
+        fallbackDirectFetch();
       });
   };
 

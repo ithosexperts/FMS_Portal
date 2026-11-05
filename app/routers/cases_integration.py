@@ -15,7 +15,11 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.auth.request_context import get_current_database_target
+from app.auth.request_context import (
+    get_current_database_target,
+    set_current_database_target,
+    reset_current_database_target,
+)
 from app.api import table_api
 from app.services import cases_integration
 
@@ -114,33 +118,37 @@ async def link_case_to_form(
     target_database = str(claims.get("database", "OperationsDB") or "OperationsDB").strip()
     case_id = payload.case_id.strip()
 
-    # Check existing
+    db_token = set_current_database_target(target_database)
     try:
-        existing = await table_api.get_table("FMS_Case_Link", filters={
+        # Check existing
+        try:
+            existing = await table_api.get_table("FMS_Case_Link", filters={
+                "CaseID": case_id,
+                "FMSAppID": claims["app_id"],
+                "FMSTaskID": claims["task_id"],
+                "FMSStageNo": claims.get("stage_no", "") or "",
+                "DatabaseTarget": target_database,
+            })
+            if existing:
+                return {"status": "success", "already_linked": True, "case_id": case_id}
+        except Exception:
+            pass
+
+        # Insert
+        link_data = {
             "CaseID": case_id,
             "FMSAppID": claims["app_id"],
             "FMSTaskID": claims["task_id"],
             "FMSStageNo": claims.get("stage_no", "") or "",
+            "FMSStageName": claims.get("stage_name", "") or "",
+            "FMSFormName": claims.get("form_name", "") or "",
+            "FMSFormURL": claims.get("form_url", "") or "",
             "DatabaseTarget": target_database,
-        })
-        if existing:
-            return {"status": "success", "already_linked": True, "case_id": case_id}
-    except Exception:
-        pass
-
-    # Insert
-    link_data = {
-        "CaseID": case_id,
-        "FMSAppID": claims["app_id"],
-        "FMSTaskID": claims["task_id"],
-        "FMSStageNo": claims.get("stage_no", "") or "",
-        "FMSStageName": claims.get("stage_name", "") or "",
-        "FMSFormName": claims.get("form_name", "") or "",
-        "FMSFormURL": claims.get("form_url", "") or "",
-        "DatabaseTarget": target_database,
-        "LinkedBy": claims.get("employee_code", ""),
-        "LinkedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    await table_api.insert_row("FMS_Case_Link", link_data)
+            "LinkedBy": claims.get("employee_code", ""),
+            "LinkedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        await table_api.insert_row("FMS_Case_Link", link_data)
+    finally:
+        reset_current_database_target(db_token)
 
     return {"status": "success", "message": "Case linked successfully.", "case_id": case_id}
