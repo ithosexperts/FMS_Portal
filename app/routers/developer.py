@@ -94,6 +94,8 @@ async def custom_forms(
                 return True, path.replace("app/templates/", "")
         if stage == "S1" and table.casefold() == "z_salesorder":
             return True, "forms/stage_custom_s1.html (special renderer)"
+        if table.casefold() in ("z_attendanceinfo", "case_master", "cases"):
+            return True, "custom_forms/Z_AttendanceInfo_stage_S1.html"
         return False, ""
 
 

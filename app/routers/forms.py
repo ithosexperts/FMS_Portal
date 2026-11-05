@@ -507,6 +507,8 @@ def _detect_stage_custom_template(table_name: str, stage_no: str) -> str | None:
         abs_path = os.path.join("app", "templates", *rel.split("/"))
         if os.path.exists(abs_path):
             return rel
+    if safe_table.casefold() in ("z_attendanceinfo", "case_master", "cases"):
+        return "custom_forms/Z_AttendanceInfo_stage_S1.html"
     return None
 
 
