@@ -520,6 +520,8 @@
     window.removeEventListener('focus', onWindowFocusRefresh);
   };
 
+  let lastLaunchToken = '';
+
   // Open Embedded Case Viewer Modal (Add Form or Case Details)
   window.openCaseViewerModal = function(url, title = 'Create New Case') {
     const modal = document.getElementById('fms-case-viewer-modal');
@@ -562,11 +564,14 @@
 
     if (data.type === 'FMS_CASE_CREATED') {
       const caseId = data.caseId || '';
-      const titleEl = document.getElementById('fms-case-viewer-title');
-      if (titleEl && caseId) {
-        titleEl.innerText = 'Case: ' + caseId;
+      if (lastLaunchToken && caseId) {
+        fetch('/api/fms/cases/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: lastLaunchToken, case_id: caseId })
+        }).catch(function(e) { console.warn('Case link sync note:', e); });
       }
-      refreshLinkedCasesModal(true);
+      window.closeCaseViewerModal();
     }
 
     if (data.type === 'FMS_CASE_MODAL_CLOSE') {
@@ -703,6 +708,7 @@
     .then(data => {
       if (btn) btn.disabled = false;
       if (data && data.status === 'success' && data.launch_url) {
+        lastLaunchToken = data.token || '';
         let launchUrl = data.launch_url;
         if (!launchUrl.includes('/create-case')) {
           launchUrl = launchUrl.replace(/(\.(?:workers\.dev|onrender\.com))(\/?\?|\/?$)/, '$1/create-case$2');

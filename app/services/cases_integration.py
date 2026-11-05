@@ -154,54 +154,92 @@ async def get_linked_cases_for_form(
     if not clean_app or not clean_task:
         return []
 
-    # Query FMS_Case_Link
+    cases_by_id: dict[str, dict[str, Any]] = {}
+    cases_base = settings.cases_system_url.rstrip("/")
+
+    # 1. Query FMS_Case_Link locally via table_api
     try:
         filters: dict[str, Any] = {
-            "FMSAppID": clean_app,
             "FMSTaskID": clean_task,
         }
+        if clean_app:
+            filters["FMSAppID"] = clean_app
+
+        # First attempt with stage filter if provided
+        links: list[dict[str, Any]] = []
         if clean_stage:
-            filters["FMSStageNo"] = clean_stage
+            try:
+                links = await table_api.get_table("FMS_Case_Link", filters={**filters, "FMSStageNo": clean_stage})
+            except Exception:
+                links = []
 
-        links = await table_api.get_table("FMS_Case_Link", filters=filters)
+        if not links:
+            links = await table_api.get_table("FMS_Case_Link", filters=filters)
+
+        for link in (links or []):
+            cid = str(link.get("CaseID", "")).strip()
+            if cid and cid not in cases_by_id:
+                cases_by_id[cid] = {
+                    "case_id": cid,
+                    "stage_no": link.get("FMSStageNo", clean_stage),
+                    "stage_name": link.get("FMSStageName", f"Stage {clean_stage}" if clean_stage else ""),
+                    "form_name": link.get("FMSFormName", "Linked FMS Form"),
+                    "linked_at": str(link.get("LinkedAt", "")),
+                    "open_url": f"{cases_base}?caseId={quote(cid, safe='')}",
+                }
     except Exception as exc:
-        print(f"[get_linked_cases_for_form] Failed to query FMS_Case_Link: {exc}")
-        return []
+        print(f"[get_linked_cases_for_form] local FMS_Case_Link note: {exc}")
 
-    if not links:
+    # 2. Query Cases System server directly for cases associated with this task ID
+    try:
+        import httpx
+        cs_url = f"{cases_base}/api/fms/cases-for-task"
+        params = {"task_id": clean_task, "app_id": clean_app, "stage_no": clean_stage}
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.get(cs_url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                cs_cases = data.get("cases", [])
+                for c in cs_cases:
+                    cid = str(c.get("case_id", "")).strip()
+                    if cid:
+                        if cid not in cases_by_id:
+                            cases_by_id[cid] = c
+                        else:
+                            for k in ("subject", "created_by", "created_on", "location"):
+                                if c.get(k) and not cases_by_id[cid].get(k):
+                                    cases_by_id[cid][k] = c[k]
+    except Exception as exc:
+        print(f"[get_linked_cases_for_form] Cases System cases-for-task note: {exc}")
+
+    if not cases_by_id:
         return []
 
     results: list[dict[str, Any]] = []
-    cases_base = settings.cases_system_url.rstrip("/")
 
-    for link in links:
-        case_id = str(link.get("CaseID", "")).strip()
-        if not case_id:
-            continue
+    for case_id, item in cases_by_id.items():
+        case_subject = item.get("subject") or "-"
+        created_by = item.get("created_by") or "-"
+        created_on = item.get("created_on") or "-"
+        if case_subject == "-" or created_by == "-":
+            try:
+                case_rows = await table_api.get_table("Case_Master", filters={"CaseID": case_id})
+                if case_rows:
+                    case_row = case_rows[0]
+                    case_subject = str(case_row.get("Subject") or "-").strip()
+                    created_by = str(case_row.get("CreatedBy") or "-").strip()
+                    created_on = str(case_row.get("Timestamp") or "-").strip()
+            except Exception as exc:
+                print(f"[get_linked_cases_for_form] Failed to fetch Case_Master for {case_id}: {exc}")
 
-        # Fetch case master details
-        case_subject = "-"
-        created_by = "-"
-        created_on = "-"
-        try:
-            case_rows = await table_api.get_table("Case_Master", filters={"CaseID": case_id})
-            if case_rows:
-                case_row = case_rows[0]
-                case_subject = str(case_row.get("Subject") or "-").strip()
-                created_by = str(case_row.get("CreatedBy") or "-").strip()
-                created_on = str(case_row.get("Timestamp") or "-").strip()
-        except Exception as exc:
-            print(f"[get_linked_cases_for_form] Failed to fetch Case_Master for {case_id}: {exc}")
-
-        # Fetch snooze/archive details
-        location = "Live"
+        location = item.get("location") or "Live"
         try:
             sa_rows = await table_api.get_table("Case_SnoozeArchive", filters={"CaseID": case_id})
             location = compute_case_location_from_records(sa_rows or [], employee_code=employee_code)
         except Exception as exc:
             print(f"[get_linked_cases_for_form] Failed to fetch Case_SnoozeArchive for {case_id}: {exc}")
 
-        open_url = f"{cases_base}?caseId={quote(case_id, safe='')}"
+        open_url = item.get("open_url") or f"{cases_base}?caseId={quote(case_id, safe='')}"
 
         results.append({
             "case_id": case_id,
@@ -209,11 +247,11 @@ async def get_linked_cases_for_form(
             "location": location,
             "created_by": created_by,
             "created_on": created_on,
-            "stage_no": link.get("FMSStageNo", ""),
-            "stage_name": link.get("FMSStageName", ""),
-            "form_name": link.get("FMSFormName", ""),
+            "stage_no": item.get("stage_no", clean_stage),
+            "stage_name": item.get("stage_name", f"Stage {clean_stage}" if clean_stage else ""),
+            "form_name": item.get("form_name", "Linked FMS Form"),
             "open_url": open_url,
-            "linked_at": str(link.get("LinkedAt", "")),
+            "linked_at": item.get("linked_at", ""),
         })
 
     return results
