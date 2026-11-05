@@ -120,4 +120,3 @@ def test_api_get_linked_cases_empty():
     assert data["status"] == "success"
     assert data["count"] == 0
     assert data["cases"] == []
-

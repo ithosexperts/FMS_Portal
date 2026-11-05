@@ -290,37 +290,6 @@
   </div>
 </div>
 
-<!-- Modal Form for Creating Case directly inside FMS Portal -->
-<div id="fms-create-case-modal" class="fms-cases-modal-backdrop" style="display:none; z-index:100010;" role="dialog" aria-modal="true">
-  <div class="fms-cases-modal-dialog" style="max-width:960px; width:95%; height:90vh; max-height:860px; display:flex; flex-direction:column; padding:0; overflow:hidden; border-radius:18px; box-shadow:0 25px 50px -12px rgba(15, 23, 42, 0.28);">
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid #e2e8f0; background:#fff;">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:18px;">📋</span>
-        <span style="font-weight:700; font-size:15px; color:#0f172a;" id="fms-create-case-title">Create New Case</span>
-      </div>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <a id="fms-create-case-newtab" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-ghost" style="font-size:12px; padding:4px 10px; color:#64748b; text-decoration:none; border:1px solid #e2e8f0; border-radius:8px;" title="Open in dedicated tab">
-          ↗ Open in New Tab
-        </a>
-        <button type="button" onclick="closeCreateCaseModal()" style="background:transparent; border:none; font-size:24px; color:#94a3b8; cursor:pointer; line-height:1; padding:0 4px;" aria-label="Close">&times;</button>
-      </div>
-    </div>
-    <div style="flex:1; position:relative; background:#f8fafc; overflow:hidden;">
-      <div id="fms-create-case-loader" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:#fff; z-index:5;">
-        <div style="width:36px; height:36px; border:3px solid #e2e8f0; border-top-color:#4f46e5; border-radius:50%; animation:fmsCasesSpin .8s linear infinite;"></div>
-        <div style="font-size:13px; font-weight:600; color:#64748b;">Loading Case Form...</div>
-      </div>
-      <iframe id="fms-create-case-iframe" src="about:blank" style="width:100%; height:100%; border:none; display:block;" allow="clipboard-write"></iframe>
-    </div>
-  </div>
-</div>
-
-<!-- Floating Success Toast Notification -->
-<div id="fms-cases-toast" style="display:none; position:fixed; bottom:24px; right:24px; z-index:100020; background:#0f172a; color:#fff; padding:12px 20px; border-radius:12px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.3); font-size:13px; font-weight:600; align-items:center; gap:10px; transition:all .3s ease;">
-  <span style="color:#22c55e; font-size:16px;">✓</span>
-  <span id="fms-cases-toast-text">Case created successfully!</span>
-</div>
-
 <script>
 (function() {
   const SERVER_CTX = {
@@ -613,66 +582,7 @@
       });
   };
 
-  function showCasesToast(message) {
-    const toast = document.getElementById('fms-cases-toast');
-    const text = document.getElementById('fms-cases-toast-text');
-    if (!toast || !text) return;
-    text.textContent = message;
-    toast.style.display = 'inline-flex';
-    setTimeout(() => {
-      toast.style.display = 'none';
-    }, 4500);
-  }
-
-  window.openCreateCaseModal = function(launchUrl, ctx) {
-    const modal = document.getElementById('fms-create-case-modal');
-    const iframe = document.getElementById('fms-create-case-iframe');
-    const title = document.getElementById('fms-create-case-title');
-    const newtab = document.getElementById('fms-create-case-newtab');
-    const loader = document.getElementById('fms-create-case-loader');
-
-    if (!modal || !iframe) return;
-
-    if (title) {
-      title.textContent = 'Create New Case' + (ctx && ctx.formName ? ' · ' + ctx.formName : '');
-    }
-    if (newtab) {
-      newtab.href = launchUrl;
-    }
-    if (loader) loader.style.display = 'flex';
-
-    // Append embed=modal so Cases System renders as clean embedded form
-    const embedUrl = launchUrl + (launchUrl.indexOf('?') >= 0 ? '&' : '?') + 'embed=modal';
-    iframe.src = embedUrl;
-
-    iframe.onload = function() {
-      if (loader) loader.style.display = 'none';
-    };
-
-    modal.style.display = 'flex';
-  };
-
-  window.closeCreateCaseModal = function() {
-    const modal = document.getElementById('fms-create-case-modal');
-    const iframe = document.getElementById('fms-create-case-iframe');
-    if (modal) modal.style.display = 'none';
-    if (iframe) iframe.src = 'about:blank';
-  };
-
-  // Listen for message events from embedded Cases System iframe
-  window.addEventListener('message', function(event) {
-    if (!event.data) return;
-    const msg = event.data;
-    if (msg.type === 'FMS_CASE_CREATED') {
-      window.closeCreateCaseModal();
-      showCasesToast('Case ' + (msg.caseId || '') + ' created and linked successfully!');
-      refreshLinkedCasesModal(true);
-    } else if (msg.type === 'FMS_CASE_MODAL_CLOSE' || msg.type === 'FMS_CASE_CANCEL') {
-      window.closeCreateCaseModal();
-    }
-  });
-
-  // Launch Create Case from FMS in Modal Form
+  // Launch Create Case from FMS
   window.launchCreateCaseFromFMS = function() {
     const ctx = resolveFormContext();
     const btn = document.getElementById('btn-create-fms-case');
@@ -694,8 +604,14 @@
     .then(data => {
       if (btn) btn.disabled = false;
       if (data && data.status === 'success' && data.launch_url) {
-        // Open directly in Modal Form
-        window.openCreateCaseModal(data.launch_url, ctx);
+        window.open(data.launch_url, '_blank');
+        // Start polling while user is in the other tab
+        let pollCount = 0;
+        const pollInterval = setInterval(() => {
+          pollCount++;
+          refreshLinkedCasesModal();
+          if (pollCount > 60) clearInterval(pollInterval);
+        }, 3000);
       } else {
         alert('Failed to generate launch token: ' + (data.detail || 'Unknown error'));
       }
@@ -733,4 +649,3 @@
   }
 })();
 </script>
-
