@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Shared portal APIs - same APIs consumed by every portal (FMS, CRM, ...).
-    api_1_url: str = ""
-    api_2_url: str = ""
-    api_auth_token: str = ""
+    api_1_url: str = "https://api.hosexperts.com:85/apiv2.php"
+    api_2_url: str = "https://api.hosexperts.com:85/apiv3.php"
+    api_auth_token: str = "Khushbu*#*#123"
 
     app_name: str = "FMS Portal"
     environment: str = "development"
