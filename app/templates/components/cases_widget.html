@@ -468,8 +468,15 @@
                    document.querySelector('.lead-time-extension-btn') ||
                    document.querySelector('.s2-lead-time-extension-btn');
     if (anchor && anchor.parentNode) {
-      anchor.insertAdjacentElement('afterend', btn);
-      btn.insertAdjacentElement('afterend', portalBtn);
+      const container = anchor.parentNode;
+      const logo = container.querySelector('img[src*="logo"]');
+      if (logo && logo.parentNode === container) {
+        container.insertBefore(btn, logo);
+        container.insertBefore(portalBtn, logo);
+      } else {
+        container.appendChild(btn);
+        container.appendChild(portalBtn);
+      }
       updateBadgeCount(ctx);
       return;
     }
@@ -499,20 +506,31 @@
     }
   }
 
-  // Comments/Tutorial icons are injected by other scripts (sometimes after this one).
-  // Keep: [... Comments, Tutorial, Cases, Portal] so Portal is always right-most.
+  // Open Portal button: ALWAYS the last (right-most) icon on any form!
+  // Cases button: ALWAYS immediately to its left!
   function keepPortalAfterCases() {
     const cases = document.getElementById('fms-cases-trigger-btn');
     const portal = document.getElementById('fms-back-to-portal-btn');
     if (!cases || !portal) return;
-    const tut = document.getElementById('task-tutorial-trigger');
-    const comm = document.getElementById('task-comments-trigger');
-    const lead = [tut, comm].filter(Boolean).pop();
-    if (lead && lead.parentNode === cases.parentNode && lead.nextElementSibling !== cases && cases.previousElementSibling !== lead) {
-      lead.insertAdjacentElement('afterend', cases);
+
+    const container = cases.parentNode;
+    if (!container) return;
+
+    const logo = container.querySelector('img[src*="logo"]');
+    if (logo && logo.parentNode === container) {
+      if (logo.previousElementSibling !== portal || portal.previousElementSibling !== cases) {
+        container.insertBefore(cases, logo);
+        container.insertBefore(portal, logo);
+      }
+    } else {
+      if (container.lastElementChild !== portal) {
+        container.appendChild(cases);
+        container.appendChild(portal);
+      } else if (portal.previousElementSibling !== cases) {
+        portal.insertAdjacentElement('beforebegin', cases);
+      }
     }
-    if (cases.nextElementSibling !== portal) cases.insertAdjacentElement('afterend', portal);
-    // App id may only become known after the form finishes rendering
+
     const ctx = resolveFormContext();
     if (ctx.appId) {
       portal.href = buildPortalUrl(ctx.appId);
@@ -763,11 +781,13 @@
           const locClass = c.location === 'Live' ? 'fms-cases-loc-live' :
                            (c.location === 'Snooze' ? 'fms-cases-loc-snooze' : 'fms-cases-loc-archive');
           const safeCaseId = escapeHtml(c.case_id || '');
-          const openUrl = c.open_url || `https://my-cases.curly-wind-1035.workers.dev?caseId=${encodeURIComponent(c.case_id || '')}`;
+          const openUrl = (c.open_url && c.open_url.includes('portal/app-window'))
+            ? c.open_url
+            : buildCaseOpenUrl(c.case_id);
           return `
             <tr>
               <td style="font-weight:700; font-family:monospace; color:#4f46e5;">
-                <a href="javascript:void(0)" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                <a href="${openUrl}" target="_blank" rel="noopener noreferrer" style="color:#4f46e5; text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Open Case in New Tab">
                   ${safeCaseId}
                 </a>
               </td>
@@ -784,12 +804,9 @@
                 ${escapeHtml(c.created_on || '-')}
               </td>
               <td style="text-align:right; white-space:nowrap;">
-                <button type="button" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 9px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;" title="View Case in Modal">
-                  View &rarr;
-                </button>
-                <a href="${openUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 9px; font-weight:700; background:#f8fafc; color:#334155; border:1px solid #cbd5e1; text-decoration:none; border-radius:6px; cursor:pointer; margin-left:4px;" title="Open Case in New Tab">
+                <a href="${openUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:5px; padding:5px 12px; font-weight:700; background:#ea580c; color:#ffffff; border:1px solid #c2410c; text-decoration:none; border-radius:6px; cursor:pointer;" title="Open app in next tab">
                   <span>Open Tab</span>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                     <polyline points="15 3 21 3 21 9"/>
                     <line x1="10" y1="14" x2="21" y2="3"/>
@@ -936,7 +953,9 @@
       keepPortalAfterCases();
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => observer.disconnect(), 15000);
+    // Defensive repositioning pulses so deferred widgets (comments, tutorials) never displace Portal button from being the last right element
+    [150, 400, 800, 1500, 3000, 6000].forEach(ms => setTimeout(keepPortalAfterCases, ms));
+    setTimeout(() => observer.disconnect(), 20000);
   }
 
   if (document.readyState === 'loading') {

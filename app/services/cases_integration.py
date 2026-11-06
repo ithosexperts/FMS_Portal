@@ -272,7 +272,7 @@ async def get_linked_cases_for_form(
                 "stage_no": item.get("stage_no", clean_stage),
                 "stage_name": item.get("stage_name", f"Stage {clean_stage}" if clean_stage else ""),
                 "form_name": item.get("form_name", "Pack to Dispatch Details" if clean_app == "APP000001" else "Linked FMS Form"),
-                "open_url": item.get("open_url") or f"{cases_base}?caseId={quote(cid, safe='')}",
+                "open_url": f"{(settings.one_portal_app_window_url or 'https://one-portal-blmn.onrender.com/portal/app-window').rstrip('/')}?app_id={settings.get_cases_system_app_id()}&caseId={quote(cid, safe='')}",
                 "linked_at": item.get("linked_at", ""),
             }
             for cid, item in cases_by_id.items()

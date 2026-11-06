@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     one_portal_origin: str = ""
     # "Open Portal" icon on every form: opens this URL + ?app_id=<APP_ID> in a new tab.
     one_portal_app_window_url: str = "https://one-portal-blmn.onrender.com/portal/app-window"
+    cases_system_app_id_production: str = "APP000004"
+    cases_system_app_id_test: str = "APP000004"
+
+    def get_cases_system_app_id(self, database: str = "") -> str:
+        db = str(database or "").strip().lower()
+        if db in ("test_operationsdb", "test", "api_1"):
+            return self.cases_system_app_id_test
+        return self.cases_system_app_id_production
 
     @property
     def is_production(self) -> bool:
