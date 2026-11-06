@@ -201,26 +201,33 @@ async def get_linked_cases_for_form(
             reset_current_database_target(db_token)
 
     # 2. Query Cases System server directly for cases associated with this task ID
-    try:
-        import httpx
-        cs_url = f"{cases_base}/api/fms/cases-for-task"
-        params = {"task_id": clean_task, "app_id": clean_app, "stage_no": clean_stage}
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(cs_url, params=params)
-            if resp.status_code == 200:
-                data = resp.json()
-                cs_cases = data.get("cases", [])
-                for c in cs_cases:
-                    cid = str(c.get("case_id", "")).strip()
-                    if cid:
-                        if cid not in cases_by_id:
-                            cases_by_id[cid] = c
-                        else:
-                            for k in ("subject", "created_by", "created_on", "location"):
-                                if c.get(k) and not cases_by_id[cid].get(k):
-                                    cases_by_id[cid][k] = c[k]
-    except Exception as exc:
-        print(f"[get_linked_cases_for_form] Cases System cases-for-task note: {exc}")
+    worker_url = "https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task"
+    candidate_urls = [worker_url]
+    if cases_base and cases_base != "https://my-cases.curly-wind-1035.workers.dev":
+        candidate_urls.insert(0, f"{cases_base}/api/fms/cases-for-task")
+
+    for cs_url in candidate_urls:
+        try:
+            import httpx
+            params = {"task_id": clean_task, "app_id": clean_app, "stage_no": clean_stage}
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(cs_url, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    cs_cases = data.get("cases", [])
+                    for c in cs_cases:
+                        cid = str(c.get("case_id", "")).strip()
+                        if cid:
+                            if cid not in cases_by_id:
+                                cases_by_id[cid] = c
+                            else:
+                                for k in ("subject", "created_by", "created_on", "location"):
+                                    if c.get(k) and not cases_by_id[cid].get(k):
+                                        cases_by_id[cid][k] = c[k]
+                    if cases_by_id:
+                        break
+        except Exception as exc:
+            print(f"[get_linked_cases_for_form] Cases System cases-for-task at {cs_url} note: {exc}")
 
     if not cases_by_id:
         return []

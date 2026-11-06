@@ -470,10 +470,20 @@
     if (!ctx) ctx = resolveFormContext();
     if (!ctx.taskId) return;
 
+    // Fast direct lookup from Cloudflare Worker
+    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+      .then(r => r.json())
+      .then(csData => {
+        if (csData && csData.status === 'success' && Number.isFinite(csData.count)) {
+          setCasesBadge(csData.count);
+        }
+      })
+      .catch(() => {});
+
     const query = new URLSearchParams({
-      app_id: ctx.appId,
+      app_id: ctx.appId || 'APP000001',
       task_id: ctx.taskId,
-      stage_no: ctx.stageNo
+      stage_no: ctx.stageNo || ''
     });
 
     fetch(`/api/fms/cases/linked?${query.toString()}`)
@@ -481,28 +491,9 @@
       .then(data => {
         if (data && data.status === 'success' && data.count > 0) {
           setCasesBadge(data.count);
-        } else {
-          // Direct fallback to Cases System
-          fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
-            .then(r => r.json())
-            .then(csData => {
-              if (csData && csData.status === 'success') {
-                setCasesBadge(csData.count || 0);
-              } else {
-                setCasesBadge(0);
-              }
-            })
-            .catch(() => setCasesBadge(0));
         }
       })
-      .catch(() => {
-        fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
-          .then(r => r.json())
-          .then(csData => {
-            if (csData && csData.status === 'success') setCasesBadge(csData.count || 0);
-          })
-          .catch(() => {});
-      });
+      .catch(() => {});
   }
 
   // Open Linked Cases list modal
@@ -694,54 +685,57 @@
     const loadingState = document.getElementById('fms-cases-loading-state');
     const table = document.getElementById('fms-cases-table');
 
+    if (!ctx.taskId) {
+      if (loadingState) loadingState.style.display = 'none';
+      renderCasesTableRows([]);
+      return;
+    }
+
     if (showLoading && loadingState && tbody) {
       loadingState.style.display = 'block';
       emptyState.style.display = 'none';
       table.style.display = 'none';
     }
 
-    const query = new URLSearchParams({
-      app_id: ctx.appId,
-      task_id: ctx.taskId,
-      stage_no: ctx.stageNo
-    });
-
-    const fallbackDirectFetch = () => {
-      if (!ctx.taskId) {
-        if (loadingState) loadingState.style.display = 'none';
-        renderCasesTableRows([]);
-        return;
-      }
-      fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
-        .then(r => r.json())
-        .then(csData => {
-          if (loadingState) loadingState.style.display = 'none';
-          if (csData && csData.status === 'success' && Array.isArray(csData.cases)) {
-            renderCasesTableRows(csData.cases);
-          } else {
-            renderCasesTableRows([]);
-          }
-        })
-        .catch(() => {
-          if (loadingState) loadingState.style.display = 'none';
-          renderCasesTableRows([]);
-        });
+    let renderedWithData = false;
+    const applyCases = (casesList) => {
+      if (renderedWithData && (!casesList || casesList.length === 0)) return;
+      if (loadingState) loadingState.style.display = 'none';
+      renderCasesTableRows(casesList || []);
+      if (casesList && casesList.length > 0) renderedWithData = true;
     };
+
+    // 1. Ultra-fast direct fetch from Cloudflare Worker (<2s)
+    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+      .then(r => r.json())
+      .then(csData => {
+        if (csData && csData.status === 'success' && Array.isArray(csData.cases) && csData.cases.length > 0) {
+          applyCases(csData.cases);
+        } else if (!renderedWithData) {
+          applyCases(csData?.cases || []);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Parallel backend query
+    const query = new URLSearchParams({
+      app_id: ctx.appId || 'APP000001',
+      task_id: ctx.taskId,
+      stage_no: ctx.stageNo || ''
+    });
 
     fetch(`/api/fms/cases/linked?${query.toString()}`)
       .then(r => r.json())
       .then(data => {
         if (data && data.status === 'success' && Array.isArray(data.cases) && data.cases.length > 0) {
-          if (loadingState) loadingState.style.display = 'none';
-          renderCasesTableRows(data.cases);
-        } else {
-          // Direct fallback to Cases System
-          fallbackDirectFetch();
+          applyCases(data.cases);
+        } else if (!renderedWithData) {
+          applyCases([]);
         }
       })
       .catch(err => {
-        console.warn('Backend cases/linked failed, using direct fallback:', err);
-        fallbackDirectFetch();
+        console.warn('Backend cases/linked failed:', err);
+        if (!renderedWithData) applyCases([]);
       });
   };
 
