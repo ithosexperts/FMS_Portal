@@ -204,7 +204,7 @@ async def get_linked_cases_for_form(
     worker_url = "https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task"
     candidate_urls = [worker_url]
     if cases_base and cases_base != "https://my-cases.curly-wind-1035.workers.dev":
-        candidate_urls.insert(0, f"{cases_base}/api/fms/cases-for-task")
+        candidate_urls.append(f"{cases_base}/api/fms/cases-for-task")
 
     for cs_url in candidate_urls:
         try:
@@ -231,6 +231,25 @@ async def get_linked_cases_for_form(
 
     if not cases_by_id:
         return []
+
+    # If cases_by_id is already enriched from worker (subject != "-"), return immediately!
+    all_enriched = all(c.get("subject") and c.get("subject") != "-" for c in cases_by_id.values())
+    if all_enriched:
+        return [
+            {
+                "case_id": cid,
+                "subject": item.get("subject") or "-",
+                "location": item.get("location") or "Live",
+                "created_by": item.get("created_by") or "-",
+                "created_on": item.get("created_on") or "-",
+                "stage_no": item.get("stage_no", clean_stage),
+                "stage_name": item.get("stage_name", f"Stage {clean_stage}" if clean_stage else ""),
+                "form_name": item.get("form_name", "Pack to Dispatch Details" if clean_app == "APP000001" else "Linked FMS Form"),
+                "open_url": item.get("open_url") or f"{cases_base}?caseId={quote(cid, safe='')}",
+                "linked_at": item.get("linked_at", ""),
+            }
+            for cid, item in cases_by_id.items()
+        ]
 
     results: list[dict[str, Any]] = []
 

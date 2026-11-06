@@ -35,6 +35,31 @@
   background: #e0e7ff;
   color: #4338ca;
   border-color: #c7d2fe;
+} 
+.fms-portal-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 34px;
+  height: 30px;
+  min-width: 34px;
+  padding: 0;
+  margin-left: 4px;
+  color: #4f46e5;
+  border: 1px solid #dce6ff;
+  background: #f5f8ff;
+  border-radius: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+.fms-portal-link-btn:hover {
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
 }
 .fms-cases-count-badge {
   position: absolute;
@@ -410,37 +435,18 @@
     const portalBtn = document.createElement('a');
     portalBtn.id = 'fms-back-to-portal-btn';
     portalBtn.className = 'btn btn-sm fms-portal-link-btn';
-    portalBtn.title = 'Open Application in ONE Portal (Back to FMS)';
-    portalBtn.setAttribute('aria-label', 'Back to FMS Portal');
+    portalBtn.title = 'Open app in next tab';
+    portalBtn.setAttribute('aria-label', 'Open app in next tab');
     portalBtn.target = '_blank';
     portalBtn.rel = 'noopener noreferrer';
     portalBtn.href = `https://one-portal-blmn.onrender.com/portal/app-window?app_id=${encodeURIComponent(ctx.appId || 'APP000001')}`;
     portalBtn.innerHTML = `
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;">
-        <rect width="7" height="7" x="3" y="3" rx="1"/>
-        <rect width="7" height="7" x="14" y="3" rx="1"/>
-        <rect width="7" height="7" x="14" y="14" rx="1"/>
-        <rect width="7" height="7" x="3" y="14" rx="1"/>
-      </svg>
-      <span style="font-size:11px; font-weight:700; white-space:nowrap; margin-left:3px;">Portal</span>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7; margin-left:2px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
         <polyline points="15 3 21 3 21 9"/>
         <line x1="10" y1="14" x2="21" y2="3"/>
       </svg>
     `;
-    portalBtn.style.display = 'inline-flex';
-    portalBtn.style.alignItems = 'center';
-    portalBtn.style.textDecoration = 'none';
-    portalBtn.style.marginLeft = '6px';
-    portalBtn.style.color = '#4f46e5';
-    portalBtn.style.background = '#eef2ff';
-    portalBtn.style.border = '1px solid #c7d2fe';
-    portalBtn.style.borderRadius = '8px';
-    portalBtn.style.padding = '4px 8px';
-    portalBtn.style.fontSize = '12px';
-    portalBtn.style.fontWeight = '700';
-    portalBtn.style.cursor = 'pointer';
 
     // Placement strategy:
     // 1. After Tutorial trigger if present
