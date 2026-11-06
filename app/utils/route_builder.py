@@ -53,6 +53,7 @@ def stage_form_route(
     table_name: str = "",
     primary_key: str = "",
     app_id: str = "",
+    **extra_params: Any,
 ) -> str:
     url = f"/forms/stage/{task_id}/{stage_no}"
     params = []
@@ -62,6 +63,9 @@ def stage_form_route(
         params.append(f"primary_key={quote_plus(str(primary_key))}")
     if app_id:
         params.append(f"app_id={quote_plus(str(app_id))}")
+    for k, v in extra_params.items():
+        if v is not None and str(v).strip() != "":
+            params.append(f"{quote_plus(str(k))}={quote_plus(str(v))}")
     return url + ("?" + "&".join(params) if params else "")
 
 
