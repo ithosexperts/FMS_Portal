@@ -406,11 +406,48 @@
       window.openLinkedCasesModal();
     });
 
+    // Create Back to Portal button
+    const portalBtn = document.createElement('a');
+    portalBtn.id = 'fms-back-to-portal-btn';
+    portalBtn.className = 'btn btn-sm fms-portal-link-btn';
+    portalBtn.title = 'Open Application in ONE Portal (Back to FMS)';
+    portalBtn.setAttribute('aria-label', 'Back to FMS Portal');
+    portalBtn.target = '_blank';
+    portalBtn.rel = 'noopener noreferrer';
+    portalBtn.href = `https://one-portal-blmn.onrender.com/portal/app-window?app_id=${encodeURIComponent(ctx.appId || 'APP000001')}`;
+    portalBtn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle;">
+        <rect width="7" height="7" x="3" y="3" rx="1"/>
+        <rect width="7" height="7" x="14" y="3" rx="1"/>
+        <rect width="7" height="7" x="14" y="14" rx="1"/>
+        <rect width="7" height="7" x="3" y="14" rx="1"/>
+      </svg>
+      <span style="font-size:11px; font-weight:700; white-space:nowrap; margin-left:3px;">Portal</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7; margin-left:2px;">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+    `;
+    portalBtn.style.display = 'inline-flex';
+    portalBtn.style.alignItems = 'center';
+    portalBtn.style.textDecoration = 'none';
+    portalBtn.style.marginLeft = '6px';
+    portalBtn.style.color = '#4f46e5';
+    portalBtn.style.background = '#eef2ff';
+    portalBtn.style.border = '1px solid #c7d2fe';
+    portalBtn.style.borderRadius = '8px';
+    portalBtn.style.padding = '4px 8px';
+    portalBtn.style.fontSize = '12px';
+    portalBtn.style.fontWeight = '700';
+    portalBtn.style.cursor = 'pointer';
+
     // Placement strategy:
     // 1. After Tutorial trigger if present
     const tutBtn = document.getElementById('task-tutorial-trigger');
     if (tutBtn && tutBtn.parentNode) {
       tutBtn.insertAdjacentElement('afterend', btn);
+      btn.insertAdjacentElement('afterend', portalBtn);
       updateBadgeCount(ctx);
       return;
     }
@@ -419,6 +456,7 @@
     const commBtn = document.getElementById('task-comments-trigger');
     if (commBtn && commBtn.parentNode) {
       commBtn.insertAdjacentElement('afterend', btn);
+      btn.insertAdjacentElement('afterend', portalBtn);
       updateBadgeCount(ctx);
       return;
     }
@@ -430,6 +468,7 @@
                    document.querySelector('.s2-lead-time-extension-btn');
     if (ltgBtn && ltgBtn.parentNode) {
       ltgBtn.insertAdjacentElement('afterend', btn);
+      btn.insertAdjacentElement('afterend', portalBtn);
       updateBadgeCount(ctx);
       return;
     }
@@ -442,9 +481,11 @@
     if (titleH3) {
       const logo = titleH3.querySelector('img[src*="logo"]');
       if (logo && logo.parentNode === titleH3) {
-        titleH3.insertBefore(btn, logo);
+        titleH3.insertBefore(portalBtn, logo);
+        titleH3.insertBefore(btn, portalBtn);
       } else {
         titleH3.appendChild(btn);
+        titleH3.appendChild(portalBtn);
       }
       updateBadgeCount(ctx);
       return;
@@ -453,6 +494,7 @@
     // 5. Fallback: header actions
     const headerActions = document.querySelector('.header_actions') || document.querySelector('.topbar__actions');
     if (headerActions) {
+      headerActions.prepend(portalBtn);
       headerActions.prepend(btn);
       updateBadgeCount(ctx);
     }
@@ -466,20 +508,50 @@
   }
 
   // Update badge count
+  // Caching helpers for instant sub-second render
+  const getCacheKey = (taskId) => `fms_cases_cache_${taskId || ''}`;
+
+  function getCachedCases(taskId) {
+    if (!taskId) return null;
+    try {
+      const data = sessionStorage.getItem(getCacheKey(taskId));
+      if (!data) return null;
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (_) {}
+    return null;
+  }
+
+  function setCachedCases(taskId, casesList) {
+    if (!taskId || !Array.isArray(casesList)) return;
+    try {
+      sessionStorage.setItem(getCacheKey(taskId), JSON.stringify(casesList));
+    } catch (_) {}
+  }
+
+  // Update badge count
   function updateBadgeCount(ctx) {
     if (!ctx) ctx = resolveFormContext();
     if (!ctx.taskId) return;
 
-    // Fast direct lookup from Cloudflare Worker
+    // 1. Instant cache check (<1ms)
+    const cached = getCachedCases(ctx.taskId);
+    if (cached) {
+      setCasesBadge(cached.length);
+    }
+
+    // 2. Fast direct lookup from Cloudflare Worker (<2s)
     fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
       .then(r => r.json())
       .then(csData => {
-        if (csData && csData.status === 'success' && Number.isFinite(csData.count)) {
-          setCasesBadge(csData.count);
+        if (csData && csData.status === 'success' && Array.isArray(csData.cases)) {
+          setCasesBadge(csData.cases.length);
+          if (csData.cases.length > 0) setCachedCases(ctx.taskId, csData.cases);
         }
       })
       .catch(() => {});
 
+    // 3. Fallback query
     const query = new URLSearchParams({
       app_id: ctx.appId || 'APP000001',
       task_id: ctx.taskId,
@@ -489,8 +561,9 @@
     fetch(`/api/fms/cases/linked?${query.toString()}`)
       .then(r => r.json())
       .then(data => {
-        if (data && data.status === 'success' && data.count > 0) {
-          setCasesBadge(data.count);
+        if (data && data.status === 'success' && Array.isArray(data.cases) && data.cases.length > 0) {
+          setCasesBadge(data.cases.length);
+          setCachedCases(ctx.taskId, data.cases);
         }
       })
       .catch(() => {});
@@ -575,6 +648,31 @@
     if (data.type === 'FMS_CASE_CREATED') {
       const caseId = data.caseId || '';
       const token = data.token || lastLaunchToken;
+      const ctx = resolveFormContext();
+
+      // Optimistically add newly created case into cache and UI immediately!
+      if (caseId && ctx.taskId) {
+        const existing = getCachedCases(ctx.taskId) || [];
+        const alreadyExists = existing.some(c => c.case_id === caseId);
+        if (!alreadyExists) {
+          const newCaseItem = {
+            case_id: caseId,
+            subject: data.subject || 'Case created from FMS form',
+            location: 'Live',
+            created_by: data.createdBy || 'Current User',
+            created_on: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            stage_no: ctx.stageNo,
+            stage_name: ctx.stageName,
+            form_name: ctx.formName,
+            open_url: `https://my-cases.curly-wind-1035.workers.dev?caseId=${encodeURIComponent(caseId)}`
+          };
+          const updated = [newCaseItem, ...existing];
+          setCachedCases(ctx.taskId, updated);
+          renderCasesTableRows(updated);
+          setCasesBadge(updated.length);
+        }
+      }
+
       if (token && caseId) {
         fetch('/api/fms/cases/link', {
           method: 'POST',
@@ -665,10 +763,18 @@
               <td style="color:#64748b; font-size:12px; white-space:nowrap;">
                 ${escapeHtml(c.created_on || '-')}
               </td>
-              <td style="text-align:right;">
-                <button type="button" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;">
-                  Open &rarr;
+              <td style="text-align:right; white-space:nowrap;">
+                <button type="button" onclick="openCaseInModal('${openUrl}', '${safeCaseId}')" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 9px; font-weight:700; background:#eef2ff; color:#4f46e5; border:1px solid #c7d2fe; text-decoration:none; border-radius:6px; cursor:pointer;" title="View Case in Modal">
+                  View &rarr;
                 </button>
+                <a href="${openUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:4px; padding:4px 9px; font-weight:700; background:#f8fafc; color:#334155; border:1px solid #cbd5e1; text-decoration:none; border-radius:6px; cursor:pointer; margin-left:4px;" title="Open Case in New Tab">
+                  <span>Open Tab</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
               </td>
             </tr>
           `;
@@ -691,21 +797,30 @@
       return;
     }
 
-    if (showLoading && loadingState && tbody) {
+    // 1. Instant Cache Render: If cases are cached, render immediately without spinner!
+    let renderedWithData = false;
+    const cached = getCachedCases(ctx.taskId);
+    if (cached && cached.length > 0) {
+      if (loadingState) loadingState.style.display = 'none';
+      renderCasesTableRows(cached);
+      renderedWithData = true;
+    } else if (showLoading && loadingState && tbody) {
       loadingState.style.display = 'block';
       emptyState.style.display = 'none';
       table.style.display = 'none';
     }
 
-    let renderedWithData = false;
     const applyCases = (casesList) => {
       if (renderedWithData && (!casesList || casesList.length === 0)) return;
       if (loadingState) loadingState.style.display = 'none';
       renderCasesTableRows(casesList || []);
-      if (casesList && casesList.length > 0) renderedWithData = true;
+      if (casesList && casesList.length > 0) {
+        renderedWithData = true;
+        setCachedCases(ctx.taskId, casesList);
+      }
     };
 
-    // 1. Ultra-fast direct fetch from Cloudflare Worker (<2s)
+    // 2. Fetch from Cloudflare Worker in parallel (<2s)
     fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
       .then(r => r.json())
       .then(csData => {
@@ -717,7 +832,7 @@
       })
       .catch(() => {});
 
-    // 2. Parallel backend query
+    // 3. Parallel backend query
     const query = new URLSearchParams({
       app_id: ctx.appId || 'APP000001',
       task_id: ctx.taskId,
