@@ -21,5 +21,6 @@ templates.env.globals["environment"] = settings.environment
 templates.env.globals["is_production"] = settings.is_production
 templates.env.globals["comments_origin"] = settings.comments_origin.rstrip("/")
 templates.env.globals["one_portal_origin"] = settings.one_portal_origin.rstrip("/")
+templates.env.globals["one_portal_app_window_url"] = settings.one_portal_app_window_url.rstrip("/")
 templates.env.globals["current_role_id"] = 1  # Simulated Admin Role for Eye Button
 templates.env.filters["duration"] = format_duration

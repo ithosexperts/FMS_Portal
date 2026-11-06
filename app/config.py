@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # Comments widget configuration (rendered only when both URLs are set).
     comments_origin: str = ""
     one_portal_origin: str = ""
+    # "Open Portal" icon on every form: opens this URL + ?app_id=<APP_ID> in a new tab.
+    one_portal_app_window_url: str = "https://one-portal-blmn.onrender.com/portal/app-window"
 
     @property
     def is_production(self) -> bool:

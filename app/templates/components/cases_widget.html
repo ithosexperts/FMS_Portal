@@ -45,10 +45,10 @@
   height: 30px;
   min-width: 34px;
   padding: 0;
-  margin-left: 4px;
-  color: #4f46e5;
-  border: 1px solid #dce6ff;
-  background: #f5f8ff;
+  margin-left: 6px;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
   border-radius: 6px;
   vertical-align: middle;
   cursor: pointer;
@@ -57,9 +57,9 @@
   text-decoration: none;
 }
 .fms-portal-link-btn:hover {
-  background: #e0e7ff;
-  color: #4338ca;
-  border-color: #c7d2fe;
+  background: #ffedd5;
+  color: #c2410c;
+  border-color: #fdba74;
 }
 .fms-cases-count-badge {
   position: absolute;
@@ -351,8 +351,17 @@
     appId: {{ _c_app_id | tojson }},
     formName: {{ _c_form_name | tojson }},
     stageName: {{ _c_stage_name | tojson }},
-    formUrl: {{ _c_form_url | tojson }}
+    formUrl: {{ _c_form_url | tojson }},
+    portalAppWindowUrl: {{ (one_portal_app_window_url if one_portal_app_window_url is defined else '') | tojson }}
   };
+
+  // Open Portal URL is mapped per app: <portal>/portal/app-window?app_id=<APP_ID>
+  const PORTAL_APP_WINDOW_URL = (SERVER_CTX.portalAppWindowUrl || 'https://one-portal-blmn.onrender.com/portal/app-window').replace(/\/+$/, '');
+  function buildPortalUrl(appId) {
+    const id = String(appId || '').trim();
+    if (!id) return '';
+    return PORTAL_APP_WINDOW_URL + '?app_id=' + encodeURIComponent(id);
+  }
 
   // Resolve form context safely (combining server context with client URL fallbacks)
   function resolveFormContext() {
@@ -431,7 +440,7 @@
       window.openLinkedCasesModal();
     });
 
-    // Create Back to Portal button
+    // Open Portal button: ALWAYS the last (right-most) icon, right after the Cases icon
     const portalBtn = document.createElement('a');
     portalBtn.id = 'fms-back-to-portal-btn';
     portalBtn.className = 'btn btn-sm fms-portal-link-btn';
@@ -439,7 +448,8 @@
     portalBtn.setAttribute('aria-label', 'Open app in next tab');
     portalBtn.target = '_blank';
     portalBtn.rel = 'noopener noreferrer';
-    portalBtn.href = `https://one-portal-blmn.onrender.com/portal/app-window?app_id=${encodeURIComponent(ctx.appId || 'APP000001')}`;
+    portalBtn.href = buildPortalUrl(ctx.appId) || '#';
+    if (!ctx.appId) portalBtn.style.display = 'none';
     portalBtn.innerHTML = `
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -448,38 +458,22 @@
       </svg>
     `;
 
-    // Placement strategy:
-    // 1. After Tutorial trigger if present
-    const tutBtn = document.getElementById('task-tutorial-trigger');
-    if (tutBtn && tutBtn.parentNode) {
-      tutBtn.insertAdjacentElement('afterend', btn);
-      btn.insertAdjacentElement('afterend', portalBtn);
-      updateBadgeCount(ctx);
-      return;
-    }
-
-    // 2. After Comments trigger if present
-    const commBtn = document.getElementById('task-comments-trigger');
-    if (commBtn && commBtn.parentNode) {
-      commBtn.insertAdjacentElement('afterend', btn);
-      btn.insertAdjacentElement('afterend', portalBtn);
-      updateBadgeCount(ctx);
-      return;
-    }
-
-    // 3. After Lead Time Extension button if present
-    const ltgBtn = document.getElementById('btn-lead-time-extension') ||
+    // Placement strategy for the Cases icon (Portal icon always follows it):
+    // 1. After Tutorial trigger  2. After Comments trigger  3. After Lead Time button
+    // 4. Header title  5. Header actions
+    const anchor = document.getElementById('task-tutorial-trigger') ||
+                   document.getElementById('task-comments-trigger') ||
+                   document.getElementById('btn-lead-time-extension') ||
                    document.getElementById('btn-lead-time-extension-s2') ||
                    document.querySelector('.lead-time-extension-btn') ||
                    document.querySelector('.s2-lead-time-extension-btn');
-    if (ltgBtn && ltgBtn.parentNode) {
-      ltgBtn.insertAdjacentElement('afterend', btn);
+    if (anchor && anchor.parentNode) {
+      anchor.insertAdjacentElement('afterend', btn);
       btn.insertAdjacentElement('afterend', portalBtn);
       updateBadgeCount(ctx);
       return;
     }
 
-    // 4. Header title h3 container (before logo image if logo is floated/margin-left:auto)
     const titleH3 = document.querySelector('.card__title') ||
                     document.querySelector('.card h3') ||
                     document.querySelector('.stage1-custom h3') ||
@@ -487,8 +481,8 @@
     if (titleH3) {
       const logo = titleH3.querySelector('img[src*="logo"]');
       if (logo && logo.parentNode === titleH3) {
+        titleH3.insertBefore(btn, logo);
         titleH3.insertBefore(portalBtn, logo);
-        titleH3.insertBefore(btn, portalBtn);
       } else {
         titleH3.appendChild(btn);
         titleH3.appendChild(portalBtn);
@@ -497,12 +491,32 @@
       return;
     }
 
-    // 5. Fallback: header actions
     const headerActions = document.querySelector('.header_actions') || document.querySelector('.topbar__actions');
     if (headerActions) {
       headerActions.prepend(portalBtn);
       headerActions.prepend(btn);
       updateBadgeCount(ctx);
+    }
+  }
+
+  // Comments/Tutorial icons are injected by other scripts (sometimes after this one).
+  // Keep: [... Comments, Tutorial, Cases, Portal] so Portal is always right-most.
+  function keepPortalAfterCases() {
+    const cases = document.getElementById('fms-cases-trigger-btn');
+    const portal = document.getElementById('fms-back-to-portal-btn');
+    if (!cases || !portal) return;
+    const tut = document.getElementById('task-tutorial-trigger');
+    const comm = document.getElementById('task-comments-trigger');
+    const lead = [tut, comm].filter(Boolean).pop();
+    if (lead && lead.parentNode === cases.parentNode && lead.nextElementSibling !== cases && cases.previousElementSibling !== lead) {
+      lead.insertAdjacentElement('afterend', cases);
+    }
+    if (cases.nextElementSibling !== portal) cases.insertAdjacentElement('afterend', portal);
+    // App id may only become known after the form finishes rendering
+    const ctx = resolveFormContext();
+    if (ctx.appId) {
+      portal.href = buildPortalUrl(ctx.appId);
+      portal.style.display = '';
     }
   }
 
@@ -515,7 +529,7 @@
 
   // Update badge count
   // Caching helpers for instant sub-second render
-  const getCacheKey = (taskId) => `fms_cases_cache_${taskId || ''}`;
+  const getCacheKey = (taskId) => `fms_cases_cache_${resolveFormContext().appId || ''}_${taskId || ''}`;
 
   function getCachedCases(taskId) {
     if (!taskId) return null;
@@ -547,7 +561,7 @@
     }
 
     // 2. Fast direct lookup from Cloudflare Worker (<2s)
-    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}&app_id=${encodeURIComponent(ctx.appId || '')}&stage_no=${encodeURIComponent(ctx.stageNo || '')}`)
       .then(r => r.json())
       .then(csData => {
         if (csData && csData.status === 'success' && Array.isArray(csData.cases)) {
@@ -559,7 +573,7 @@
 
     // 3. Fallback query
     const query = new URLSearchParams({
-      app_id: ctx.appId || 'APP000001',
+      app_id: ctx.appId || '',
       task_id: ctx.taskId,
       stage_no: ctx.stageNo || ''
     });
@@ -827,7 +841,7 @@
     };
 
     // 2. Fetch from Cloudflare Worker in parallel (<2s)
-    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}`)
+    fetch(`https://my-cases.curly-wind-1035.workers.dev/api/fms/cases-for-task?task_id=${encodeURIComponent(ctx.taskId)}&app_id=${encodeURIComponent(ctx.appId || '')}&stage_no=${encodeURIComponent(ctx.stageNo || '')}`)
       .then(r => r.json())
       .then(csData => {
         if (csData && csData.status === 'success' && Array.isArray(csData.cases) && csData.cases.length > 0) {
@@ -840,7 +854,7 @@
 
     // 3. Parallel backend query
     const query = new URLSearchParams({
-      app_id: ctx.appId || 'APP000001',
+      app_id: ctx.appId || '',
       task_id: ctx.taskId,
       stage_no: ctx.stageNo || ''
     });
@@ -916,8 +930,10 @@
   // Initialize and observe DOM for deferred toolbar elements
   function init() {
     injectCasesButton();
+    keepPortalAfterCases();
     const observer = new MutationObserver(() => {
       injectCasesButton();
+      keepPortalAfterCases();
     });
     observer.observe(document.body, { childList: true, subtree: true });
     setTimeout(() => observer.disconnect(), 15000);

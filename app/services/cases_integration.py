@@ -144,6 +144,21 @@ def compute_case_location_from_records(
     return "Live"
 
 
+def _link_matches_app(link: dict[str, Any], app_id: str) -> bool:
+    """True when an FMS_Case_Link row belongs to `app_id`.
+
+    Older links (created straight from the Cases System) may carry a default /
+    wrong FMSAppID, so the app_id inside the stored form URL is honoured too.
+    """
+    want = str(app_id or "").strip().casefold()
+    if not want:
+        return True
+    if str(link.get("FMSAppID", "")).strip().casefold() == want:
+        return True
+    url = str(link.get("FMSFormURL", "") or "").casefold()
+    return f"app_id={want}" in url
+
+
 async def get_linked_cases_for_form(
     app_id: str,
     task_id: str,
@@ -181,6 +196,18 @@ async def get_linked_cases_for_form(
 
             if not links:
                 links = await table_api.get_table("FMS_Case_Link", filters=filters)
+
+            # Fallback: match on task only, then verify the app in Python
+            # (covers links saved with a missing / default FMSAppID).
+            if not links and clean_app:
+                try:
+                    loose = await table_api.get_table("FMS_Case_Link", filters={"FMSTaskID": clean_task})
+                except Exception:
+                    loose = []
+                links = [l for l in (loose or []) if _link_matches_app(l, clean_app)]
+
+            # The table API may ignore filters - never show another task's cases.
+            links = [l for l in (links or []) if str(l.get("FMSTaskID", "")).strip() == clean_task]
 
             for link in (links or []):
                 cid = str(link.get("CaseID", "")).strip()
