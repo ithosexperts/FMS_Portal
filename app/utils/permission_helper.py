@@ -36,7 +36,7 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
         # Auth is not configured for this environment.
         return True
 
-    if str(identity.role_id).strip() == "1":
+    if str(identity.role_id).strip() in ("1", "2", "3"):
         return True
 
     permission_keys = {str(p).strip().lower() for p in identity.permissions}

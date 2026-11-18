@@ -177,8 +177,8 @@ async def test_picker_dropdown_absent_overrides_busy_and_present_is_available(mo
     from app.services import stage1_custom_service as picker_service
 
     employee_rows = [
-        {"EmployeeCode": "E001", "EmployeeID": "17", "EmployeeName": "Alex Worker", "Active": "Y", "Branch": "Noida"},
-        {"EmployeeCode": "E002", "EmployeeID": "18", "EmployeeName": "Pat Present", "Active": "Y", "Branch": "Noida"},
+        {"EmployeeCode": "E001", "EmployeeID": "17", "EmployeeName": "Alex Worker", "Active": "Y", "IsEmployed": "Y", "Branch": "Noida"},
+        {"EmployeeCode": "E002", "EmployeeID": "18", "EmployeeName": "Pat Present", "Active": "Y", "IsEmployed": "Y", "Branch": "Noida"},
     ]
     tables = {
         "VM_EmployeeMaster": employee_rows,

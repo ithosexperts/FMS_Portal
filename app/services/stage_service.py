@@ -172,13 +172,26 @@ async def save_stage(task_id: str, stage_no: str, payload: dict[str, Any]) -> di
             current_pick_id=_row_value(context.get("row") or {}, "S1_PickID", "PickID"),
         )
 
+    # Guard against application code writing lifecycle state columns directly:
+    # C_RowCycleStatus / C_RowCycleStatusEvent (and legacy I_RowCycleStatus / I_RowCycleStatusEvent)
+    # are framework-managed columns and must only be written by row cycle stored procedures.
+    cleaned_payload = dict(payload or {})
+    for k in list(cleaned_payload.keys()):
+        norm_k = "".join(ch for ch in str(k).lower() if ch.isalnum())
+        if norm_k in {"crowcyclestatus", "irowcyclestatus", "crowcyclestatusevent", "irowcyclestatusevent"}:
+            print(
+                f"[ROW CYCLE GUARD] Blocked attempt to write protected row cycle column '{k}' via stage save. "
+                "Row cycle status must only be written by framework procedures."
+            )
+            cleaned_payload.pop(k, None)
+
     row_id = _context_row_id(context, task_id)
     print(
         f"[Stage Save] stage={stage_no} task_id={task_id} "
         f"primary_key={context.get('primary_key')} row_id={row_id} "
-        f"fields={sorted(payload.keys())}"
+        f"fields={sorted(cleaned_payload.keys())}"
     )
-    return await table_api.update_row(context["fms"]["table_name"], row_id, payload)
+    return await table_api.update_row(context["fms"]["table_name"], row_id, cleaned_payload)
 
 
 def _flatten_procedure_result(result: dict[str, Any] | None) -> dict[str, Any]:

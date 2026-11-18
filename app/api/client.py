@@ -28,12 +28,11 @@ def _current_role_id() -> str:
     return str(getattr(identity, "role_id", "") or "").strip()
 
 
-def _select_base_for_role(spec_base: str) -> str:
-    """Select the API from signed One Portal request context when available.
+def get_active_api_base() -> str:
+    """Select the active API base from signed One Portal request context when available.
 
-    A valid FMS SSO cookie carries the database the employee selected in One Portal.
-    All FMS reads and writes in that request then use the matching API. Requests
-    without that signed context retain the existing environment/default behavior.
+    API_2 -> OperationsDB (apiv3.php)
+    API_1 -> Test_OperationsDB (apiv2.php)
     """
     request_target = get_current_database_target()
     if request_target == "Test_OperationsDB":
@@ -50,6 +49,21 @@ def _select_base_for_role(spec_base: str) -> str:
 
     # Default: environment determines the database.
     return "API_2" if settings.is_production else "API_1"
+
+
+def get_effective_database_target() -> str:
+    """Return the canonical effective database target for the current context."""
+    return "OperationsDB" if get_active_api_base() == "API_2" else "Test_OperationsDB"
+
+
+def _select_base_for_role(spec_base: str) -> str:
+    """Select the API from signed One Portal request context when available.
+
+    A valid FMS SSO cookie carries the database the employee selected in One Portal.
+    All FMS reads and writes in that request then use the matching API. Requests
+    without that signed context retain the existing environment/default behavior.
+    """
+    return get_active_api_base()
 
 
 class ApiError(Exception):

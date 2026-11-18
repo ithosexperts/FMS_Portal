@@ -513,7 +513,7 @@ async def _get_runner_assignments() -> list[dict[str, Any]]:
 
             continue
 
-        if not _is_active(_lookup_case_insensitive(employee, "Active")):
+        if not _is_active(_lookup_case_insensitive(employee, "IsEmployed", "is_employed", "Active", "ActiveStatus")):
 
             continue
 
@@ -1267,7 +1267,7 @@ async def _get_current_employee_row(request: Request) -> dict[str, Any]:
 
     if not matched:
         raise HTTPException(status_code=401, detail="Your employee record was not found in VM_EmployeeMaster.")
-    if not _is_active(_lookup_case_insensitive(matched, "Active", "ActiveStatus")):
+    if not _is_active(_lookup_case_insensitive(matched, "IsEmployed", "is_employed", "Active", "ActiveStatus")):
         raise HTTPException(status_code=403, detail="Inactive employees cannot edit Runner360 planned details.")
     return matched
 
@@ -1438,8 +1438,8 @@ async def _resolve_runner360_branch_coordinates(branch_name: str) -> tuple[float
             if not master_branch or _branch_key(master_branch) != _branch_key(branch_name):
                 continue
 
-            # If an Active flag exists, inactive records must never verify an IN action.
-            active_value = _lookup_case_insensitive(item, "Active", "IsActive", "ActiveStatus")
+            # If an Active or IsEmployed flag exists, inactive records must never verify an IN action.
+            active_value = _lookup_case_insensitive(item, "IsEmployed", "is_employed", "Active", "IsActive", "ActiveStatus")
             if active_value is not None and not _is_active(active_value):
                 continue
 

@@ -2129,6 +2129,31 @@ async def _save_stage_with_assignment_guard(
 async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     form_data = await request.form()
     requested_app_id = str(form_data.get("app_id") or app_id or "").strip()
+    requested_fms_name = str(form_data.get("fms_name") or "").strip()
+    requested_table_name = str(form_data.get("table_name") or "").strip()
+    async with metadata_service.app_live_database_context(
+        app_id=requested_app_id or None,
+        fms_name=requested_fms_name or None,
+        table_name=requested_table_name or None,
+    ):
+        return await _stage_form_submit_impl(
+            request=request,
+            task_id=task_id,
+            stage_no=stage_no,
+            form_data=form_data,
+            requested_app_id=requested_app_id,
+            app_id=app_id,
+        )
+
+
+async def _stage_form_submit_impl(
+    request: Request,
+    task_id: str,
+    stage_no: str,
+    form_data: Any,
+    requested_app_id: str,
+    app_id: str = "",
+):
     action = str(form_data.get("_action", "save") or "save").strip().lower()
     print(
         "[FORM SUBMIT] START: "
@@ -2208,6 +2233,18 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
             payload[key] = None
         else:
             payload[key] = val
+
+    # Guard against application writing lifecycle columns:
+    # C_RowCycleStatus / C_RowCycleStatusEvent (and legacy I_RowCycleStatus / I_RowCycleStatusEvent)
+    # must only be written by framework stored procedures.
+    for k in list(payload.keys()):
+        norm_k = "".join(ch for ch in str(k).lower() if ch.isalnum())
+        if norm_k in {"crowcyclestatus", "irowcyclestatus", "crowcyclestatusevent", "irowcyclestatusevent"}:
+            print(
+                f"[ROW CYCLE GUARD] Blocked attempt to write protected row cycle column '{k}' via form submission. "
+                "Row cycle status must only be written by framework procedures."
+            )
+            payload.pop(k, None)
 
     # Global server-side attendance gate: validate changed assignment fields
     # before any child-row or stage write occurs. Existing assignments are not
@@ -3123,7 +3160,8 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
                                 "S3_DelLineNo": s3_del_line,
                                 "S3_ALTimeStamp": _row_value_ci(latest_row, "S3_ALTimeStamp"),
                                 "I_DelInvClear": _row_value_ci(latest_row, "I_DelInvClear"),
-                                "I_RowCycleStatus": _row_value_ci(latest_row, "I_RowCycleStatus"),
+                                "C_RowCycleStatus": _row_value_ci(latest_row, "C_RowCycleStatus") if _row_value_ci(latest_row, "C_RowCycleStatus") is not None else _row_value_ci(latest_row, "I_RowCycleStatus"),
+                                "C_RowCycleStatusEvent": _row_value_ci(latest_row, "C_RowCycleStatusEvent") if _row_value_ci(latest_row, "C_RowCycleStatusEvent") is not None else _row_value_ci(latest_row, "I_RowCycleStatusEvent"),
                                 "I_DelShippingType": _row_value_ci(latest_row, "I_DelShippingType"),
                                 "I_Location": _row_value_ci(latest_row, "I_Location"),
                                 "S4_PLTimeStamp": _row_value_ci(latest_row, "S4_PLTimeStamp"),
@@ -4019,51 +4057,55 @@ async def stage_lead_time_grant_submit(request: Request, task_id: str, stage_no:
     fms_row_id = fms_row_id_raw or str(row_data.get(primary_key) or task_id or "").strip()
     insert_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        lead_time_table = await _resolve_lead_time_grant_table()
-        existing_requests = await table_api.get_table(
-            lead_time_table,
-            filters={
-                "I_FMS_Name": fms_name,
-                "I_Stage_No": stage_no_int,
-                "I_FMS_Row_ID": fms_row_id,
-                "I_Doer_Name": doer_name,
-                "I_Status": "Pending"
-            }
-        )
-        
-        if existing_requests and len(existing_requests) > 0:
+    lead_time_table = await _resolve_lead_time_grant_table()
+
+    async with metadata_service.app_live_database_context(
+        table_name=lead_time_table,
+        fms_name="FMS_Lead Time Grant",
+    ):
+        try:
+            existing_requests = await table_api.get_table(
+                lead_time_table,
+                filters={
+                    "I_FMS_Name": fms_name,
+                    "I_Stage_No": stage_no_int,
+                    "I_FMS_Row_ID": fms_row_id,
+                    "I_Doer_Name": doer_name,
+                    "I_Status": "Pending"
+                }
+            )
+            
+            if existing_requests and len(existing_requests) > 0:
+                return RedirectResponse(
+                    route_builder.stage_form_route(task_id, stage_no, ltg_error="Pehle wali request abhi pending hai. Naya form fill nahi kar sakte."),
+                    status_code=303,
+                )
+        except Exception as check_exc:
+            print(f"Error checking existing requests: {check_exc}")
+
+        insert_payload = {
+            "I_APPID": app_id,
+            "I_FMS_Name": fms_name,
+            "I_Stage_No": stage_no_int,
+            "I_Stage_Name": stage_name,
+            "I_Doer_Name": doer_name,
+            "I_Requested_Min": requested_minutes,
+            "I_Attachments": ",".join(attachment_urls) if attachment_urls else None,
+            "I_Lead_Time_Grant_Remarks": remarks or None,
+            "I_InsertTS": insert_ts,
+            "I_FMS_Row_ID": fms_row_id or None,
+            "I_Created_By_EmpID": _get_authenticated_employee_code(request),
+            "I_Status": "Pending" 
+        }
+
+        try:
+            await table_api.insert_row(lead_time_table, insert_payload)
+        except Exception as exc:
+            err_msg = quote_plus(str(exc).strip() or "Unable to save Lead Time Extention")
             return RedirectResponse(
-                route_builder.stage_form_route(task_id, stage_no, ltg_error="Pehle wali request abhi pending hai. Naya form fill nahi kar sakte."),
+                route_builder.stage_form_route(task_id, stage_no, ltg_error=err_msg),
                 status_code=303,
             )
-    except Exception as check_exc:
-        print(f"Error checking existing requests: {check_exc}")
-
-    insert_payload = {
-        "I_APPID": app_id,
-        "I_FMS_Name": fms_name,
-        "I_Stage_No": stage_no_int,
-        "I_Stage_Name": stage_name,
-        "I_Doer_Name": doer_name,
-        "I_Requested_Min": requested_minutes,
-        "I_Attachments": ",".join(attachment_urls) if attachment_urls else None,
-        "I_Lead_Time_Grant_Remarks": remarks or None,
-        "I_InsertTS": insert_ts,
-        "I_FMS_Row_ID": fms_row_id or None,
-        "I_Created_By_EmpID": _get_authenticated_employee_code(request),
-        "I_Status": "Pending" 
-    }
-
-    try:
-        lead_time_table = await _resolve_lead_time_grant_table()
-        await table_api.insert_row(lead_time_table, insert_payload)
-    except Exception as exc:
-        err_msg = quote_plus(str(exc).strip() or "Unable to save Lead Time Extention")
-        return RedirectResponse(
-            route_builder.stage_form_route(task_id, stage_no, ltg_error=err_msg),
-            status_code=303,
-        )
 
     return RedirectResponse(
         route_builder.stage_form_route(task_id, stage_no, ltg_saved="1"),

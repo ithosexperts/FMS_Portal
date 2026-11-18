@@ -11,7 +11,7 @@ import asyncio
 import time
 from typing import Any
 
-from app.api.client import api_client
+from app.api.client import api_client, get_active_api_base
 from app.api.table_api import as_list, get_table
 from app.utils.input_mapper import map_input_type
 
@@ -38,15 +38,15 @@ async def get_metadata(table_name: str) -> list[dict[str, Any]]:
     Return column metadata for `table_name`, normalized to:
     [{"name": str, "data_type": str, "nullable": bool}, ...]
     """
-    key = str(table_name or "").strip().lower()
+    cache_key = f"{get_active_api_base()}::{str(table_name or '').strip().lower()}"
     now = time.monotonic()
-    cached = _METADATA_CACHE.get(key)
+    cached = _METADATA_CACHE.get(cache_key)
     if cached and now - cached[0] < _METADATA_TTL:
         return cached[1]
-    lock = _METADATA_LOCKS.setdefault(key, asyncio.Lock())
+    lock = _METADATA_LOCKS.setdefault(cache_key, asyncio.Lock())
     async with lock:
         now = time.monotonic()
-        cached = _METADATA_CACHE.get(key)
+        cached = _METADATA_CACHE.get(cache_key)
         if cached and now - cached[0] < _METADATA_TTL:
             return cached[1]
         raw = await api_client.get(
@@ -117,7 +117,7 @@ async def get_metadata(table_name: str) -> list[dict[str, Any]]:
         )
         columns = [col for _, col in columns]
 
-        _METADATA_CACHE[key] = (time.monotonic(), columns)
+        _METADATA_CACHE[cache_key] = (time.monotonic(), columns)
         return columns
 
 

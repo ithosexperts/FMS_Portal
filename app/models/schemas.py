@@ -23,6 +23,13 @@ class FmsConfigRow(BaseModel):
     STAGE_NAME: str
     DOER: Optional[str] = None
     DOER_EMP_CODE: Optional[str] = None
+    PERMANENT_DOER: Optional[str] = None
+    PERMANENT_DOER_EMP_CODE: Optional[str] = None
+    TEMP_DOER: Optional[str] = None
+    TEMP_DOER_EMP_CODE: Optional[str] = None
+    I_FROM_DATE_TIME: Optional[str] = None
+    I_TO_DATE_TIME: Optional[str] = None
+    ACTIVE: Optional[int] = None
     BACKUP_DOER: Optional[str] = None
     BACKUP_EMP_CODE: Optional[str] = None
     PLANNED_COLUMN: Optional[str] = None
@@ -71,6 +78,8 @@ class TaskSummary(BaseModel):
     extra_busy_minutes: Optional[int] = None
     status: str = "Pending"
     lifecycle_status: str = "Open"
+    row_cycle_status: Optional[str] = None
+    row_cycle_status_event: Optional[str] = None
     so_no: Optional[str] = None
     po_no: Optional[str] = None
     timeline: list[dict[str, Any]] = Field(default_factory=list)

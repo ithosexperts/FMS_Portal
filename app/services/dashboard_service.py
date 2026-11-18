@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from app.api import table_api
-from app.api.client import api_client
+from app.api.client import api_client, get_active_api_base
 from app.models.schemas import TaskSummary
 from app.services import metadata_service
 from app.utils.delay_calculator import calculate_delay_minutes, format_duration, parse_datetime
@@ -40,8 +40,8 @@ _FILTERED_SCAN_CONCURRENCY = 6
 _FILTER_OPTIONS_PAGE_SIZE = 500
 _FILTER_OPTIONS_CONCURRENCY = 8
 _FILTER_OPTIONS_CACHE_TTL_SECONDS = 60.0
-_FILTER_OPTIONS_CACHE: dict[tuple[str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
-_SALES_ORDER_OPTIONS_CACHE: tuple[float, list[str]] | None = None
+_FILTER_OPTIONS_CACHE: dict[tuple[str, str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
+_SALES_ORDER_OPTIONS_CACHE: dict[str, tuple[float, list[str]]] = {}
 _SALES_ORDER_OPTIONS_CACHE_TTL_SECONDS = 60.0
 _PROGRESSIVE_START_DELAY_SECONDS = 2.0
 _PROGRESSIVE_CACHE_TTL_SECONDS = 300.0
@@ -161,7 +161,19 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
 
 
 async def get_doer_options(fms_names: list[str] | None = None) -> list[str]:
+    allowed_options = await get_dashboard_fms_options()
+    allowed_names = {
+        str(opt.get("fms_name") or "").strip().lower()
+        for opt in allowed_options
+        if str(opt.get("fms_name") or "").strip()
+    }
+    if not allowed_names:
+        return []
     config_rows = await metadata_service.get_fms_config(fms_type=DASHBOARD_FMS_TYPE)
+    config_rows = [
+        r for r in config_rows
+        if str(r.get("FMS_NAME") or "").strip().lower() in allowed_names
+    ]
     if fms_names:
         selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
         config_rows = [
@@ -250,13 +262,13 @@ async def _fetch_dashboard_api_page(
 
 
 def _progressive_cache_key(table_name: str, filters: dict[str, Any] | None, page_size: int) -> str:
-    """Stable cache key for one table/query, independent of FMS stage configuration."""
+    """Stable cache key for one API scope + table/query, independent of FMS stage configuration."""
     normalized_filters = filters or {}
     try:
         filter_text = json.dumps(normalized_filters, sort_keys=True, default=str, separators=(",", ":"))
     except TypeError:
         filter_text = repr(sorted((str(k), repr(v)) for k, v in normalized_filters.items()))
-    return f"{table_name}|{page_size}|{filter_text}"
+    return f"{get_active_api_base()}|{table_name}|{page_size}|{filter_text}"
 
 
 def _cache_prune() -> None:
@@ -312,15 +324,21 @@ def invalidate_dashboard_table_cache(table_name: str) -> int:
     if not target:
         return 0
 
+    def cached_table_from_key(cache_key: str) -> str:
+        parts = str(cache_key or "").split("|", 2)
+        if len(parts) >= 2 and parts[0] in {"API_1", "API_2"}:
+            return canonical_table_name(parts[1])
+        return canonical_table_name(parts[0])
+
     removed = 0
     for cache_key in list(_PAGE_CACHE.keys()):
-        cached_table = canonical_table_name(cache_key.split("|", 1)[0])
+        cached_table = cached_table_from_key(cache_key)
         if cached_table == target:
             _PAGE_CACHE.pop(cache_key, None)
             removed += 1
 
     for cache_key, task in list(_PAGE_LOAD_TASKS.items()):
-        cached_table = canonical_table_name(cache_key.split("|", 1)[0])
+        cached_table = cached_table_from_key(cache_key)
         if cached_table != target:
             continue
         if not task.done():
@@ -442,7 +460,7 @@ async def _fetch_distinct_filter_values_all_pages(
     if not cleaned_columns:
         return {}
 
-    cache_key = (str(table_name or "").strip().lower(), tuple(sorted(c.lower() for c in cleaned_columns)))
+    cache_key = (get_active_api_base(), str(table_name or "").strip().lower(), tuple(sorted(c.lower() for c in cleaned_columns)))
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.monotonic() - cached[0]) < _FILTER_OPTIONS_CACHE_TTL_SECONDS:
         return {k: list(v) for k, v in cached[1].items()}
@@ -528,11 +546,11 @@ async def _fetch_all_sales_order_numbers() -> list[str]:
     the gateway's page metadata, so this function always walks every backend
     page and merges I_DocNum values.
     """
-    global _SALES_ORDER_OPTIONS_CACHE
-
+    cache_scope = get_active_api_base()
     now = time.monotonic()
-    if _SALES_ORDER_OPTIONS_CACHE is not None:
-        cached_at, cached_values = _SALES_ORDER_OPTIONS_CACHE
+    cached_so = _SALES_ORDER_OPTIONS_CACHE.get(cache_scope)
+    if cached_so is not None:
+        cached_at, cached_values = cached_so
         if now - cached_at < _SALES_ORDER_OPTIONS_CACHE_TTL_SECONDS:
             return list(cached_values)
 
@@ -622,7 +640,7 @@ async def _fetch_all_sales_order_numbers() -> list[str]:
         values.values(),
         key=lambda item: (0, int(item)) if item.isdigit() else (1, item.casefold()),
     )
-    _SALES_ORDER_OPTIONS_CACHE = (time.monotonic(), result)
+    _SALES_ORDER_OPTIONS_CACHE[cache_scope] = (time.monotonic(), result)
     logger.info(
         "[Sales Order Master] FINAL complete Z_SalesOrder.I_DocNum count=%s",
         len(result),
@@ -1112,7 +1130,19 @@ def build_fms_filter_options(
 
 async def get_stage_headers(fms_name: str | None = None) -> list[dict[str, Any]]:
     """Ordered stage list for dashboard matrix headers."""
+    allowed_options = await get_dashboard_fms_options()
+    allowed_names = {
+        str(opt.get("fms_name") or "").strip().lower()
+        for opt in allowed_options
+        if str(opt.get("fms_name") or "").strip()
+    }
+    if not allowed_names:
+        return []
     config_rows = await metadata_service.get_fms_config(fms_type=DASHBOARD_FMS_TYPE)
+    config_rows = [
+        r for r in config_rows
+        if str(r.get("FMS_NAME") or "").strip().lower() in allowed_names
+    ]
     if fms_name:
         config_rows = [
             r for r in config_rows
@@ -1142,6 +1172,20 @@ def _build_task_summary(
     timeline = build_timeline(stage_configs, row)
     has_any_planned = any(_has_value(stage.get("planned")) for stage in timeline)
     lifecycle_status = "Close" if timeline and timeline[-1].get("status") == "Completed" else ("Open" if has_any_planned else "-")
+
+    # Generic FMS row cycle status support:
+    # Framework procedures write the row lifecycle state into C_RowCycleStatus and C_RowCycleStatusEvent
+    # (previously named I_RowCycleStatus and I_RowCycleStatusEvent).
+    row_cycle_status = (
+        _row_value(row, "C_RowCycleStatus")
+        or _row_value(row, "I_RowCycleStatus")
+    )
+    row_cycle_status_event = (
+        _row_value(row, "C_RowCycleStatusEvent")
+        or _row_value(row, "I_RowCycleStatusEvent")
+    )
+    if _has_value(row_cycle_status):
+        lifecycle_status = str(row_cycle_status).strip()
 
     # Runner360 cancellation is stored in S1_TaskStatus by the Revoke Task action.
     # The general stage calculator intentionally derives statuses from planned/actual
@@ -1231,6 +1275,8 @@ def _build_task_summary(
         extra_busy_minutes=extra_busy_minutes,
         status=status,
         lifecycle_status=lifecycle_status,
+        row_cycle_status=str(row_cycle_status).strip() if _has_value(row_cycle_status) else None,
+        row_cycle_status_event=str(row_cycle_status_event).strip() if _has_value(row_cycle_status_event) else None,
         timeline=timeline,
         raw=row,
     )

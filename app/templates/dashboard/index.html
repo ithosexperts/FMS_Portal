@@ -29,12 +29,16 @@
       <input type="text" class="fms-multi-filter__search" data-filter-search placeholder="Search options..." autocomplete="off" />
 
       <div class="fms-multi-filter__list" data-filter-options-list>
-        {% for fms in fms_options %}
-        <label class="fms-multi-filter__option" data-filter-option-item>
-          <input type="checkbox" data-filter-option value="{{ fms.fms_name }}" {{ 'checked' if fms.fms_name in (selected_fms_values or []) else '' }} />
-          <span>{{ fms.fms_name }}</span>
-        </label>
-        {% endfor %}
+        {% if fms_options %}
+          {% for fms in fms_options %}
+          <label class="fms-multi-filter__option" data-filter-option-item>
+            <input type="checkbox" data-filter-option value="{{ fms.fms_name }}" {{ 'checked' if fms.fms_name in (selected_fms_values or []) else '' }} />
+            <span>{{ fms.fms_name }}</span>
+          </label>
+          {% endfor %}
+        {% else %}
+          <div class="fms-multi-filter__empty">No options available</div>
+        {% endif %}
       </div>
 
       <div class="fms-multi-filter__actions">
@@ -416,6 +420,10 @@
     {% set section_tasks = section.tasks %}
     {% set section_stage_headers = section.stage_headers %}
     {% include "dashboard/_table.html" %}
+  </section>
+  {% else %}
+  <section class="card" style="padding:24px; margin-bottom:14px; text-align:center; color:var(--text-secondary);">
+    No FMS available for the selected database environment.
   </section>
   {% endfor %}
 </div>

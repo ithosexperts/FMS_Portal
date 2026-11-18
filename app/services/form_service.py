@@ -228,10 +228,13 @@ async def build_dashboard_modal_sections(
             grouped.append(_build_question(col, _row_value(row, name), editable=False, force_readonly=True))
         return grouped
 
+    lifecycle_fields = prefixed_fields("c_")
     sections = [
         {"title": "Identity", "fields": identity_fields},
         {"title": "Input Details", "fields": prefixed_fields("i_")},
     ]
+    if lifecycle_fields:
+        sections.append({"title": "Lifecycle State", "fields": lifecycle_fields})
     return sections
 
 

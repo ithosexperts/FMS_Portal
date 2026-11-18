@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import table_api
-from app.api.client import ApiError
+from app.api.client import ApiError, get_effective_database_target
 from app.auth.request_context import (
     AuthenticatedIdentity,
     reset_current_bearer_token,
@@ -21,6 +21,7 @@ from app.auth.request_context import (
 )
 from app.auth.sso_session import SESSION_COOKIE, read_session_cookie
 from app.config import settings
+from app.services import metadata_service
 
 
 EXCLUDED_PATH_PREFIXES = (
@@ -37,6 +38,57 @@ EXCLUDED_PATHS = {
     "/favicon.ico",
     "/auth/launch",
 }
+
+APP_LIVE_ROUTED_PREFIXES = (
+    "/forms/",
+    "/task/",
+    "/runner360",
+    "/dashboard/modal/",
+    "/api/fms/cases/",
+)
+
+
+async def _call_next_with_live_routing(request: Request, call_next):
+    """Route Pull/Append app requests by TM_Application_Master.Live when OperationsDB is active.
+
+    - Live = 'Y' -> keep OperationsDB (API_2_URL / apiv3.php)
+    - Live = 'N', NULL, or blank -> route to Test_OperationsDB (API_1_URL / apiv2.php)
+    - When Test_OperationsDB is already selected in One Portal -> stay on Test_OperationsDB.
+    """
+    path = request.url.path or ""
+    if (
+        get_effective_database_target() != "OperationsDB"
+        or not any(path.startswith(prefix) for prefix in APP_LIVE_ROUTED_PREFIXES)
+    ):
+        return await call_next(request)
+
+    app_id = str(request.query_params.get("app_id") or "").strip()
+    table_name = str(request.query_params.get("table_name") or request.query_params.get("table") or "").strip()
+    fms_name = str(request.query_params.get("fms_name") or "").strip()
+
+    if path.startswith("/forms/runner360") or path.startswith("/runner360"):
+        fms_name = fms_name or "Runner360"
+        table_name = table_name or "Z_Runner360"
+
+    if not any((app_id, table_name, fms_name)):
+        return await call_next(request)
+
+    resolved_db = await metadata_service.resolve_database_target_for_app(
+        app_id=app_id or None,
+        fms_name=fms_name or None,
+        table_name=table_name or None,
+    )
+    if resolved_db == "OperationsDB":
+        return await call_next(request)
+
+    prev_target = getattr(request.state, "target_database", None)
+    live_db_token = set_current_database_target(resolved_db)
+    request.state.target_database = resolved_db
+    try:
+        return await call_next(request)
+    finally:
+        request.state.target_database = prev_target
+        reset_current_database_target(live_db_token)
 
 
 def _is_truthy(value: Any) -> bool:
@@ -123,7 +175,10 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
         database_context = set_current_database_target(target_database)
         request.state.target_database = target_database or None
         try:
-            return await self._dispatch_with_database_context(request, call_next, sso_claims)
+            async def _proceed(req: Request):
+                return await _call_next_with_live_routing(req, call_next)
+
+            return await self._dispatch_with_database_context(request, _proceed, sso_claims)
         finally:
             reset_current_database_target(database_context)
 
@@ -239,7 +294,7 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(status_code=401, content={"detail": "Employee profile not found"})
             return await call_next(request)
 
-        active_status = _pick_ci(employee_row, "Active", "active", "ActiveStatus", "active_status")
+        active_status = _pick_ci(employee_row, "IsEmployed", "is_employed", "Active", "active", "ActiveStatus", "active_status")
         if active_status is not None and not _is_truthy(active_status):
             if enforce_auth:
                 return JSONResponse(status_code=401, content={"detail": "Employee is inactive"})

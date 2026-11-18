@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from app.api import table_api
+from app.api.client import get_active_api_base
 from app.services import metadata_service
 from app.utils.stage_calculator import get_current_stage, sorted_stages
 from app.utils.status_calculator import build_timeline, calculate_task_status
@@ -39,7 +40,8 @@ async def _locate_task(
     normalized_id = str(task_id).strip()
     direct_table = str(table_name or "").strip()
     direct_app = str(app_id or "").strip()
-    locator_key = f"{direct_app}::{normalized_id.lower()}" if direct_app else normalized_id.lower()
+    scope = get_active_api_base()
+    locator_key = f"{scope}::{direct_app}::{normalized_id.lower()}" if direct_app else f"{scope}::{normalized_id.lower()}"
 
     if direct_table:
         pk = str(primary_key or "").strip() or await metadata_service.resolve_primary_key(direct_table)
@@ -81,6 +83,8 @@ async def _locate_task(
 
         config_rows = await metadata_service.get_fms_config(app_id=direct_app) if direct_app else await metadata_service.get_fms_config()
         fms_options = metadata_service._group_by_app(config_rows)
+        if not direct_app:
+            fms_options = await metadata_service.filter_fms_options_for_active_db(fms_options)
         config_by_app: dict[str, list[dict[str, Any]]] = {}
         for row in config_rows:
             config_by_app.setdefault(str(row.get("APP_ID") or ""), []).append(row)

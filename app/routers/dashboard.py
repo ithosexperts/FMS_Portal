@@ -141,6 +141,12 @@ async def _dashboard_context(
         if option_name and option_name.lower() in selected_fms_map:
             normalized_fms_values.append(option_name)
             selected_fms_options.append(option)
+    if not normalized_fms_values and fms_options:
+        first_option = fms_options[0]
+        first_name = str(first_option.get("fms_name") or "").strip()
+        if first_name:
+            normalized_fms_values = [first_name]
+            selected_fms_options = [first_option]
     selected_fms_values = normalized_fms_values
 
     filter_column_definitions: list[dict[str, str]] = []
@@ -543,7 +549,7 @@ async def _dashboard_context(
         doer_options = list(primary_section.get("doer_options") or [])
         selected_doer_values = list(primary_section.get("selected_doer_values") or selected_doer_values)
 
-    if not dashboard_sections:
+    if not dashboard_sections and fms_options:
         dashboard_sections = [{
             "fms_name": selected_fms_name or "FMS",
             "tasks": all_tasks,

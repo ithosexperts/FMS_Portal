@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from app.api import table_api
+from app.api.client import get_active_api_base
 from app.services import employee_availability_service
 from app.utils.delay_calculator import is_blank
 
@@ -24,8 +25,8 @@ SALES_ORDER_TABLE = "Z_SalesOrder"
 PICKER_LOCATION_TEAM_MAP = {"delhi": "29", "noida": "30"}
 
 _CACHE_TTL_SECONDS = 5.0
-_sales_order_cache: tuple[float, list[dict[str, Any]]] | None = None
-_picker_options_cache: tuple[float, list[dict[str, str]]] | None = None
+_sales_order_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_picker_options_cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
 
 
 def _norm(value: Any) -> str:
@@ -81,9 +82,8 @@ def _parse_list(value: Any, limit: int = 5) -> list[str]:
 
 
 def invalidate_picker_assignment_cache() -> None:
-    global _sales_order_cache, _picker_options_cache
-    _sales_order_cache = None
-    _picker_options_cache = None
+    _sales_order_cache.clear()
+    _picker_options_cache.clear()
 
 
 async def get_sales_order_picker_rows(force_refresh: bool = False) -> list[dict[str, Any]]:
@@ -94,14 +94,15 @@ async def get_sales_order_picker_rows(force_refresh: bool = False) -> list[dict[
     ``fetchAll=true``; use that as the primary path and only fall back to the
     dashboard's 50-row pagination when the all-row request fails.
     """
-    global _sales_order_cache
+    cache_scope = get_active_api_base()
     now = time.monotonic()
+    cached = _sales_order_cache.get(cache_scope)
     if (
         not force_refresh
-        and _sales_order_cache
-        and now - _sales_order_cache[0] < _CACHE_TTL_SECONDS
+        and cached
+        and now - cached[0] < _CACHE_TTL_SECONDS
     ):
-        return _sales_order_cache[1]
+        return cached[1]
 
     rows: list[dict[str, Any]] = []
 
@@ -178,7 +179,7 @@ async def get_sales_order_picker_rows(force_refresh: bool = False) -> list[dict[
         seen.add(key)
         unique.append(row)
 
-    _sales_order_cache = (now, unique)
+    _sales_order_cache[cache_scope] = (now, unique)
     print(f"[S1 PICKER] Busy Picker source contains {len(unique)} unique {SALES_ORDER_TABLE} rows")
     return unique
 
