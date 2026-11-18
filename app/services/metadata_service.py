@@ -319,8 +319,10 @@ async def lookup_app_live_status(
 async def filter_fms_options_for_active_db(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Filter FMS options according to the selected One Portal DB and TM_Application_Master.Live.
 
-    - OperationsDB (API_2 / apiv3.php): show ONLY FMS with Live = 'Y'.
-    - Test_OperationsDB (API_1 / apiv2.php): show ONLY FMS with Live = 'N', NULL, or blank.
+    - OperationsDB (Production): show ONLY FMS with Live = 'Y'.
+    - Test_OperationsDB (Test): show ALL FMS (Live = 'Y', 'N', NULL, or blank).
+      Per-FMS Pull/Append routing still directs Live = 'Y' to apiv3.php and
+      Live = 'N'/NULL/blank to apiv2.php in both environments.
     """
     active_db = get_effective_database_target()
     live_by_app_id, live_by_app_name = await get_application_live_maps()
@@ -332,13 +334,14 @@ async def filter_fms_options_for_active_db(options: list[dict[str, Any]]) -> lis
             live_by_app_id,
             live_by_app_name,
         )
-        include = (
-            is_app_live_value(live_val)
-            if active_db == "OperationsDB"
-            else is_app_non_live_value(live_val)
-        )
+        is_live = is_app_live_value(live_val)
+        include = is_live if active_db == "OperationsDB" else True
         if include:
-            filtered.append({**option, "live": live_val})
+            filtered.append({
+                **option,
+                "live": live_val,
+                "target_db": "OperationsDB" if is_live else "Test_OperationsDB",
+            })
 
     logger.info(
         "Filtered FMS options for %s (%s): %d -> %d (%s)",
@@ -355,17 +358,17 @@ async def resolve_database_target_for_app(
     app_id: str | None = None,
     fms_name: str | None = None,
     table_name: str | None = None,
+    live_value: Any = None,
 ) -> str:
     """Resolve the Pull/Append database target for an FMS app based on TM_Application_Master.Live.
 
-    - When Test_OperationsDB is explicitly active -> always stay on Test_OperationsDB (apiv2.php).
-    - When OperationsDB is active:
-        - Live = 'Y' -> OperationsDB (API_2_URL / apiv3.php)
-        - Live = 'N', NULL, or blank -> Test_OperationsDB (API_1_URL / apiv2.php)
+    Applies in BOTH OperationsDB and Test_OperationsDB:
+    - Live = 'Y' -> OperationsDB (API_2_URL / apiv3.php)
+    - Live = 'N', NULL, or blank -> Test_OperationsDB (API_1_URL / apiv2.php)
     """
     effective_db = get_effective_database_target()
-    if effective_db == "Test_OperationsDB":
-        return "Test_OperationsDB"
+    if live_value is not None:
+        return "OperationsDB" if is_app_live_value(live_value) else "Test_OperationsDB"
 
     if not any(str(v or "").strip() for v in (app_id, fms_name, table_name)):
         return effective_db
@@ -376,17 +379,20 @@ async def resolve_database_target_for_app(
             fms_name=fms_name,
             table_name=table_name,
         )
-        if is_app_live_value(live_val):
-            return "OperationsDB"
-        logger.info(
-            "App (app_id=%r, fms_name=%r, table_name=%r) has Live=%r in OperationsDB; "
-            "routing Pull/Append to Test_OperationsDB (API_1 / apiv2.php)",
-            app_id,
-            fms_name,
-            table_name,
-            live_val or None,
-        )
-        return "Test_OperationsDB"
+        resolved_db = "OperationsDB" if is_app_live_value(live_val) else "Test_OperationsDB"
+        if resolved_db != effective_db:
+            logger.info(
+                "App (app_id=%r, fms_name=%r, table_name=%r) has Live=%r in %s; "
+                "routing Pull/Append to %s (%s)",
+                app_id,
+                fms_name,
+                table_name,
+                live_val or None,
+                effective_db,
+                resolved_db,
+                "API_2 / apiv3.php" if resolved_db == "OperationsDB" else "API_1 / apiv2.php",
+            )
+        return resolved_db
     except Exception as exc:
         logger.warning(
             "Unable to verify TM_Application_Master.Live for app_id=%r fms_name=%r table_name=%r: %s",
@@ -403,10 +409,11 @@ async def app_live_database_context(
     app_id: str | None = None,
     fms_name: str | None = None,
     table_name: str | None = None,
+    live_value: Any = None,
 ):
-    """Temporarily route Pull/Append calls to apiv3.php (Live='Y') or apiv2.php (Live='N'/NULL/blank)."""
+    """Route Pull/Append calls to apiv3.php (Live='Y') or apiv2.php (Live='N'/NULL/blank) in both DB modes."""
     effective_db = get_effective_database_target()
-    if effective_db != "OperationsDB" or not any(str(v or "").strip() for v in (app_id, fms_name, table_name)):
+    if live_value is None and not any(str(v or "").strip() for v in (app_id, fms_name, table_name)):
         yield effective_db
         return
 
@@ -414,6 +421,7 @@ async def app_live_database_context(
         app_id=app_id,
         fms_name=fms_name,
         table_name=table_name,
+        live_value=live_value,
     )
     if resolved_db == effective_db:
         yield resolved_db

@@ -662,11 +662,12 @@ async def get_dashboard_filter_options_all_pages(
     if not fms_options or not filter_columns:
         return []
 
-    selected_tables = {
-        str(option.get("table_name") or "").strip()
-        for option in fms_options
-        if str(option.get("table_name") or "").strip()
-    }
+    option_by_table: dict[str, dict[str, Any]] = {}
+    for option in fms_options:
+        table_name = str(option.get("table_name") or "").strip()
+        if table_name and table_name not in option_by_table:
+            option_by_table[table_name] = option
+    selected_tables = set(option_by_table.keys())
 
     # Fetch every requested dimension from every selected source table.
     by_table: dict[str, dict[str, list[str]]] = {}
@@ -677,10 +678,18 @@ async def get_dashboard_filter_options_all_pages(
     ]
 
     if selected_tables and columns:
+        async def _load_table_filter_values(table_name: str) -> dict[str, list[str]]:
+            opt = option_by_table.get(table_name) or {}
+            async with metadata_service.app_live_database_context(
+                app_id=opt.get("app_id"),
+                fms_name=opt.get("fms_name"),
+                table_name=table_name,
+                live_value=opt.get("live"),
+            ):
+                return await _fetch_distinct_filter_values_all_pages(table_name, columns)
+
         table_tasks = {
-            table_name: asyncio.create_task(
-                _fetch_distinct_filter_values_all_pages(table_name, columns)
-            )
+            table_name: asyncio.create_task(_load_table_filter_values(table_name))
             for table_name in sorted(selected_tables, key=str.lower)
         }
         if table_tasks:
@@ -815,19 +824,25 @@ async def get_dashboard_rows(
         if not table_name or not stage_configs:
             continue
 
-        primary_key = await metadata_service.resolve_primary_key(table_name)
-        api_filters: dict[str, Any] = {}
+        async with metadata_service.app_live_database_context(
+            app_id=fms.get("app_id"),
+            fms_name=fms.get("fms_name"),
+            table_name=table_name,
+            live_value=fms.get("live"),
+        ):
+            primary_key = await metadata_service.resolve_primary_key(table_name)
+            api_filters: dict[str, Any] = {}
 
-        if search_text:
-            api_filters[primary_key] = search_text
+            if search_text:
+                api_filters[primary_key] = search_text
 
-        if fms_column_filters:
-            for col_name, selected_values in fms_column_filters.items():
-                active_vals = [v for v in selected_values if str(v).strip()]
-                if active_vals:
-                    api_filters[col_name] = active_vals
+            if fms_column_filters:
+                for col_name, selected_values in fms_column_filters.items():
+                    active_vals = [v for v in selected_values if str(v).strip()]
+                    if active_vals:
+                        api_filters[col_name] = active_vals
 
-        cache_key = _progressive_cache_key(table_name, api_filters, dashboard_page_size)
+            cache_key = _progressive_cache_key(table_name, api_filters, dashboard_page_size)
         active_cache_keys.add(cache_key)
         query_specs.append((fms, table_name, stage_configs, primary_key, api_filters))
 
@@ -852,9 +867,15 @@ async def get_dashboard_rows(
                 for col_name in fms_column_filters:
                     scan_filters.pop(col_name, None)
 
-            rows = await _fetch_all_dashboard_pages(
-                table_name, filters=scan_filters, page_size=dashboard_page_size
-            )
+            async with metadata_service.app_live_database_context(
+                app_id=fms.get("app_id"),
+                fms_name=fms.get("fms_name"),
+                table_name=table_name,
+                live_value=fms.get("live"),
+            ):
+                rows = await _fetch_all_dashboard_pages(
+                    table_name, filters=scan_filters, page_size=dashboard_page_size
+                )
 
             seen_row_ids: set[str] = set()
             for row in rows:
@@ -934,83 +955,89 @@ async def get_dashboard_rows(
         return result
 
     for fms, table_name, stage_configs, primary_key, api_filters in query_specs:
-        cache_key = _progressive_cache_key(table_name, api_filters, dashboard_page_size)
-        page_results: list[tuple[int, list[dict[str, Any]], int, int]] = []
-        total_pages = 1
+        async with metadata_service.app_live_database_context(
+            app_id=fms.get("app_id"),
+            fms_name=fms.get("fms_name"),
+            table_name=table_name,
+            live_value=fms.get("live"),
+        ):
+            cache_key = _progressive_cache_key(table_name, api_filters, dashboard_page_size)
+            page_results: list[tuple[int, list[dict[str, Any]], int, int]] = []
+            total_pages = 1
 
-        # Only the first two pages are interactive-blocking.
-        for page_no in range(1, initial_pages + 1):
-            cached = _cache_get(cache_key, page_no)
-            if cached is None:
-                rows, page_total, page_current = await _fetch_dashboard_api_page(
-                    table_name,
-                    filters=api_filters,
-                    page=page_no,
-                    page_size=dashboard_page_size,
-                )
-                _cache_put(cache_key, page_no, rows, page_total, page_current)
-                cached = (rows, page_total, page_current)
-
-            rows, page_total, page_current = cached
-            total_pages = max(total_pages, int(page_total or 1))
-            page_results.append((page_no, rows, page_total, page_current))
-            if not rows or page_no >= total_pages:
-                break
-
-        if not page_results:
-            continue
-
-        # The UI may request a page beyond the first two while the backend
-        # is still warming the cache. Fetch that requested page directly so
-        # navigation never depends on the background worker having reached it.
-        requested_rows: list[dict[str, Any]] | None = None
-        if requested_page <= initial_pages:
-            for page_no, rows, _page_total, _page_current in page_results:
-                if page_no == requested_page:
-                    requested_rows = rows
-                    break
-        elif requested_page <= total_pages:
-            cached_requested = _cache_get(cache_key, requested_page)
-            if cached_requested is None:
-                req_rows, req_total, req_current = await _fetch_dashboard_api_page(
-                    table_name,
-                    filters=api_filters,
-                    page=requested_page,
-                    page_size=dashboard_page_size,
-                )
-                _cache_put(cache_key, requested_page, req_rows, req_total, req_current)
-                requested_rows = req_rows
-                total_pages = max(total_pages, int(req_total or 1))
-            else:
-                requested_rows, req_total, req_current = cached_requested
-                total_pages = max(total_pages, int(req_total or 1))
-            page_results.append((requested_page, requested_rows or [], total_pages, requested_page))
-
-        result.total_pages_by_fms[str(fms.get("fms_name") or "").strip().lower()] = max(total_pages, 1)
-
-        # Remaining pages are loaded in the background after a two-second delay.
-        _start_background_page_load(
-            cache_key,
-            table_name,
-            api_filters,
-            dashboard_page_size,
-            total_pages,
-            min(initial_pages + 1, total_pages + 1),
-        )
-
-        # On a normal dashboard/filter request, render only the first two pages.
-        # On a progressive refresh, render every contiguous page already cached,
-        # so the UI can grow while the backend finishes the remaining pages.
-        if include_cached_pages:
-            cached_results: list[tuple[int, list[dict[str, Any]], int, int]] = []
-            for page_no in range(1, total_pages + 1):
+            # Only the first two pages are interactive-blocking.
+            for page_no in range(1, initial_pages + 1):
                 cached = _cache_get(cache_key, page_no)
                 if cached is None:
-                    break
+                    rows, page_total, page_current = await _fetch_dashboard_api_page(
+                        table_name,
+                        filters=api_filters,
+                        page=page_no,
+                        page_size=dashboard_page_size,
+                    )
+                    _cache_put(cache_key, page_no, rows, page_total, page_current)
+                    cached = (rows, page_total, page_current)
+
                 rows, page_total, page_current = cached
-                cached_results.append((page_no, rows, page_total, page_current))
-            if cached_results:
-                page_results = cached_results
+                total_pages = max(total_pages, int(page_total or 1))
+                page_results.append((page_no, rows, page_total, page_current))
+                if not rows or page_no >= total_pages:
+                    break
+
+            if not page_results:
+                continue
+
+            # The UI may request a page beyond the first two while the backend
+            # is still warming the cache. Fetch that requested page directly so
+            # navigation never depends on the background worker having reached it.
+            requested_rows: list[dict[str, Any]] | None = None
+            if requested_page <= initial_pages:
+                for page_no, rows, _page_total, _page_current in page_results:
+                    if page_no == requested_page:
+                        requested_rows = rows
+                        break
+            elif requested_page <= total_pages:
+                cached_requested = _cache_get(cache_key, requested_page)
+                if cached_requested is None:
+                    req_rows, req_total, req_current = await _fetch_dashboard_api_page(
+                        table_name,
+                        filters=api_filters,
+                        page=requested_page,
+                        page_size=dashboard_page_size,
+                    )
+                    _cache_put(cache_key, requested_page, req_rows, req_total, req_current)
+                    requested_rows = req_rows
+                    total_pages = max(total_pages, int(req_total or 1))
+                else:
+                    requested_rows, req_total, req_current = cached_requested
+                    total_pages = max(total_pages, int(req_total or 1))
+                page_results.append((requested_page, requested_rows or [], total_pages, requested_page))
+
+            result.total_pages_by_fms[str(fms.get("fms_name") or "").strip().lower()] = max(total_pages, 1)
+
+            # Remaining pages are loaded in the background after a two-second delay.
+            _start_background_page_load(
+                cache_key,
+                table_name,
+                api_filters,
+                dashboard_page_size,
+                total_pages,
+                min(initial_pages + 1, total_pages + 1),
+            )
+
+            # On a normal dashboard/filter request, render only the first two pages.
+            # On a progressive refresh, render every contiguous page already cached,
+            # so the UI can grow while the backend finishes the remaining pages.
+            if include_cached_pages:
+                cached_results: list[tuple[int, list[dict[str, Any]], int, int]] = []
+                for page_no in range(1, total_pages + 1):
+                    cached = _cache_get(cache_key, page_no)
+                    if cached is None:
+                        break
+                    rows, page_total, page_current = cached
+                    cached_results.append((page_no, rows, page_total, page_current))
+                if cached_results:
+                    page_results = cached_results
 
         seen_row_ids: set[str] = set()
         seen_page_signatures: set[tuple[str, ...]] = set()

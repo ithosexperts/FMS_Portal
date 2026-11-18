@@ -1369,17 +1369,22 @@ async def stage_form_page(
     if embedded and str(stage_no).strip().upper() == "S1" and str(pick_id).strip():
         requested_pick_id = str(pick_id).strip()
         try:
-            candidates = []
-            for filter_key in ("S1_PickID", "PickID"):
-                try:
-                    candidates = await table_api.get_table(
-                        "Z_SalesOrder",
-                        filters={filter_key: requested_pick_id},
-                    )
-                except Exception:
-                    candidates = []
-                if candidates:
-                    break
+            async with metadata_service.app_live_database_context(
+                app_id=(str(app_id).strip() or None),
+                table_name="Z_SalesOrder",
+                fms_name="Pack to Dispatch Details",
+            ):
+                candidates = []
+                for filter_key in ("S1_PickID", "PickID"):
+                    try:
+                        candidates = await table_api.get_table(
+                            "Z_SalesOrder",
+                            filters={filter_key: requested_pick_id},
+                        )
+                    except Exception:
+                        candidates = []
+                    if candidates:
+                        break
 
             if candidates:
                 # Prefer the first row carrying the exact requested PickID.
@@ -1909,6 +1914,15 @@ async def stage1_picker_board(request: Request, task_id: str, stage_no: str, cur
 
 @router.post("/forms/stage/{task_id}/{stage_no}/picker-save")
 async def stage1_picker_save(request: Request, task_id: str, stage_no: str):
+    async with metadata_service.app_live_database_context(
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+        table_name="Z_SalesOrder",
+        fms_name="Pack to Dispatch Details",
+    ):
+        return await _stage1_picker_save_impl(request, task_id, stage_no)
+
+
+async def _stage1_picker_save_impl(request: Request, task_id: str, stage_no: str):
     # Accept the same Stage 1 route variants as the Weight endpoint.
     stage_key = str(stage_no or "").strip().upper()
     if not (stage_key == "1" or stage_key.startswith("S1")):
@@ -2046,6 +2060,15 @@ async def stage1_picker_save(request: Request, task_id: str, stage_no: str):
 
 @router.post("/forms/stage/{task_id}/{stage_no}/weight-save")
 async def stage1_weight_save(request: Request, task_id: str, stage_no: str):
+    async with metadata_service.app_live_database_context(
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+        table_name="Z_SalesOrder",
+        fms_name="Pack to Dispatch Details",
+    ):
+        return await _stage1_weight_save_impl(request, task_id, stage_no)
+
+
+async def _stage1_weight_save_impl(request: Request, task_id: str, stage_no: str):
     # The page router can pass Stage 1 as S1, 1, or a richer stage label
     # beginning with S1. Normalize that here so the dedicated Weight Save
     # endpoint never rejects a valid S1 form because of presentation text.

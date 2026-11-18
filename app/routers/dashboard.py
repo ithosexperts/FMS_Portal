@@ -157,7 +157,13 @@ async def _dashboard_context(
             continue
         if table_name in filter_definitions_by_table:
             continue
-        filter_definitions_by_table[table_name] = await metadata_service.get_dashboard_filter_columns(table_name)
+        async with metadata_service.app_live_database_context(
+            app_id=option.get("app_id"),
+            fms_name=option.get("fms_name"),
+            table_name=table_name,
+            live_value=option.get("live"),
+        ):
+            filter_definitions_by_table[table_name] = await metadata_service.get_dashboard_filter_columns(table_name)
 
     if selected_fms_options:
         seen_cols: set[str] = set()
@@ -645,7 +651,11 @@ async def _dashboard_context(
 async def dashboard_busy_pickers():
     """Return all unfinished Stage 1 picker assignments for the dashboard board."""
     try:
-        assignments = await stage1_custom_service.get_busy_picker_assignments("")
+        async with metadata_service.app_live_database_context(
+            table_name="Z_SalesOrder",
+            fms_name="Pack to Dispatch Details",
+        ):
+            assignments = await stage1_custom_service.get_busy_picker_assignments("")
     except Exception as exc:
         print(f"[Dashboard Busy Picker] Failed to load assignments: {exc}")
         return JSONResponse(

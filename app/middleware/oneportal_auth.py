@@ -49,17 +49,13 @@ APP_LIVE_ROUTED_PREFIXES = (
 
 
 async def _call_next_with_live_routing(request: Request, call_next):
-    """Route Pull/Append app requests by TM_Application_Master.Live when OperationsDB is active.
+    """Route Pull/Append app requests by TM_Application_Master.Live in both DB modes.
 
-    - Live = 'Y' -> keep OperationsDB (API_2_URL / apiv3.php)
-    - Live = 'N', NULL, or blank -> route to Test_OperationsDB (API_1_URL / apiv2.php)
-    - When Test_OperationsDB is already selected in One Portal -> stay on Test_OperationsDB.
+    - Live = 'Y' -> OperationsDB (API_2_URL / apiv3.php)
+    - Live = 'N', NULL, or blank -> Test_OperationsDB (API_1_URL / apiv2.php)
     """
     path = request.url.path or ""
-    if (
-        get_effective_database_target() != "OperationsDB"
-        or not any(path.startswith(prefix) for prefix in APP_LIVE_ROUTED_PREFIXES)
-    ):
+    if not any(path.startswith(prefix) for prefix in APP_LIVE_ROUTED_PREFIXES):
         return await call_next(request)
 
     app_id = str(request.query_params.get("app_id") or "").strip()
@@ -73,12 +69,13 @@ async def _call_next_with_live_routing(request: Request, call_next):
     if not any((app_id, table_name, fms_name)):
         return await call_next(request)
 
+    effective_db = get_effective_database_target()
     resolved_db = await metadata_service.resolve_database_target_for_app(
         app_id=app_id or None,
         fms_name=fms_name or None,
         table_name=table_name or None,
     )
-    if resolved_db == "OperationsDB":
+    if resolved_db == effective_db:
         return await call_next(request)
 
     prev_target = getattr(request.state, "target_database", None)
