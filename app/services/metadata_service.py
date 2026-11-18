@@ -471,7 +471,10 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
     # source now that the dashboard FMS type has changed from D to F.
     dashboard_rows = await get_fms_config(fms_type="F")
     all_rows = dashboard_rows
-    options = _group_by_app(dashboard_rows)
+    options = [
+        opt for opt in _group_by_app(dashboard_rows)
+        if str(opt.get("table_name") or "").strip()
+    ]
     options = await filter_fms_options_for_active_db(options)
     options = sorted(options, key=lambda x: str(x.get("fms_name") or "").lower())
 

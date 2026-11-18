@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.client import ApiError, api_client
+from app.api.client import ApiError, api_client, get_active_api_base, get_effective_database_target
 from app.config import settings
 from app.middleware.oneportal_auth import OnePortalAuthMiddleware
 from app.routers import dashboard, developer, forms, misc, sso, task, runner360, cases_integration
@@ -61,7 +61,15 @@ async def root():
 
 @app.get("/healthz")
 async def health_check():
-    return {"status": "ok", "app": settings.app_name, "environment": settings.environment}
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "environment": settings.environment,
+        "default_db": get_effective_database_target(),
+        "default_api_base": get_active_api_base(),
+        "fms_db_target_override": bool(str(settings.fms_db_target or "").strip()),
+        "live_routing_enabled": True,
+    }
 
 
 @app.exception_handler(TaskNotFoundError)

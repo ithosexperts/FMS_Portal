@@ -19,7 +19,7 @@ from app.auth.request_context import (
     set_current_database_target,
     set_current_identity,
 )
-from app.auth.sso_session import SESSION_COOKIE, read_session_cookie
+from app.auth.sso_session import SESSION_COOKIE, read_latest_session_cookie
 from app.config import settings
 from app.services import metadata_service
 
@@ -167,7 +167,10 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # The DB target is accepted only from a verified, signed FMS SSO cookie.
         # Browser headers/query params cannot choose the database for authenticated SSO.
-        sso_claims = read_session_cookie(request.cookies.get(SESSION_COOKIE))
+        sso_claims = read_latest_session_cookie(
+            request.headers.get("cookie"),
+            request.cookies.get(SESSION_COOKIE),
+        )
         target_database = str((sso_claims or {}).get("target_database") or "").strip()
         database_context = set_current_database_target(target_database)
         request.state.target_database = target_database or None

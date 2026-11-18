@@ -133,6 +133,52 @@ def read_session_cookie(value: str | None) -> dict[str, Any] | None:
         return None
 
 
+def read_latest_session_cookie(
+    cookie_header: str | None,
+    fallback_value: str | None = None,
+) -> dict[str, Any] | None:
+    """Resolve the newest valid fms_sso_session cookie when Chrome sends duplicates.
+
+    /auth/launch sets both a standard cookie and a Partitioned (CHIPS) cookie under
+    SESSION_COOKIE. If an older cookie from a previous environment (e.g. Test_OperationsDB)
+    coexists with a newer cookie (e.g. OperationsDB), Starlette's request.cookies dict
+    keeps only one arbitrarily. Decoding every SESSION_COOKIE value from the raw Cookie
+    header and picking the highest `iat` ensures the most recent One Portal launch wins.
+    """
+    candidates: list[str] = []
+    if cookie_header:
+        for part in str(cookie_header).split(";"):
+            name, sep, val = part.strip().partition("=")
+            if sep and name.strip() == SESSION_COOKIE:
+                cleaned = val.strip().strip('"')
+                if cleaned and cleaned not in candidates:
+                    candidates.append(cleaned)
+    if fallback_value:
+        cleaned_fallback = str(fallback_value).strip().strip('"')
+        if cleaned_fallback and cleaned_fallback not in candidates:
+            candidates.append(cleaned_fallback)
+
+    best_claims: dict[str, Any] | None = None
+    best_rank: tuple[int, int] = (-1, -1)
+    for raw_val in candidates:
+        claims = read_session_cookie(raw_val)
+        if not claims:
+            continue
+        try:
+            iat = int(claims.get("iat") or 0)
+        except (TypeError, ValueError):
+            iat = 0
+        try:
+            exp = int(claims.get("exp") or 0)
+        except (TypeError, ValueError):
+            exp = 0
+        rank = (iat, exp)
+        if best_claims is None or rank >= best_rank:
+            best_claims = claims
+            best_rank = rank
+    return best_claims
+
+
 def safe_next_path(value: str | None, default: str = "/dashboard") -> str:
     """Only allow same-site relative paths (blocks open-redirects)."""
     path = (value or "").strip()

@@ -359,3 +359,87 @@ async def test_middleware_live_routing_for_forms_and_dashboard_in_both_dbs(monke
         assert observed["url"].endswith("/apiv2.php")
     finally:
         reset_current_database_target(test_token)
+
+
+def test_read_latest_session_cookie_prefers_newest_iat_on_duplicate_cookies(monkeypatch):
+    import time
+    import jwt
+    from app.auth import sso_session
+
+    secret = "unit-test-fms-sso-secret-key-0123456789abcdef"
+    monkeypatch.setattr(sso_session.settings, "fms_sso_secret", secret)
+    now = int(time.time())
+
+    old_test_cookie = jwt.encode(
+        {
+            "iss": sso_session.SESSION_ISSUER,
+            "aud": sso_session.SESSION_AUDIENCE,
+            "sub": "0210",
+            "employee_code": "0210",
+            "session_id": "sess-old",
+            "target_database": "Test_OperationsDB",
+            "iat": now - 60,
+            "nbf": now - 61,
+            "exp": now + 3600,
+        },
+        secret,
+        algorithm=sso_session.ALGORITHM,
+    )
+    new_prod_cookie = jwt.encode(
+        {
+            "iss": sso_session.SESSION_ISSUER,
+            "aud": sso_session.SESSION_AUDIENCE,
+            "sub": "0210",
+            "employee_code": "0210",
+            "session_id": "sess-new",
+            "target_database": "OperationsDB",
+            "iat": now,
+            "nbf": now - 1,
+            "exp": now + 3600,
+        },
+        secret,
+        algorithm=sso_session.ALGORITHM,
+    )
+
+    # Order 1: old first, new second
+    claims = sso_session.read_latest_session_cookie(
+        f"{sso_session.SESSION_COOKIE}={old_test_cookie}; {sso_session.SESSION_COOKIE}={new_prod_cookie}",
+        fallback_value=old_test_cookie,
+    )
+    assert claims is not None
+    assert claims["target_database"] == "OperationsDB"
+    assert claims["session_id"] == "sess-new"
+
+    # Order 2: new first, old second
+    claims_rev = sso_session.read_latest_session_cookie(
+        f"{sso_session.SESSION_COOKIE}={new_prod_cookie}; {sso_session.SESSION_COOKIE}={old_test_cookie}",
+        fallback_value=old_test_cookie,
+    )
+    assert claims_rev is not None
+    assert claims_rev["target_database"] == "OperationsDB"
+    assert claims_rev["session_id"] == "sess-new"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_fms_options_excludes_blank_table_name_rows(monkeypatch):
+    db_tables = _sample_db_tables()
+    db_tables["API_2"]["TM_Application_Master"].append(
+        {"app_id": "APP000072", "app_name": "Courier Incoming", "Type": "A", "Live": "Y", "active": 1}
+    )
+    db_tables["API_2"]["FMS_Config"].append(
+        {"APP_ID": "APP000072", "FMS_NAME": "Courier Incoming", "FMS_TYPE": "F", "FMS_Table_Name": "", "STAGE_NO": "S1", "STAGE_NAME": "In", "DOER": "Admin"}
+    )
+
+    async def fake_get_table(table_name: str, filters=None):
+        base = api_client_mod.get_active_api_base()
+        return list(db_tables[base].get(table_name, []))
+
+    monkeypatch.setattr(metadata_service.table_api, "get_table", fake_get_table)
+
+    token = set_current_database_target("OperationsDB")
+    try:
+        names = [opt["fms_name"] for opt in await metadata_service.get_dashboard_fms_options()]
+        assert "Courier Incoming" not in names
+        assert names == ["Pack to Dispatch Details", "Runner360"]
+    finally:
+        reset_current_database_target(token)
