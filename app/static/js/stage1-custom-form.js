@@ -260,11 +260,14 @@
     }
     if (!Array.isArray(pickerOptions) || !pickerOptions.length) {
       const first = rowsContainer.querySelector(".s1-picker-select");
-      pickerOptions = first ? Array.from(first.options).map((option) => ({
-        name: option.value,
-        label: option.textContent,
-        disabled: option.disabled,
-      })) : [];
+      pickerOptions = first ? Array.from(first.options)
+        .filter((option) => String(option.value || "").trim())
+        .map((option) => ({
+          value: option.value,
+          name: option.value,
+          label: option.textContent,
+          disabled: option.disabled,
+        })) : [];
     }
     pickerOptions = pickerOptions
       .map((option) => ({
@@ -278,6 +281,7 @@
 
     const rebuildSelectOptions = (select) => {
       if (!select) return;
+      if (!Array.isArray(pickerOptions) || pickerOptions.length === 0) return;
       const selected = String(select.value || "").trim();
       const selectedKey = normPicker(selected);
       const usedByOtherRows = new Set(
@@ -355,7 +359,8 @@
       if (!url) return { ok: true, assignments: [], busy_picker_names: [] };
       const params = new URLSearchParams();
       if (root.dataset.currentPickId) params.set("current_pick_id", root.dataset.currentPickId);
-      const target = params.toString() ? `${url}?${params.toString()}` : url;
+      const joiner = url.includes("?") ? "&" : "?";
+      const target = params.toString() ? `${url}${joiner}${params.toString()}` : url;
       const response = await fetch(target, {
         method: "GET",
         credentials: "same-origin",

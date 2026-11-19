@@ -160,7 +160,7 @@
             <select class="s1-picker-select" disabled>
               <option value="">Select Picker</option>
               {% for option in picker.options %}
-              <option value="{{ option.name }}" {% if selected_picker|string|trim|lower == option.name|string|trim|lower %}selected{% endif %}>{{ option.name }}</option>
+              <option value="{{ option.name }}" {% if selected_picker|string|trim|lower == option.name|string|trim|lower %}selected{% endif %} {% if option.disabled %}disabled style="color:#777; background-color:#f1f3f5;"{% endif %}>{{ option.label or option.name }}</option>
               {% endfor %}
             </select>
             <button type="button" class="btn btn-sm s1-picker-save" hidden>S</button>
@@ -174,7 +174,7 @@
             <select class="s1-picker-select" {% if custom_stage1.stage_locked %}disabled{% endif %}>
               <option value="">Select Picker</option>
               {% for option in picker.options %}
-              <option value="{{ option.name }}">{{ option.name }}</option>
+              <option value="{{ option.name }}" {% if option.disabled %}disabled style="color:#777; background-color:#f1f3f5;"{% endif %}>{{ option.label or option.name }}</option>
               {% endfor %}
             </select>
             <button type="button" class="btn btn-sm s1-picker-save" {% if custom_stage1.stage_locked %}disabled{% endif %}>S</button>
@@ -461,5 +461,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/stage1-custom-form.js?v=20260919final"></script>
+<script src="/static/js/stage1-custom-form.js?v=20261119_v2"></script>
 {% endblock %}
