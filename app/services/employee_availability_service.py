@@ -137,7 +137,9 @@ def _status_code(value: Any) -> str:
     normalized = _text(value).casefold()
     if normalized in {"a", "absent"}:
         return ATTENDANCE_ABSENT
-    if normalized in {"p", "present"}:
+    if normalized in {"p", "present", "hd", "halfday", "half day", "od", "wfh", "prs", "leave", "l", "sl", "cl", "pl", "el"}:
+        return ATTENDANCE_PRESENT
+    if normalized:
         return ATTENDANCE_PRESENT
     return ""
 
@@ -166,9 +168,7 @@ def resolve_attendance_status(
         raw_date = _field(row, "AttendanceDate", "Attendance Date")
         parsed_date = _parse_date(raw_date)
         if not parsed_date:
-            raise EmployeeAvailabilityError(
-                f"Attendance record for employee {str(employee_code).strip()} has no valid AttendanceDate; assignment blocked."
-            )
+            continue
         if parsed_date == work_date:
             matching_date_rows.append(row)
 

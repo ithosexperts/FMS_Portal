@@ -1404,143 +1404,152 @@ async def stage_form_page(
         task_id, stage_no, app_id=(str(app_id).strip() or None)
     )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
-    
-    # Embedded S1 must be resolved BEFORE generic custom-template detection.
-    # The Pack-to-Dispatch repository also contains custom S2/S3 templates, and
-    # the generic detector can otherwise short-circuit the heavy S1 builder.
-    # For embedded mode we deliberately use the dedicated S1 template with the
-    # bare embedded layout and force the entire S1 form to read-only.
-    if embedded and str(stage_no).strip().upper() == "S1":
-        try:
-            embedded_custom_stage1 = await stage1_custom_service.build_stage1_custom_context(stage_context)
-        except Exception as exc:
-            print(f"Embedded S1 custom context failed for task {task_id}/{stage_no}: {exc}")
-            embedded_custom_stage1 = {"enabled": False}
+    fms_info = stage_context.get("fms") or {}
+    fms_table = str(fms_info.get("table_name") or table_name or "").strip()
+    fms_app_id = str(fms_info.get("app_id") or app_id or "").strip()
+    fms_live = str(fms_info.get("live") or "").strip()
 
-        if embedded_custom_stage1.get("enabled"):
-            embedded_custom_stage1["stage_locked"] = True
-            embedded_custom_stage1["embedded"] = True
-            return templates.TemplateResponse(request, "forms/stage_custom_s1.html", {
-                "task_id": task_id,
-                "stage_no": stage_no,
-                "context": stage_context,
-                "custom_stage1": embedded_custom_stage1,
-                "has_pending_ltg": False,
-                "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
-                "embedded": True,
-                "layout_template": "forms/_embed_base.html",
-            })
-
-    # Custom Pack-to-Dispatch stages S4/S5/S6 are explicit: when the custom
-    # HTML file exists, always use it and always build the custom context.
-    stage_upper = str(stage_no or "").strip().upper()
-    detected_custom_template = _detect_stage_custom_template(table_name, stage_no)
-    if stage_upper in {"S4", "S5", "S6"} and str(table_name).strip().casefold() == "z_salesorder":
-        explicit_template = f"custom_forms/stage_{stage_upper}.html"
-        explicit_path = os.path.join("app", "templates", "custom_forms", f"stage_{stage_upper}.html")
-        if os.path.exists(explicit_path):
-            detected_custom_template = explicit_template
-            print(
-                "[CUSTOM FORM ROUTING] "
-                f"task={task_id} stage={stage_upper} -> {explicit_template}"
-            )
-
-    custom_stage1: dict[str, Any] = {}
-    custom_stage2: dict[str, Any] = {}
-    custom_stage3: dict[str, Any] = {}
-    custom_stage456: dict[str, Any] = {}
-
-    if detected_custom_template:
-        template_name = detected_custom_template
-        if stage_upper in {"S4", "S5", "S6"}:
+    async with metadata_service.app_live_database_context(
+        table_name=fms_table or None,
+        app_id=fms_app_id or None,
+        live_value=fms_live or None,
+    ):
+        # Embedded S1 must be resolved BEFORE generic custom-template detection.
+        # The Pack-to-Dispatch repository also contains custom S2/S3 templates, and
+        # the generic detector can otherwise short-circuit the heavy S1 builder.
+        # For embedded mode we deliberately use the dedicated S1 template with the
+        # bare embedded layout and force the entire S1 form to read-only.
+        if embedded and str(stage_no).strip().upper() == "S1":
             try:
-                custom_stage456 = await _build_stage456_custom_context(stage_context, stage_upper)
+                embedded_custom_stage1 = await stage1_custom_service.build_stage1_custom_context(stage_context)
             except Exception as exc:
-                print(f"[CUSTOM FORM CONTEXT] Stage {stage_upper} failed for task={task_id}: {exc!r}")
-                custom_stage456 = {
-                    "enabled": True,
-                    "stage_no": stage_upper,
-                    "summary": [],
-                    "publish_names": {},
-                    "stage_locked": True,
-                    "sales_order_no": "",
-                    "line_rows": [],
-                }
-                if stage_upper == "S4":
-                    custom_stage456["invoice_doc_no"] = {"field": "S4_InvDocNo", "caption": "S4 Invoice Doc No", "value": None}
-                    custom_stage456["invoice_line_no"] = {"field": "S4_InvLineNo", "caption": "S4 Invoice Line No", "value": None}
-                elif stage_upper == "S5":
-                    custom_stage456["returned_field_name"] = "S5_ReturnedToStore"
-                    custom_stage456["returned_caption"] = "Returned to Store"
-                    custom_stage456["unpacked_field_name"] = "S5_MaterialUnpacked"
-                    custom_stage456["unpacked_caption"] = "Material Unpacked"
-                else:
-                    custom_stage456["user_fields"] = []
-        elif stage_upper == "S2":
-            try:
-                custom_stage2 = await _build_stage2_custom_context(stage_context)
-            except Exception as exc:
-                print(f"Stage 2 custom context failed for task {task_id}/{stage_no}: {exc}")
-                fallback_publish_names = await _load_publish_names(table_name)
-                custom_stage2 = _safe_stage2_fallback_context(stage_context, fallback_publish_names)
-        elif stage_upper == "S3":
-            try:
-                custom_stage3 = await _build_stage3_custom_context(stage_context)
-            except Exception as exc:
-                print(f"Stage 3 custom context failed for task {task_id}/{stage_no}: {exc}")
-                custom_stage3 = {"enabled": False}
-    else:
-        custom_stage1 = await stage1_custom_service.build_stage1_custom_context(stage_context)
-        if custom_stage1.get("enabled"):
-            template_name = "forms/stage_custom_s1.html"
+                print(f"Embedded S1 custom context failed for task {task_id}/{stage_no}: {exc}")
+                embedded_custom_stage1 = {"enabled": False}
+
+            if embedded_custom_stage1.get("enabled"):
+                embedded_custom_stage1["stage_locked"] = True
+                embedded_custom_stage1["embedded"] = True
+                return templates.TemplateResponse(request, "forms/stage_custom_s1.html", {
+                    "task_id": task_id,
+                    "stage_no": stage_no,
+                    "context": stage_context,
+                    "custom_stage1": embedded_custom_stage1,
+                    "has_pending_ltg": False,
+                    "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
+                    "embedded": True,
+                    "layout_template": "forms/_embed_base.html",
+                })
+
+        # Custom Pack-to-Dispatch stages S4/S5/S6 are explicit: when the custom
+        # HTML file exists, always use it and always build the custom context.
+        stage_upper = str(stage_no or "").strip().upper()
+        detected_custom_template = _detect_stage_custom_template(table_name, stage_no)
+        if stage_upper in {"S4", "S5", "S6"} and str(table_name).strip().casefold() == "z_salesorder":
+            explicit_template = f"custom_forms/stage_{stage_upper}.html"
+            explicit_path = os.path.join("app", "templates", "custom_forms", f"stage_{stage_upper}.html")
+            if os.path.exists(explicit_path):
+                detected_custom_template = explicit_template
+                print(
+                    "[CUSTOM FORM ROUTING] "
+                    f"task={task_id} stage={stage_upper} -> {explicit_template}"
+                )
+
+        custom_stage1: dict[str, Any] = {}
+        custom_stage2: dict[str, Any] = {}
+        custom_stage3: dict[str, Any] = {}
+        custom_stage456: dict[str, Any] = {}
+
+        if detected_custom_template:
+            template_name = detected_custom_template
+            if stage_upper in {"S4", "S5", "S6"}:
+                try:
+                    custom_stage456 = await _build_stage456_custom_context(stage_context, stage_upper)
+                except Exception as exc:
+                    print(f"[CUSTOM FORM CONTEXT] Stage {stage_upper} failed for task={task_id}: {exc!r}")
+                    custom_stage456 = {
+                        "enabled": True,
+                        "stage_no": stage_upper,
+                        "summary": [],
+                        "publish_names": {},
+                        "stage_locked": True,
+                        "sales_order_no": "",
+                        "line_rows": [],
+                    }
+                    if stage_upper == "S4":
+                        custom_stage456["invoice_doc_no"] = {"field": "S4_InvDocNo", "caption": "S4 Invoice Doc No", "value": None}
+                        custom_stage456["invoice_line_no"] = {"field": "S4_InvLineNo", "caption": "S4 Invoice Line No", "value": None}
+                    elif stage_upper == "S5":
+                        custom_stage456["returned_field_name"] = "S5_ReturnedToStore"
+                        custom_stage456["returned_caption"] = "Returned to Store"
+                        custom_stage456["unpacked_field_name"] = "S5_MaterialUnpacked"
+                        custom_stage456["unpacked_caption"] = "Material Unpacked"
+                    else:
+                        custom_stage456["user_fields"] = []
+            elif stage_upper == "S2":
+                try:
+                    custom_stage2 = await _build_stage2_custom_context(stage_context)
+                except Exception as exc:
+                    print(f"Stage 2 custom context failed for task {task_id}/{stage_no}: {exc}")
+                    fallback_publish_names = await _load_publish_names(table_name)
+                    custom_stage2 = _safe_stage2_fallback_context(stage_context, fallback_publish_names)
+            elif stage_upper == "S3":
+                try:
+                    custom_stage3 = await _build_stage3_custom_context(stage_context)
+                except Exception as exc:
+                    print(f"Stage 3 custom context failed for task {task_id}/{stage_no}: {exc}")
+                    custom_stage3 = {"enabled": False}
         else:
-            template_name = "forms/stage.html"
+            custom_stage1 = await stage1_custom_service.build_stage1_custom_context(stage_context)
+            if custom_stage1.get("enabled"):
+                template_name = "forms/stage_custom_s1.html"
+            else:
+                template_name = "forms/stage.html"
 
-    # =====================================================================
-    # Check if any Lead Time Extension is already "Pending"
-    # =====================================================================
-    has_pending_ltg = False
-    try:
-        fms_name = str((stage_context.get("fms") or {}).get("fms_name") or "")
-        stage_no_int = _extract_stage_no_int(stage_no)
-        primary_key = str(stage_context.get("primary_key") or "").strip()
-        row_data = stage_context.get("row") or {}
-        fms_row_id = str(row_data.get(primary_key) or task_id or "").strip()
+        # =====================================================================
+        # Check if any Lead Time Extension is already "Pending"
+        # =====================================================================
+        has_pending_ltg = False
+        try:
+            fms_name = str((stage_context.get("fms") or {}).get("fms_name") or "")
+            stage_no_int = _extract_stage_no_int(stage_no)
+            primary_key = str(stage_context.get("primary_key") or "").strip()
+            row_data = stage_context.get("row") or {}
+            fms_row_id = str(row_data.get(primary_key) or task_id or "").strip()
 
-        lead_time_table = await _resolve_lead_time_grant_table()
-        existing_requests = await table_api.get_table(
-            lead_time_table,
-            filters={
-                "I_FMS_Name": fms_name,
-                "I_Stage_No": stage_no_int,
-                "I_FMS_Row_ID": fms_row_id,
-                "I_Status": "Pending"
-            }
-        )
-        if existing_requests and len(existing_requests) > 0:
-            has_pending_ltg = True
-    except Exception as e:
-        print(f"Error checking pending ltg on load: {e}")
-    # =====================================================================
+            lead_time_table = await _resolve_lead_time_grant_table()
+            existing_requests = await table_api.get_table(
+                lead_time_table,
+                filters={
+                    "I_FMS_Name": fms_name,
+                    "I_Stage_No": stage_no_int,
+                    "I_FMS_Row_ID": fms_row_id,
+                    "I_Status": "Pending"
+                }
+            )
+            if existing_requests and len(existing_requests) > 0:
+                has_pending_ltg = True
+        except Exception as e:
+            print(f"Error checking pending ltg on load: {e}")
+        # =====================================================================
 
-    return templates.TemplateResponse(request, template_name, {
-        "task_id": task_id, "stage_no": stage_no,
-        "context": stage_context,
-        "saved": saved,
-        "cleared": cleared,
-        "appended": appended,
-        "ltg_saved": ltg_saved,
-        "ltg_error": ltg_error,
-        "clear_error": clear_error,
-        "custom_stage1": custom_stage1,
-        "custom_stage2": custom_stage2,
-        "custom_stage3": custom_stage3,
-        "custom_stage456": custom_stage456,
-        "custom_stage_template": detected_custom_template,
-        "has_pending_ltg": has_pending_ltg,
-        "can_clear_responses": True,
-        "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
-    })
+        return templates.TemplateResponse(request, template_name, {
+            "task_id": task_id, "stage_no": stage_no,
+            "context": stage_context,
+            "saved": saved,
+            "cleared": cleared,
+            "appended": appended,
+            "ltg_saved": ltg_saved,
+            "ltg_error": ltg_error,
+            "clear_error": clear_error,
+            "custom_stage1": custom_stage1,
+            "custom_stage2": custom_stage2,
+            "custom_stage3": custom_stage3,
+            "custom_stage456": custom_stage456,
+            "custom_stage_template": detected_custom_template,
+            "has_pending_ltg": has_pending_ltg,
+            "can_clear_responses": True,
+            "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
+        })
 
 
 
@@ -1849,86 +1858,94 @@ async def _stage1_picker_board_impl(request: Request, task_id: str, stage_no: st
             status_code=400,
         )
 
-    resolved_pick_id = str(current_pick_id or "").strip()
-    try:
-        stage_context = await stage_service.get_stage_context(
-            task_id,
-            stage_no,
-            table_name="Z_SalesOrder",
-            app_id=(str(request.query_params.get("app_id") or "").strip() or None),
-        )
-        stage_row = stage_context.get("row") or {}
-        if not resolved_pick_id:
-            resolved_pick_id = _to_text(
-                _pick_value_by_suffix(stage_row, ("s1pickid", "pickid"), "S1")
+    async with metadata_service.app_live_database_context(
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+        table_name="Z_SalesOrder",
+        fms_name="Pack to Dispatch Details",
+    ):
+        resolved_pick_id = str(current_pick_id or "").strip()
+        try:
+            stage_context = await stage_service.get_stage_context(
+                task_id,
+                stage_no,
+                table_name="Z_SalesOrder",
+                app_id=(str(request.query_params.get("app_id") or "").strip() or None),
             )
-        # Reuse the existing Stage 1 option builder so the refreshed picker list
-        # includes attendance and cross-role Busy states, not only PickID Busy.
-        custom_context = await stage1_custom_service.build_stage1_custom_context(stage_context)
-        picker_context = custom_context.get("picker") or {}
-        picker_options = list(picker_context.get("options") or [])
-    except Exception as exc:
-        print(f"[Picker Board] Failed to load attendance/busy picker options: {type(exc).__name__}")
-        return JSONResponse(
-            {"ok": False, "error": "Unable to verify Picker attendance and availability."},
-            status_code=503,
-        )
+            stage_row = stage_context.get("row") or {}
+            if not resolved_pick_id:
+                resolved_pick_id = _to_text(
+                    _pick_value_by_suffix(stage_row, ("s1pickid", "pickid"), "S1")
+                )
+            # Reuse the existing Stage 1 option builder so the refreshed picker list
+            # includes attendance and cross-role Busy states, not only PickID Busy.
+            custom_context = await stage1_custom_service.build_stage1_custom_context(stage_context)
+            picker_context = custom_context.get("picker") or {}
+            picker_options = list(picker_context.get("options") or [])
+        except Exception as exc:
+            print(f"[Picker Board] Failed to load attendance/busy picker options: {type(exc).__name__}: {exc}")
+            row_loc = "Delhi"
+            try:
+                if 'stage_row' in locals() and stage_row:
+                    row_loc = stage_row.get("I_Location") or stage_row.get("Location") or "Delhi"
+                picker_options = await stage1_custom_service._load_picker_options(row_loc, current_pick_id=resolved_pick_id)
+            except Exception:
+                picker_options = []
 
-    try:
-        assignments = await stage1_custom_service.get_busy_picker_assignments(resolved_pick_id)
-    except Exception as exc:
-        print(f"[Picker Board] Failed to load busy assignments: {type(exc).__name__}")
-        return JSONResponse({"ok": False, "error": "Unable to load busy picker board."}, status_code=502)
+        try:
+            assignments = await stage1_custom_service.get_busy_picker_assignments(resolved_pick_id)
+        except Exception as exc:
+            print(f"[Picker Board] Failed to load busy assignments: {type(exc).__name__}: {exc}")
+            assignments = []
 
-    board_rows: list[dict[str, Any]] = []
-    for assignment in assignments:
-        row_links = [
-            {
-                "row_id": row_id,
-                "stage_url": route_builder.stage_form_route(
-                    row_id,
-                    "S1",
-                    "Z_SalesOrder",
-                    "RowID",
-                ),
-            }
-            for row_id in assignment.get("row_ids") or []
-        ]
-        board_rows.append({
-            "pick_id": assignment.get("pick_id") or "-",
-            "pickers": assignment.get("pickers") or [],
-            "row_links": row_links,
+        board_rows: list[dict[str, Any]] = []
+        for assignment in assignments:
+            row_links = [
+                {
+                    "row_id": row_id,
+                    "stage_url": route_builder.stage_form_route(
+                        row_id,
+                        "S1",
+                        "Z_SalesOrder",
+                        "RowID",
+                    ),
+                }
+                for row_id in assignment.get("row_ids") or []
+            ]
+            board_rows.append({
+                "pick_id": assignment.get("pick_id") or "-",
+                "pickers": assignment.get("pickers") or [],
+                "row_links": row_links,
+            })
+
+        busy_picker_names: list[str] = []
+        seen_picker_keys: set[str] = set()
+        for assignment in board_rows:
+            for picker_name in assignment["pickers"]:
+                key = _norm_person(picker_name)
+                if key and key not in seen_picker_keys:
+                    seen_picker_keys.add(key)
+                    busy_picker_names.append(picker_name)
+
+        busy_picker_names.sort(key=lambda value: value.casefold())
+        return JSONResponse({
+            "ok": True,
+            "current_pick_id": resolved_pick_id,
+            "busy_picker_names": busy_picker_names,
+            "picker_options": [
+                {
+                    "name": option.get("name", ""),
+                    "label": option.get("label", option.get("name", "")),
+                    "employee_code": option.get("employee_code", ""),
+                    "attendance_status": option.get("attendance_status", "NOT_MARKED"),
+                    "status": option.get("status", "Attendance not marked"),
+                    "is_absent": bool(option.get("is_absent")),
+                    "is_busy": bool(option.get("is_busy")),
+                    "disabled": bool(option.get("disabled")),
+                }
+                for option in picker_options
+            ],
+            "assignments": board_rows,
         })
-
-    busy_picker_names: list[str] = []
-    seen_picker_keys: set[str] = set()
-    for assignment in board_rows:
-        for picker_name in assignment["pickers"]:
-            key = _norm_person(picker_name)
-            if key and key not in seen_picker_keys:
-                seen_picker_keys.add(key)
-                busy_picker_names.append(picker_name)
-
-    busy_picker_names.sort(key=lambda value: value.casefold())
-    return JSONResponse({
-        "ok": True,
-        "current_pick_id": resolved_pick_id,
-        "busy_picker_names": busy_picker_names,
-        "picker_options": [
-            {
-                "name": option.get("name", ""),
-                "label": option.get("label", option.get("name", "")),
-                "employee_code": option.get("employee_code", ""),
-                "attendance_status": option.get("attendance_status", "NOT_MARKED"),
-                "status": option.get("status", "Attendance not marked"),
-                "is_absent": bool(option.get("is_absent")),
-                "is_busy": bool(option.get("is_busy")),
-                "disabled": bool(option.get("disabled")),
-            }
-            for option in picker_options
-        ],
-        "assignments": board_rows,
-    })
 
 
 @router.post("/forms/stage/{task_id}/{stage_no}/picker-save")

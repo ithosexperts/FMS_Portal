@@ -44,42 +44,56 @@ async def _locate_task(
     locator_key = f"{scope}::{direct_app}::{normalized_id.lower()}" if direct_app else f"{scope}::{normalized_id.lower()}"
 
     if direct_table:
-        pk = str(primary_key or "").strip() or await metadata_service.resolve_primary_key(direct_table)
-        rows = await table_api.get_table(direct_table, filters={pk: normalized_id})
-        row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
-        if row is None and rows and len(rows) == 1:
-            row = rows[0]
-        if row is None:
-            raise TaskNotFoundError(f"Task '{task_id}' was not found in table '{direct_table}'.")
-        config_rows = await metadata_service.get_fms_config(app_id=direct_app) if direct_app else await metadata_service.get_fms_config()
-        matching = [r for r in config_rows if str(r.get("TABLE_NAME") or "").strip().lower() == direct_table.lower()]
-        if direct_app:
-            matching = [r for r in matching if str(r.get("APP_ID") or "").strip() == direct_app]
-        if not matching:
-            raise TaskNotFoundError(f"No FMS configuration found for table '{direct_table}'.")
-        fms = metadata_service._group_by_app(matching)[0]
-        return fms, matching, row
+        async with metadata_service.app_live_database_context(
+            table_name=direct_table,
+            app_id=direct_app or None,
+        ):
+            pk = str(primary_key or "").strip() or await metadata_service.resolve_primary_key(direct_table)
+            rows = await table_api.get_table(direct_table, filters={pk: normalized_id})
+            row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
+            if row is None and rows and len(rows) == 1:
+                row = rows[0]
+            if row is None:
+                raise TaskNotFoundError(f"Task '{task_id}' was not found in table '{direct_table}'.")
+            config_rows = await metadata_service.get_fms_config(app_id=direct_app) if direct_app else await metadata_service.get_fms_config()
+            matching = [r for r in config_rows if str(r.get("TABLE_NAME") or "").strip().lower() == direct_table.lower()]
+            if direct_app:
+                matching = [r for r in matching if str(r.get("APP_ID") or "").strip() == direct_app]
+            if not matching:
+                raise TaskNotFoundError(f"No FMS configuration found for table '{direct_table}'.")
+            fms = metadata_service._group_by_app(matching)[0]
+            return fms, matching, row
 
     cached = _locator_cache.get(locator_key)
     if cached and time.monotonic() - cached[0] < _LOCATOR_TTL:
         item = cached[1]
         fms = item["fms"]
-        pk = await metadata_service.resolve_primary_key(fms["table_name"])
-        rows = await table_api.get_table(fms["table_name"], filters={pk: normalized_id})
-        row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
-        if row is not None:
-            return fms, item["stage_configs"], row
+        async with metadata_service.app_live_database_context(
+            table_name=fms.get("table_name"),
+            app_id=str(fms.get("app_id") or "").strip() or None,
+            live_value=str(fms.get("live") or "").strip() or None,
+        ):
+            pk = await metadata_service.resolve_primary_key(fms["table_name"])
+            rows = await table_api.get_table(fms["table_name"], filters={pk: normalized_id})
+            row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
+            if row is not None:
+                return fms, item["stage_configs"], row
 
     async with _lock(locator_key):
         cached = _locator_cache.get(locator_key)
         if cached and time.monotonic() - cached[0] < _LOCATOR_TTL:
             item = cached[1]
             fms = item["fms"]
-            pk = await metadata_service.resolve_primary_key(fms["table_name"])
-            rows = await table_api.get_table(fms["table_name"], filters={pk: normalized_id})
-            row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
-            if row is not None:
-                return fms, item["stage_configs"], row
+            async with metadata_service.app_live_database_context(
+                table_name=fms.get("table_name"),
+                app_id=str(fms.get("app_id") or "").strip() or None,
+                live_value=str(fms.get("live") or "").strip() or None,
+            ):
+                pk = await metadata_service.resolve_primary_key(fms["table_name"])
+                rows = await table_api.get_table(fms["table_name"], filters={pk: normalized_id})
+                row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
+                if row is not None:
+                    return fms, item["stage_configs"], row
 
         config_rows = await metadata_service.get_fms_config(app_id=direct_app) if direct_app else await metadata_service.get_fms_config()
         fms_options = metadata_service._group_by_app(config_rows)
@@ -94,11 +108,16 @@ async def _locate_task(
             if not table:
                 return None
             try:
-                pk = await metadata_service.resolve_primary_key(table)
-                rows = await table_api.get_table(table, filters={pk: normalized_id})
-                row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
-                if row is not None:
-                    return fms, config_by_app.get(str(fms.get("app_id") or ""), []), row
+                async with metadata_service.app_live_database_context(
+                    table_name=table,
+                    app_id=str(fms.get("app_id") or "").strip() or None,
+                    live_value=str(fms.get("live") or "").strip() or None,
+                ):
+                    pk = await metadata_service.resolve_primary_key(table)
+                    rows = await table_api.get_table(table, filters={pk: normalized_id})
+                    row = next((r for r in rows if str(r.get(pk, "")).strip().lower() == normalized_id.lower()), None)
+                    if row is not None:
+                        return fms, config_by_app.get(str(fms.get("app_id") or ""), []), row
             except Exception:
                 return None
             return None

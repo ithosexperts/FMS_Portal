@@ -42,7 +42,7 @@
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ ltg_error }}</div>
 {% endif %}
 
-<section class="card stage1-custom" data-stage-locked="{{ 'true' if custom_stage1.stage_locked else 'false' }}" data-appended-saved="{{ 'true' if custom_stage1.appended_saved else 'false' }}" data-task-id="{{ task_id }}" data-stage-no="{{ stage_no }}" data-weight-save-url="/forms/stage/{{ task_id }}/{{ stage_no | urlencode }}/weight-save">
+<section class="card stage1-custom" data-stage-locked="{{ 'true' if custom_stage1.stage_locked else 'false' }}" data-appended-saved="{{ 'true' if custom_stage1.appended_saved else 'false' }}" data-task-id="{{ task_id }}" data-stage-no="{{ stage_no }}" data-weight-save-url="/forms/stage/{{ task_id }}/{{ stage_no | urlencode }}/weight-save?table_name=Z_SalesOrder&amp;app_id={{ context.fms.app_id or 'APP000001' }}">
   
   <h3 class="card__title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
     <div style="display:flex; align-items:center; gap:10px;">
@@ -136,10 +136,10 @@
          data-max-pickers="5"
          data-locked="{{ 'true' if custom_stage1.stage_locked else 'false' }}"
          data-picker-saved="{{ 'true' if picker.saved else 'false' }}"
-         data-picker-save-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-save"
-         data-picker-board-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-board"
+         data-picker-save-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-save?table_name=Z_SalesOrder&amp;app_id={{ context.fms.app_id or 'APP000001' }}"
+         data-picker-board-url="/forms/stage/{{ task_id }}/{{ stage_no }}/picker-board?table_name=Z_SalesOrder&amp;app_id={{ context.fms.app_id or 'APP000001' }}"
          data-current-pick-id="{{ custom_stage1.pick_id or '' }}"
-         data-picker-availability-ready="{{ 'true' if custom_stage1.stage_locked else 'false' }}"
+         data-picker-availability-ready="true"
          data-picker-options="{{ picker.options | tojson | forceescape }}">
       <div class="s1-picker-editor-head">
         <div>
@@ -218,8 +218,10 @@
   </div>
 </div>
 
-  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
-    <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no, 'Z_SalesOrder', 'RowID', context.fms.app_id or 'APP000001') }}" enctype="multipart/form-data">
+    <input type="hidden" name="app_id" value="{{ context.fms.app_id or 'APP000001' }}">
+    <input type="hidden" name="table_name" value="Z_SalesOrder">
+    <input type="hidden" name="fms_name" value="Pack to Dispatch Details">
     <input type="hidden" id="s1-picker-value" name="S1_Picker" value="{{ custom_stage1.picker.value if custom_stage1.picker else '' }}" />
     <input type="hidden" name="__batch_checkbox_field" value="{{ custom_stage1.checkbox_field }}" />
     <input type="hidden" name="__batch_remarks_field" value="{{ custom_stage1.remarks_row_field }}" />

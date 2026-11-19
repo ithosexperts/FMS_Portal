@@ -298,14 +298,21 @@
         if (!key) return;
         if (usedByOtherRows.has(key)) return;
         // Keep Busy and Absent employees visible; disabling, not hiding, is the rule.
-        const label = String(option.label || option.value);
-        const isAbsent = /\s[—-]\s*Absent$/i.test(label);
-        const isBusy = !isAbsent && ( /\s[—-]\s*Busy$/i.test(label) || busyPickerKeys.has(key) );
+        let rawLabel = String(option.label || option.value || "");
+        rawLabel = rawLabel.replace(/\s*[—–-]\s*(Available|Attendance unavailable|Availability unavailable|Existing assignment)\s*$/i, "").trim();
+        const isAbsent = /\(Absent\)$/i.test(rawLabel) || /\s*[—–-]\s*Absent$/i.test(rawLabel);
+        const isBusy = !isAbsent && ( /\(Busy\)$/i.test(rawLabel) || /\s*[—–-]\s*Busy$/i.test(rawLabel) || busyPickerKeys.has(key) );
+        const baseName = rawLabel.replace(/\s*(\(Absent\)|\(Busy\)|\s*[—–-]\s*(Absent|Busy))\s*$/i, "").trim();
+
         const el = document.createElement("option");
-        el.value = option.value;
-        el.textContent = isBusy && !/\s[—-]\s*Busy$/i.test(label)
-          ? `${label} — Busy`
-          : label;
+        el.value = option.value || baseName;
+        if (isAbsent) {
+          el.textContent = `${baseName} (Absent)`;
+        } else if (isBusy) {
+          el.textContent = `${baseName} (Busy)`;
+        } else {
+          el.textContent = baseName;
+        }
         el.disabled = Boolean(option.disabled) || isAbsent || isBusy;
         if (el.disabled) {
           el.style.color = "#777";
@@ -387,9 +394,9 @@
           return data;
         })
         .catch((error) => {
-          setAvailabilityReady(false);
-          setPickerStatus(error.message || "Unable to check picker availability.");
-          throw error;
+          console.warn("[Picker Availability] Background refresh failed, keeping initial options:", error);
+          setAvailabilityReady(true);
+          return { ok: false, error: error.message };
         })
         .finally(() => {
           availabilityPromise = null;

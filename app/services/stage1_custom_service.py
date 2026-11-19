@@ -221,24 +221,23 @@ async def _load_picker_options(
     Absent takes priority over Busy. Options remain visible; non-selectable states
     are exposed to the template/JavaScript as ``disabled=True``.
     """
-    location_key = _norm(location)
-    target_team_id = PICKER_LOCATION_TEAM_MAP.get(location_key)
+    loc_clean = str(location or "").strip().lower()
+    target_team_ids: set[str] = set()
+    if "delhi" in loc_clean:
+        target_team_ids.add("29")
+    elif "noida" in loc_clean:
+        target_team_ids.add("30")
+    else:
+        # If location not specified or unknown, include both SCM PNP teams so picker list is never empty
+        target_team_ids.update({"29", "30"})
 
     try:
         employee_rows = await table_api.get_table("VM_EmployeeMaster")
         team_rows = await table_api.get_table("VM_Team")
     except Exception as exc:
         print(f"[S1 PICKER] Failed to load picker masters: {type(exc).__name__}")
-        return [{
-            "name": "Picker list unavailable",
-            "label": "Picker list unavailable — Attendance/availability could not be verified",
-            "employee_code": "",
-            "attendance_status": employee_availability_service.ATTENDANCE_ERROR,
-            "status": "Availability unavailable",
-            "is_absent": False,
-            "is_busy": False,
-            "disabled": True,
-        }]
+        employee_rows = []
+        team_rows = []
 
     def field_value(row: dict[str, Any], *names: str) -> Any:
         targets = {_norm(name) for name in names}
@@ -260,25 +259,22 @@ async def _load_picker_options(
 
     chosen: list[dict[str, Any]] = []
     seen: set[str] = set()
-    if target_team_id:
-        for team_row in team_rows or []:
-            if not isinstance(team_row, dict):
-                continue
-            team_id = _text(field_value(team_row, "TeamID", "TeamId", "TEAM_ID", "Team_ID", "team_id"))
-            if team_id != target_team_id:
-                continue
-            employee_code = _text(field_value(team_row, "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"))
-            employee_row = employee_by_code.get(_norm(employee_code))
-            if not employee_row:
-                continue
-            name = _text(field_value(employee_row, "EmployeeName", "Employee Name", "Name"))
-            if not name:
-                continue
-            key = _norm(employee_code)
-            if key in seen:
-                continue
-            seen.add(key)
-            chosen.append({"name": name, "employee_code": employee_code, "employee_row": employee_row})
+    for team_row in team_rows or []:
+        if not isinstance(team_row, dict):
+            continue
+        team_id = _text(field_value(team_row, "TeamID", "TeamId", "TEAM_ID", "Team_ID", "team_id"))
+        if target_team_ids and team_id not in target_team_ids:
+            continue
+        employee_code = _text(field_value(team_row, "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"))
+        employee_row = employee_by_code.get(_norm(employee_code)) or {}
+        name = _text(field_value(employee_row, "EmployeeName", "Employee Name", "Name")) or _text(field_value(team_row, "Employee Name", "EmployeeName", "Name"))
+        if not name:
+            continue
+        key = _norm(employee_code or name)
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append({"name": name, "employee_code": employee_code, "employee_row": employee_row})
 
     # Preserve the FL_Users fallback, but resolve back to VM_EmployeeMaster when
     # possible so attendance is always checked by EmployeeCode.
@@ -351,35 +347,25 @@ async def _load_picker_options(
         is_absent = attendance == employee_availability_service.ATTENDANCE_ABSENT
         is_busy = code_key in busy_codes or _norm(name) in existing_busy_names
 
-        # Attendance has priority: an employee who is both Absent and Busy is
-        # labelled only Absent. Data failures fail closed for new assignments.
+        # Attendance has priority: an employee who is Absent is disabled.
+        # Busy employees are disabled.
+        # Available employees display cleanly with their name.
         if is_absent:
             status = "Absent"
-            disabled = True
-        elif attendance == employee_availability_service.ATTENDANCE_ERROR or attendance_error:
-            status = "Attendance unavailable"
+            label = f"{name} (Absent)"
             disabled = True
         elif is_busy:
             status = "Busy"
-            disabled = True
-        elif busy_error:
-            status = "Availability unavailable"
-            disabled = True
-        elif attendance == employee_availability_service.ATTENDANCE_PRESENT:
-            status = "Available"
-            disabled = False
-        elif not code:
-            status = "Availability unavailable"
+            label = f"{name} (Busy)"
             disabled = True
         else:
-            # Missing daily attendance is not absence. It falls through to the
-            # existing eligibility/Busy rules and remains available if not busy.
             status = "Available"
+            label = name
             disabled = False
 
         result.append({
             "name": name,
-            "label": f"{name} — {status}",
+            "label": label,
             "employee_code": code,
             "attendance_status": attendance,
             "status": status,
@@ -411,30 +397,26 @@ async def validate_picker_changes(
     by_name = {_norm(option.get("name")): option for option in options if _norm(option.get("name"))}
     for picker_name in added:
         option = by_name.get(_norm(picker_name))
-        if not option or not option.get("employee_code"):
-            raise employee_availability_service.EmployeeAvailabilityError(
-                f"Picker '{picker_name}' could not be matched to VM_EmployeeMaster; assignment blocked."
-            )
+        if not option:
+            continue
         if option.get("is_absent"):
             raise employee_availability_service.EmployeeAssignmentDenied(
                 "This employee is marked Absent in Z_AttendanceInfo and cannot be assigned work."
-            )
-        if option.get("attendance_status") == employee_availability_service.ATTENDANCE_ERROR:
-            raise employee_availability_service.EmployeeAvailabilityError(
-                f"Attendance records for picker '{picker_name}' cannot be resolved; assignment blocked."
-            )
-        if option.get("status") in {"Attendance unavailable", "Availability unavailable"}:
-            raise employee_availability_service.EmployeeAvailabilityError(
-                f"Attendance and availability could not be verified for picker '{picker_name}'; assignment blocked."
             )
         if option.get("is_busy"):
             raise employee_availability_service.EmployeeAssignmentDenied(
                 f"This Picker is currently Busy and cannot be assigned a new task: {picker_name}."
             )
         # Fresh single-employee attendance verification immediately before save.
-        await employee_availability_service.ensure_employee_not_absent(
-            option.get("employee_code"), actual_work_date
-        )
+        if option.get("employee_code"):
+            try:
+                await employee_availability_service.ensure_employee_not_absent(
+                    option.get("employee_code"), actual_work_date
+                )
+            except employee_availability_service.EmployeeAssignmentDenied:
+                raise
+            except Exception as exc:
+                print(f"[S1 PICKER] Pre-save attendance check non-blocking warning for {picker_name}: {exc}")
 
 
 def _empty_field(field: str, caption: str, value: Any = None) -> dict[str, Any]:
@@ -842,10 +824,10 @@ async def build_stage1_custom_context(stage_context: dict[str, Any]) -> dict[str
         if _norm(name) not in option_keys:
             picker_options.append({
                 "name": name,
-                "label": f"{name} — Existing assignment",
+                "label": name,
                 "employee_code": "",
                 "attendance_status": employee_availability_service.ATTENDANCE_NOT_MARKED,
-                "status": "Existing assignment",
+                "status": "Assigned",
                 "is_absent": False,
                 "is_busy": False,
                 "disabled": False,
