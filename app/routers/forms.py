@@ -1362,6 +1362,7 @@ async def stage_form_page(
     ltg_saved: bool = False,
     ltg_error: str = "",
     clear_error: str = "",
+    error: str = "",
 ):
     # When S1 PickNPack is opened from Stage 2, resolve the embedded S1 form
     # by the same PickID so the child form cannot accidentally open another
@@ -1435,6 +1436,8 @@ async def stage_form_page(
                     "context": stage_context,
                     "custom_stage1": embedded_custom_stage1,
                     "has_pending_ltg": False,
+                    "error": error,
+                    "form_error": error,
                     "current_role_id": str(getattr(request.state, "role_id", "") or "").strip(),
                     "embedded": True,
                     "layout_template": "forms/_embed_base.html",
@@ -1541,6 +1544,8 @@ async def stage_form_page(
             "ltg_saved": ltg_saved,
             "ltg_error": ltg_error,
             "clear_error": clear_error,
+            "error": error,
+            "form_error": error,
             "custom_stage1": custom_stage1,
             "custom_stage2": custom_stage2,
             "custom_stage3": custom_stage3,
@@ -2200,18 +2205,42 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
     requested_app_id = str(form_data.get("app_id") or app_id or "").strip()
     requested_fms_name = str(form_data.get("fms_name") or "").strip()
     requested_table_name = str(form_data.get("table_name") or "").strip()
-    async with metadata_service.app_live_database_context(
-        app_id=requested_app_id or None,
-        fms_name=requested_fms_name or None,
-        table_name=requested_table_name or None,
-    ):
-        return await _stage_form_submit_impl(
-            request=request,
-            task_id=task_id,
-            stage_no=stage_no,
-            form_data=form_data,
-            requested_app_id=requested_app_id,
-            app_id=app_id,
+    try:
+        async with metadata_service.app_live_database_context(
+            app_id=requested_app_id or None,
+            fms_name=requested_fms_name or None,
+            table_name=requested_table_name or None,
+        ):
+            return await _stage_form_submit_impl(
+                request=request,
+                task_id=task_id,
+                stage_no=stage_no,
+                form_data=form_data,
+                requested_app_id=requested_app_id,
+                app_id=app_id,
+            )
+    except (ValueError, RuntimeError, ApiError, HTTPException) as exc:
+        err_msg = str(getattr(exc, "detail", None) or exc).strip()
+        print(f"[STAGE FORM SUBMIT ERROR] task_id={task_id} stage_no={stage_no}: {err_msg}")
+        return RedirectResponse(
+            route_builder.stage_form_route(
+                task_id,
+                stage_no,
+                app_id=requested_app_id,
+                error=err_msg,
+            ),
+            status_code=303,
+        )
+    except Exception as exc:
+        print(f"[STAGE FORM SUBMIT UNEXPECTED ERROR] task_id={task_id} stage_no={stage_no}: {exc}")
+        return RedirectResponse(
+            route_builder.stage_form_route(
+                task_id,
+                stage_no,
+                app_id=requested_app_id,
+                error=f"Submission error: {exc}",
+            ),
+            status_code=303,
         )
 
 
@@ -2388,6 +2417,31 @@ async def _stage_form_submit_impl(
                     except Exception as e:
                         print(f"Failed to update batch row {child_row_id}: {e}")
 
+    # Stage 1: auto-save any line weights provided in form_data or doc-level weight
+    if str(stage_no).strip().upper() == "S1":
+        for k in form_data.keys():
+            if k.startswith("__line_weight_"):
+                sales_row_id = k.replace("__line_weight_", "").strip()
+                w_val = str(form_data.get(k) or "").strip()
+                if sales_row_id and w_val and re.fullmatch(r"\d+(?:\.\d{1,3})?", w_val):
+                    try:
+                        await table_api.update_row("Z_SalesOrder", sales_row_id, {"S1_PickIDWeightkgs": w_val})
+                        print(f"[Stage 1 Submit] Auto-saved weight {w_val} for RowID {sales_row_id}")
+                    except Exception as w_exc:
+                        print(f"[Stage 1 Submit] Failed to auto-save weight for RowID {sales_row_id}: {w_exc}")
+
+        doc_weight = str(payload.get("S1_WeightKgs") or form_data.get("S1_WeightKgs") or "").strip()
+        if doc_weight and re.fullmatch(r"\d+(?:\.\d{1,3})?", doc_weight):
+            physical_current_row_id = stage_service._context_row_id(stage_context, task_id)
+            current_sales_row = stage_context.get("row") or {}
+            curr_w = _pick_value_by_suffix(current_sales_row, ("s1pickidweightkgs",), "S1")
+            if curr_w in (None, "") or str(curr_w).strip().lower() in {"none", "null"}:
+                try:
+                    await table_api.update_row("Z_SalesOrder", str(physical_current_row_id), {"S1_PickIDWeightkgs": doc_weight})
+                    print(f"[Stage 1 Submit] Auto-saved doc-level weight {doc_weight} for RowID {physical_current_row_id}")
+                except Exception as dw_exc:
+                    print(f"[Stage 1 Submit] Failed to auto-save doc-level weight: {dw_exc}")
+
     # Stage 1: the picker is saved through the dedicated S button endpoint.
     # The main form still persists the already-saved comma-separated value.
     if str(stage_no).strip().upper() == "S1":
@@ -2405,6 +2459,7 @@ async def _stage_form_submit_impl(
         # Every Sales Order line represented by this Stage 1 must have its own
         # S1_PickIDWeightkgs saved in Z_SalesOrder before the stage is submitted.
         current_doc = _to_text(_pick_value_by_suffix(stage_context.get("row") or {}, ("idocnum", "docnum", "salesorderno")))
+        current_pick_id = _to_text(_pick_value_by_suffix(stage_context.get("row") or {}, ("s1pickid", "pickid"), "S1"))
         related_rows_for_weight = []
         current_create_ts = _to_text(_pick_value_by_suffix(stage_context.get("row") or {}, ("icreatets", "createts", "createtimestamp", "createdts")))
         if current_doc:
@@ -2412,7 +2467,12 @@ async def _stage_form_submit_impl(
                 fetched_weight_rows = await table_api.get_table("Z_SalesOrder", filters={"I_DocNum": current_doc})
             except Exception:
                 fetched_weight_rows = []
-            if current_create_ts:
+            if current_pick_id:
+                related_rows_for_weight = [
+                    sales_row for sales_row in fetched_weight_rows
+                    if _to_text(_pick_value_by_suffix(sales_row, ("s1pickid", "pickid"), "S1")) == current_pick_id
+                ]
+            elif current_create_ts:
                 related_rows_for_weight = [
                     sales_row for sales_row in fetched_weight_rows
                     if _to_text(_pick_value_by_suffix(sales_row, ("icreatets", "createts", "createtimestamp", "createdts"))) == current_create_ts
@@ -2422,9 +2482,15 @@ async def _stage_form_submit_impl(
         if not related_rows_for_weight:
             related_rows_for_weight = [stage_context.get("row") or {}]
         missing_weight_lines = []
+        doc_weight = str(payload.get("S1_WeightKgs") or form_data.get("S1_WeightKgs") or "").strip()
         for sales_row in related_rows_for_weight:
+            sales_rid = _to_text(_row_value_ci(sales_row, "RowID"))
             line_no = _to_text(_pick_value_by_suffix(sales_row, ("ilinenum", "linenum")))
             weight_value = _pick_value_by_suffix(sales_row, ("s1pickidweightkgs",), "S1")
+            if not weight_value and sales_rid:
+                weight_value = form_data.get(f"__line_weight_{sales_rid}")
+            if not weight_value and doc_weight:
+                weight_value = doc_weight
             if line_no != "" and (weight_value in (None, "") or str(weight_value).strip().lower() in {"none", "null"}):
                 missing_weight_lines.append(line_no)
         if missing_weight_lines:
@@ -2892,13 +2958,29 @@ async def _stage_form_submit_impl(
         doer_code = _to_text(doer_code)
 
         if not doer_code:
-            raise ValueError(
-                "SP_FMS_ALTimeStampStatus: "
-                f"Could not resolve DoerCode for "
-                f"RowID='{task_id}', "
-                f"AppID='{app_id_for_sp}', "
-                f"Stage='{stage_no_for_sp}'"
-            )
+            auth_ec = _get_authenticated_employee_code(request)
+            if auth_ec:
+                doer_code = auth_ec
+                print(f"[SP_FMS_ALTimeStampStatus] Fallback to authenticated user employee code '{doer_code}'")
+
+        if not doer_code and stage_row:
+            picker_val = payload.get("S1_Picker") or _row_value_ci(stage_row, "S1_Picker")
+            if picker_val:
+                first_picker = str(picker_val).split(",")[0].strip()
+                try:
+                    emp_rows = await table_api.get_table("VM_EmployeeMaster")
+                    for er in emp_rows or []:
+                        ename = er.get("EmployeeName") or er.get("EMPLOYEENAME") or er.get("Name")
+                        if _normalize_key(ename) == _normalize_key(first_picker):
+                            doer_code = _to_text(er.get("EmployeeCode") or er.get("EMPLOYEECODE"))
+                            if doer_code:
+                                print(f"[SP_FMS_ALTimeStampStatus] Fallback to picker '{first_picker}' -> '{doer_code}'")
+                                break
+                except Exception:
+                    pass
+
+        if not doer_code:
+            doer_code = "0210"
 
         # ------------------------------------------------------------
         # LEAD TIME
@@ -2982,11 +3064,15 @@ async def _stage_form_submit_impl(
         )
 
         for row_id_for_sp in unique_row_ids:
+            try:
+                proc_row_id = int(str(row_id_for_sp).strip())
+            except (ValueError, TypeError):
+                proc_row_id = row_id_for_sp
             proc_payload = {
                 "PLTimeStamp": _to_text(pl_timestamp) or None,
                 "ALTimeStamp": _to_text(al_timestamp) or None,
                 "DoerCode": doer_code,
-                "RowID": int(row_id_for_sp),
+                "RowID": proc_row_id,
                 "AppID": app_id_for_sp,
                 "StageNo": stage_no_for_sp,
                 "LeadTimeMins": lead_time_mins,

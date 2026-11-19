@@ -19,6 +19,9 @@
 {% if cleared %}
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
 {% endif %}
+{% if error or form_error %}
+<div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger); border:1px solid #ffccd5; padding:10px 14px; font-weight:600;">{{ error or form_error }}</div>
+{% endif %}
 {% if clear_error %}
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-danger-bg); color:var(--color-danger);">{{ clear_error }}</div>
 {% endif %}
@@ -252,6 +255,7 @@
             <label>Weight</label>
             <div class="stage1-weight-editor">
               <input type="text" class="line-weight" inputmode="decimal" maxlength="20"
+                     name="__line_weight_{{ group.sales_row_id }}"
                      value="{{ group.weight or '' }}"
                      data-row-id="{{ group.sales_row_id }}"
                      data-weight-saved="{{ 'true' if group.weight else 'false' }}"
@@ -461,5 +465,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/stage1-custom-form.js?v=20261119_v2"></script>
+<script src="/static/js/stage1-custom-form.js?v=20261119_v3"></script>
 {% endblock %}

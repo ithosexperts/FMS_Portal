@@ -387,10 +387,9 @@ async def run_named_stage_procedure(
         "linked_stored_procedure": proc_name,
     }
     proc_data = dict(payload or {})
-    # RowID is authoritative from the physical row loaded for this task.
-    # Do not allow callers to accidentally pass a dashboard/task id that is
-    # different from the table's real primary key.
-    proc_data["RowID"] = physical_row_id
+    # RowID is authoritative from the physical row loaded for this task unless explicitly provided.
+    if "RowID" not in proc_data or proc_data["RowID"] in (None, ""):
+        proc_data["RowID"] = physical_row_id
     request_payload["data"] = proc_data
 
     print(
