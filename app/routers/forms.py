@@ -1827,7 +1827,21 @@ async def _get_busy_picker_map(current_pick_id: str = "") -> dict[str, str]:
 
 @router.get("/forms/stage/{task_id}/{stage_no}/picker-board")
 async def stage1_picker_board(request: Request, task_id: str, stage_no: str, current_pick_id: str = ""):
-    """Return the current list of pickers blocked by unfinished Stage 1 work."""
+    """Return the current list of pickers blocked by unfinished Stage 1 work.
+
+    Runs inside Z_SalesOrder's own resolved database context (via TM_Application_Master.Live)
+    so row lookup, picker master, attendance, and busy checks all execute against the same
+    database as the FMS table itself (never across databases).
+    """
+    async with metadata_service.app_live_database_context(
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+        table_name="Z_SalesOrder",
+        fms_name="Pack to Dispatch Details",
+    ):
+        return await _stage1_picker_board_impl(request, task_id, stage_no, current_pick_id)
+
+
+async def _stage1_picker_board_impl(request: Request, task_id: str, stage_no: str, current_pick_id: str = ""):
     stage_key = str(stage_no or "").strip().upper()
     if not (stage_key == "1" or stage_key.startswith("S1")):
         return JSONResponse(
@@ -1837,7 +1851,12 @@ async def stage1_picker_board(request: Request, task_id: str, stage_no: str, cur
 
     resolved_pick_id = str(current_pick_id or "").strip()
     try:
-        stage_context = await stage_service.get_stage_context(task_id, stage_no)
+        stage_context = await stage_service.get_stage_context(
+            task_id,
+            stage_no,
+            table_name="Z_SalesOrder",
+            app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+        )
         stage_row = stage_context.get("row") or {}
         if not resolved_pick_id:
             resolved_pick_id = _to_text(
@@ -1935,7 +1954,12 @@ async def _stage1_picker_save_impl(request: Request, task_id: str, stage_no: str
     if len(pickers) > 5:
         return JSONResponse({"ok": False, "error": "Maximum 5 pickers allowed."}, status_code=400)
 
-    context = await stage_service.get_stage_context(task_id, stage_no)
+    context = await stage_service.get_stage_context(
+        task_id,
+        stage_no,
+        table_name="Z_SalesOrder",
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+    )
     if not context.get("editable"):
         return JSONResponse({"ok": False, "error": "This stage is not currently editable."}, status_code=409)
 
@@ -2084,7 +2108,12 @@ async def _stage1_weight_save_impl(request: Request, task_id: str, stage_no: str
     if not row_id or not re.fullmatch(r"\d+(?:\.\d{1,3})?", raw_weight):
         return JSONResponse({"ok": False, "error": "Enter a valid weight up to 3 decimal places."}, status_code=400)
 
-    context = await stage_service.get_stage_context(task_id, stage_no)
+    context = await stage_service.get_stage_context(
+        task_id,
+        stage_no,
+        table_name="Z_SalesOrder",
+        app_id=(str(request.query_params.get("app_id") or "").strip() or None),
+    )
     if not context.get("editable"):
         return JSONResponse({"ok": False, "error": "This stage is not currently editable."}, status_code=409)
     current_row = context.get("row") or {}
@@ -2186,6 +2215,11 @@ async def _stage_form_submit_impl(
     stage_context = await stage_service.get_stage_context(
         task_id, stage_no, app_id=(requested_app_id or None)
     )
+    if not stage_context.get("editable"):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to edit or submit this stage form.",
+        )
     fms_info = stage_context.get("fms", {})
     
     app_id = fms_info.get("app_id", "GENERAL")

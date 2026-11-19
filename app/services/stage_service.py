@@ -14,7 +14,7 @@ from typing import Any
 from app.api import table_api
 from app.api import task_api
 from app.api.metadata_api import get_metadata
-from app.services import form_service, task_service, employee_availability_service
+from app.services import form_service, task_service, employee_availability_service, metadata_service
 from app.utils.permission_helper import ACTION_EDIT_CURRENT_STAGE, can
 
 
@@ -49,7 +49,27 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         current_stage
         and _stage_no_key(current_stage.get("STAGE_NO")) == requested_stage_key
     )
-    editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, {"task_id": task_id, "stage_no": stage_no})
+
+    resolved_app_id = (context.get("fms") or {}).get("app_id") or app_id
+    resolved_fms_name = (context.get("fms") or {}).get("fms_name")
+    login_type = await metadata_service.get_app_login_type(app_id=resolved_app_id, fms_name=resolved_fms_name)
+    if "fms" in context and isinstance(context["fms"], dict):
+        context["fms"]["login_type"] = login_type
+
+    perm_context = {
+        "task_id": task_id,
+        "stage_no": stage_no,
+        "stage": stage,
+        "current_stage": current_stage,
+        "stage_configs": context.get("stage_configs") or [],
+        "fms": context.get("fms") or {},
+        "app_id": resolved_app_id,
+        "login_type": login_type,
+    }
+    editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, perm_context)
+    context["editable"] = editable
+    context["can_edit"] = editable
+    context["can_view"] = can("can_view", perm_context)
 
     # Fixed: Rely on get_metadata to ensure TM_Form_Settings are merged correctly.
     # Stage 3 custom forms can still be rendered from the task row when the

@@ -443,3 +443,111 @@ async def test_dashboard_fms_options_excludes_blank_table_name_rows(monkeypatch)
         assert names == ["Pack to Dispatch Details", "Runner360"]
     finally:
         reset_current_database_target(token)
+
+
+@pytest.mark.asyncio
+async def test_stage1_picker_board_stays_within_fms_own_database(monkeypatch):
+    """Picker board lookups (Z_SalesOrder, VM_Team, VM_EmployeeMaster, Z_AttendanceInfo,
+    KPI, FL_Drivers, FL_Trips) must all execute against the FMS table's own database
+    (OperationsDB when Live='Y'), never mixing across databases.
+    """
+    import json
+    from app.routers import forms as forms_router
+    from app.services import stage1_custom_service, stage_service
+
+    db_tables = _sample_db_tables()
+    db_tables["API_2"].update({
+        "Z_SalesOrder": [
+            {
+                "RowID": 766,
+                "I_DocNum": "128344",
+                "I_CreateTS": "2026-11-18 18:04:10",
+                "I_Location": "Delhi",
+                "S1_PickID": 64,
+                "S1_PLTimeStamp": "2026-11-19 11:34:00",
+                "S1_ALTimeStamp": None,
+                "S1_Picker": "",
+            }
+        ],
+        "VM_EmployeeMaster": [
+            {"EmployeeCode": "0004", "EmployeeName": "Diwan Singh"},
+            {"EmployeeCode": "0017", "EmployeeName": "Bhupal Singh"},
+        ],
+        "VM_Team": [
+            {"TeamID": 29, "EmployeeCode": "0004", "TeamName": "SCM - PNP (Delhi)"},
+            {"TeamID": 29, "EmployeeCode": "0017", "TeamName": "SCM - PNP (Delhi)"},
+        ],
+        "Z_AttendanceInfo": [
+            {"EmployeeCode": "0004", "AttendanceDate": "2026-11-19", "Status": "P", "InsertTS": "2026-11-19 08:00:00"},
+            {"EmployeeCode": "0017", "AttendanceDate": "2026-11-19", "Status": "A", "InsertTS": "2026-11-19 08:00:00"},
+        ],
+        "KPI_MasterRecord": [],
+        "Z_KPI_MasterRecord": [],
+        "FL_Drivers": [],
+        "FL_Trips": [],
+        "Z_SOPickNpackBatchDetails": [],
+    })
+    # Deliberately keep Test_OperationsDB (API_1) empty for Z_SalesOrder & lookups
+    db_tables["API_1"].update({
+        "Z_SalesOrder": [],
+        "VM_EmployeeMaster": [],
+        "VM_Team": [],
+        "Z_AttendanceInfo": [],
+        "KPI_MasterRecord": [],
+        "Z_KPI_MasterRecord": [],
+        "FL_Drivers": [],
+        "FL_Trips": [],
+    })
+
+    recorded_lookup_calls: list[tuple[str, str]] = []
+    recorded_stage_ctx_calls: list[dict] = []
+
+    async def fake_get_table(table_name: str, filters=None):
+        base = api_client_mod.get_active_api_base()
+        if table_name not in {"TM_Application_Master", "FMS_Config"}:
+            recorded_lookup_calls.append((base, table_name))
+        return list(db_tables[base].get(table_name, []))
+
+    async def fake_get_stage_context(task_id: str, stage_no: str, table_name=None, app_id=None, primary_key=None):
+        base = api_client_mod.get_active_api_base()
+        recorded_stage_ctx_calls.append({"base": base, "table_name": table_name, "task_id": task_id, "stage_no": stage_no})
+        rows = db_tables[base].get(table_name or "", [])
+        if not rows:
+            raise RuntimeError(f"Task {task_id} not found in {base}.{table_name}")
+        return {
+            "fms": {"app_id": "APP000001", "fms_name": "Pack to Dispatch Details", "table_name": "Z_SalesOrder"},
+            "stage": {"STAGE_NO": "S1", "STAGE_NAME": "S1_Pick N Pack"},
+            "row": rows[0],
+            "editable": True,
+        }
+
+    monkeypatch.setattr(metadata_service.table_api, "get_table", fake_get_table)
+    monkeypatch.setattr(stage_service, "get_stage_context", fake_get_stage_context)
+    stage1_custom_service.invalidate_picker_assignment_cache()
+
+    req = SimpleNamespace(query_params={})
+
+    # Even when the One Portal session is in Test_OperationsDB, Pack to Dispatch Details (Live='Y')
+    # must execute ALL picker-board row + master + attendance + busy lookups in OperationsDB (API_2).
+    test_token = set_current_database_target("Test_OperationsDB")
+    try:
+        resp = await forms_router.stage1_picker_board(req, task_id="766", stage_no="S1", current_pick_id="64")
+        assert resp.status_code == 200
+        body = json.loads(resp.body)
+        assert body["ok"] is True
+        by_name = {opt["name"]: opt for opt in body["picker_options"]}
+        assert by_name["Diwan Singh"]["status"] == "Available"
+        assert by_name["Diwan Singh"]["disabled"] is False
+        assert by_name["Bhupal Singh"]["status"] == "Absent"
+        assert by_name["Bhupal Singh"]["disabled"] is True
+
+        # Verify table_name="Z_SalesOrder" was passed and ZERO cross-DB lookups hit API_1!
+        assert recorded_stage_ctx_calls == [
+            {"base": "API_2", "table_name": "Z_SalesOrder", "task_id": "766", "stage_no": "S1"}
+        ]
+        assert recorded_lookup_calls, "Expected lookup table reads to occur"
+        assert all(base == "API_2" for base, _tbl in recorded_lookup_calls), (
+            f"Cross-database lookup detected: {recorded_lookup_calls}"
+        )
+    finally:
+        reset_current_database_target(test_token)

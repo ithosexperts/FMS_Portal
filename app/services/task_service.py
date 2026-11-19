@@ -123,6 +123,8 @@ async def get_task_context(
     fms, stage_configs, row = await _locate_task(task_id, table_name=table_name, app_id=app_id, primary_key=primary_key)
     stages = sorted_stages(stage_configs)
     primary_key = await metadata_service.resolve_primary_key(fms["table_name"])
+    if "login_type" not in fms:
+        fms["login_type"] = await metadata_service.get_app_login_type(app_id=fms.get("app_id"), fms_name=fms.get("fms_name"))
     return {
         "task_id": task_id,
         "fms": fms,

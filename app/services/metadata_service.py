@@ -18,7 +18,7 @@ from typing import Any
 
 from app.api import metadata_api, table_api
 from app.api.client import get_active_api_base, get_effective_database_target
-from app.auth.request_context import reset_current_database_target, set_current_database_target
+from app.auth.request_context import get_current_identity, reset_current_database_target, set_current_database_target
 
 FMS_CONFIG_TABLE = "FMS_Config"
 APPLICATION_MASTER_TABLE = "TM_Application_Master"
@@ -119,11 +119,11 @@ def _normalize_fms_row(row: dict[str, Any]) -> dict[str, Any]:
     # 2. Otherwise permanent doer from Doer_EC / Doer
     # 3. Otherwise EA Operations & Development ('0195')
     perm_doer = _pick_str(row, "DOER", "doer_name", "doer")
-    perm_doer_ec = _pick_str(row, "DOER_EMP_CODE", "Doer_EC", "doer_ec")
+    perm_doer_ec = _pick_str(row, "DOER_EMP_CODE", "Doer_EC", "doer_ec", "DOER_EC", "DoerEC", "doerec")
     temp_doer = _pick_str(row, "TEMP_DOER", "Temp_Doer", "temp_doer", "TempDoer")
-    temp_doer_ec = _pick_str(row, "TEMP_DOER_EMP_CODE", "TempDoer_EC", "temp_doer_ec", "tempdoerec")
-    from_dt_raw = _pick_str(row, "I_FromDateTime", "from_date_time", "fromdatetime")
-    to_dt_raw = _pick_str(row, "I_ToDateTime", "to_date_time", "todatetime")
+    temp_doer_ec = _pick_str(row, "TEMP_DOER_EMP_CODE", "TempDoer_EC", "Temp_Doer_EC", "temp_doer_ec", "TEMP_DOER_EC", "TempDoerEC", "tempdoerec")
+    from_dt_raw = _pick_str(row, "I_FromDateTime", "from_date_time", "fromdatetime", "I_FROM_DATE_TIME")
+    to_dt_raw = _pick_str(row, "I_ToDateTime", "to_date_time", "todatetime", "I_TO_DATE_TIME")
 
     resolved_doer = perm_doer
     resolved_doer_ec = perm_doer_ec
@@ -133,7 +133,14 @@ def _normalize_fms_row(row: dict[str, Any]) -> dict[str, Any]:
             now = datetime.now()
             from_dt = None
             to_dt = None
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            for fmt in (
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%d",
+                "%d-%m-%Y %H:%M:%S",
+                "%d/%m/%Y %H:%M:%S",
+            ):
                 if not from_dt:
                     try:
                         from_dt = datetime.strptime(from_dt_raw, fmt)
@@ -162,8 +169,19 @@ def _normalize_fms_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized["TEMP_DOER_EMP_CODE"] = temp_doer_ec
     normalized["I_FROM_DATE_TIME"] = from_dt_raw
     normalized["I_TO_DATE_TIME"] = to_dt_raw
-    normalized["BACKUP_DOER"] = _pick_str(row, "BACKUP_DOER", "backup_doer")
-    normalized["BACKUP_EMP_CODE"] = _pick_str(row, "BACKUP_EMP_CODE", "BackupDoer_EC", "backup_ec")
+    normalized["BACKUP_DOER"] = _pick_str(row, "BACKUP_DOER", "backup_doer", "Backup_Doer", "BackupDoer")
+    normalized["BACKUP_EMP_CODE"] = _pick_str(
+        row,
+        "BACKUP_EMP_CODE",
+        "BackupDoer_EC",
+        "Backup_Doer_EC",
+        "backup_doer_ec",
+        "BACKUP_DOER_EC",
+        "BackupDoerEC",
+        "backup_ec",
+        "backupec",
+        "backupdoerec",
+    )
     normalized["PLANNED_COLUMN"] = _pick_str(row, "PLANNED_COLUMN", "planned_column")
     normalized["ACTUAL_COLUMN"] = _pick_str(row, "ACTUAL_COLUMN", "actual_column")
     normalized["PROCESS_COORDINATOR"] = _pick_str(
@@ -252,6 +270,27 @@ async def get_application_master(app_id: str | None = None) -> list[dict[str, An
             ]
         _cache[key] = (time.monotonic(), rows)
         return rows
+
+
+async def get_app_login_type(app_id: str | None = None, fms_name: str | None = None) -> str:
+    """Resolve whether an application's LOGIN_TYPE is 'SSO' or 'NOR' (default NOR)."""
+    try:
+        rows = await get_application_master()
+        target_app_id = str(app_id or "").strip().upper()
+        target_fms_name = str(fms_name or "").strip().lower()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            r_id = _pick_str(row, "APP_ID", "app_id", "AppID", "App_ID").upper()
+            r_name = _pick_str(row, "APP_NAME", "app_name", "AppName", "App_Name").lower()
+            if (target_app_id and r_id == target_app_id) or (target_fms_name and r_name == target_fms_name):
+                if r_id == "APP000006":
+                    return "NOR"
+                lt = _pick_str(row, "LOGIN_TYPE", "LoginType", "login_type").upper()
+                return "SSO" if lt == "SSO" else "NOR"
+    except Exception as exc:
+        logger.warning("Failed to resolve app login type for app_id=%s fms_name=%s: %s", app_id, fms_name, exc)
+    return "NOR"
 
 
 async def get_application_live_maps() -> tuple[dict[str, str], dict[str, str]]:
@@ -477,6 +516,49 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
     ]
     options = await filter_fms_options_for_active_db(options)
     options = sorted(options, key=lambda x: str(x.get("fms_name") or "").lower())
+
+    identity = get_current_identity()
+    if identity and str(getattr(identity, "role_id", "") or "").strip() not in ("1", "2", "3"):
+        user_ec = str(getattr(identity, "employee_code", "") or "").strip()
+        if user_ec:
+            now = datetime.now()
+            allowed_app_ids = set()
+            allowed_fms_names = set()
+            for r in dashboard_rows:
+                d_ec = str(r.get("DOER_EMP_CODE") or "").strip()
+                b_ec = str(r.get("BACKUP_EMP_CODE") or "").strip()
+                t_ec = str(r.get("TEMP_DOER_EMP_CODE") or "").strip()
+                is_doer = (user_ec in (d_ec, b_ec))
+                if not is_doer and user_ec == t_ec:
+                    from_raw = r.get("I_FROM_DATE_TIME")
+                    to_raw = r.get("I_TO_DATE_TIME")
+                    if from_raw and to_raw:
+                        from_dt = None
+                        to_dt = None
+                        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d-%m-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S"):
+                            if not from_dt:
+                                try:
+                                    from_dt = datetime.strptime(str(from_raw).strip(), fmt)
+                                except ValueError:
+                                    pass
+                            if not to_dt:
+                                try:
+                                    to_dt = datetime.strptime(str(to_raw).strip(), fmt)
+                                except ValueError:
+                                    pass
+                        if from_dt and to_dt and from_dt <= now <= to_dt:
+                            is_doer = True
+                if is_doer:
+                    if r.get("APP_ID"):
+                        allowed_app_ids.add(str(r["APP_ID"]).strip().upper())
+                    if r.get("FMS_NAME"):
+                        allowed_fms_names.add(str(r["FMS_NAME"]).strip().lower())
+
+            options = [
+                opt for opt in options
+                if (str(opt.get("app_id") or "").strip().upper() in allowed_app_ids)
+                or (str(opt.get("fms_name") or "").strip().lower() in allowed_fms_names)
+            ]
 
     distinct_names = ", ".join([str(opt.get("fms_name") or "") for opt in options])
     logger.info("Loaded %d rows from FMS_Config", len(all_rows))
