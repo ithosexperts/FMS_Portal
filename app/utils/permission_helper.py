@@ -168,7 +168,7 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
             ).strip()
 
             # Doer EC and Backup EC doer have Can View and Can Edit by default
-            if user_ec in (d_ec, b_ec):
+            if user_ec in (d_ec, b_ec) or d_ec.upper() == "ALL" or b_ec.upper() == "ALL":
                 return True
 
             # Temp Doer EC has rights only for I_FromDateTime to I_ToDateTime

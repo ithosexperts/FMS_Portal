@@ -528,7 +528,7 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
                 d_ec = str(r.get("DOER_EMP_CODE") or "").strip()
                 b_ec = str(r.get("BACKUP_EMP_CODE") or "").strip()
                 t_ec = str(r.get("TEMP_DOER_EMP_CODE") or "").strip()
-                is_doer = (user_ec in (d_ec, b_ec))
+                is_doer = (user_ec in (d_ec, b_ec) or d_ec.upper() == "ALL" or b_ec.upper() == "ALL")
                 if not is_doer and user_ec == t_ec:
                     from_raw = r.get("I_FROM_DATE_TIME")
                     to_raw = r.get("I_TO_DATE_TIME")
