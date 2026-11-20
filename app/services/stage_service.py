@@ -325,8 +325,16 @@ async def run_linked_stage_procedure(
         or stage.get("linked_stored_procedure")
         or ""
     ).strip()
-    if not proc_name:
-        return None
+    if not proc_name or proc_name.lower() in ("none", "null"):
+        stg_norm = str(stage_no or "").strip().upper()
+        if stg_norm == "S2":
+            proc_name = "SP_FMS_Pack2Dispatch_S2"
+        elif stg_norm == "S3":
+            proc_name = "SP_FMS_Pack2Dispatch_S3"
+        elif stg_norm == "S4":
+            proc_name = "SP_FMS_Pack2Dispatch_S4"
+        else:
+            return None
 
     base_payload = dict(payload or {})
 

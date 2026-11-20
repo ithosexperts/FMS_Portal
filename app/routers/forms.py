@@ -3542,6 +3542,8 @@ async def _stage_form_submit_impl(
                     or (current_stage or {}).get("linked_stored_procedure")
                     or ""
                 ).strip()
+                if not linked_proc_name or linked_proc_name.lower() in ("none", "null"):
+                    linked_proc_name = "SP_FMS_Pack2Dispatch_S2"
 
                 if linked_proc_name and linked_proc_name.lower() != "sp_fms_altimestampstatus":
                     print(
@@ -3670,6 +3672,15 @@ async def _stage_form_submit_impl(
                     or (stage_context.get("stage") or {}).get("linked_stored_procedure")
                     or ""
                 ).strip()
+
+                target_stage_norm = str(linked_stage_no or "").strip().upper()
+                if not linked_proc_name or linked_proc_name.lower() in ("none", "null"):
+                    if target_stage_norm == "S2":
+                        linked_proc_name = "SP_FMS_Pack2Dispatch_S2"
+                    elif target_stage_norm == "S3":
+                        linked_proc_name = "SP_FMS_Pack2Dispatch_S3"
+                    elif target_stage_norm == "S4":
+                        linked_proc_name = "SP_FMS_Pack2Dispatch_S4"
                 print(
                     "[Linked SP] RESOLUTION: "
                     f"source_stage='{current_stage_no}' -> target_stage='{linked_stage_no}' "
@@ -3938,83 +3949,26 @@ async def _stage_form_submit_impl(
                     latest_s1_row = refreshed_after_s3.get("row") or latest_s1_row
 
                     # ----------------------------------------------------
-                    # STEP 3: CONDITIONAL S2 LINKED PROCEDURE
+                    # STEP 3: DIRECT S2 PROCEDURE
                     # ----------------------------------------------------
-                    # The physical row decides the shipping type. The
-                    # matching FMS_Config S2 condition decides whether its
-                    # Linked_Stored_Procedure should run.
-                    shipping_type = _pick_value_case_insensitive(
-                        latest_s1_row, "I_SOShippingTypeU"
-                    )
-                    shipping_norm = str(shipping_type or "").strip().lower()
-
+                    # Execute SP_FMS_Pack2Dispatch_S2 directly without
+                    # requiring FMS_Config lookup.
                     print(
-                        "[S1 DOWNSTREAM CHAIN] S2 condition check: "
-                        f"I_SOShippingTypeU={shipping_type!r}"
+                        "[S1 DOWNSTREAM CHAIN] Running direct S2 procedure: "
+                        "SP_FMS_Pack2Dispatch_S2"
                     )
-
-                    matching_s2_configs = []
-                    for cfg in stage_configs:
-                        if not isinstance(cfg, dict):
-                            continue
-                        cfg_stage = str(
-                            cfg.get("STAGE_NO")
-                            or cfg.get("stage_no")
-                            or ""
-                        ).strip().upper()
-                        cfg_condition = str(
-                            cfg.get("conditions")
-                            or cfg.get("CONDITIONS")
-                            or ""
-                        ).strip().lower()
-                        cfg_proc = str(
-                            cfg.get("Linked_Stored_Procedure")
-                            or cfg.get("LINKED_STORED_PROCEDURE")
-                            or cfg.get("linked_stored_procedure")
-                            or ""
-                        ).strip()
-                        cfg_active = cfg.get("active") if "active" in cfg else cfg.get("ACTIVE")
-
-                        if (
-                            cfg_stage == "S2"
-                            and cfg_condition
-                            and cfg_condition == shipping_norm
-                            and cfg_proc
-                            and str(cfg_active).strip().lower() not in {"0", "false", "no", "n"}
-                        ):
-                            matching_s2_configs.append(cfg)
-
-                    if shipping_norm and matching_s2_configs:
-                        if len(matching_s2_configs) > 1:
-                            print(
-                                "[S1 DOWNSTREAM CHAIN] Multiple active S2 FMS_Config rows "
-                                f"matched condition={shipping_type!r}; refusing to guess."
-                            )
-                        else:
-                            s2_cfg = matching_s2_configs[0]
-                            s2_proc_name = str(
-                                s2_cfg.get("Linked_Stored_Procedure")
-                                or s2_cfg.get("LINKED_STORED_PROCEDURE")
-                                or s2_cfg.get("linked_stored_procedure")
-                                or ""
-                            ).strip()
-                            print(
-                                "[S1 DOWNSTREAM CHAIN] S2 condition MATCHED: "
-                                f"I_SOShippingTypeU={shipping_type!r} -> "
-                                f"procedure='{s2_proc_name}'"
-                            )
-                            s2_linked_result = await stage_service.run_linked_stage_procedure(
-                                task_id, "S2", payload, table_name=fms_table, app_id=fms_app_id
-                            )
-                            print(
-                                "[S1 DOWNSTREAM CHAIN] S2 Linked SP completed: "
-                                f"procedure='{s2_proc_name}' result={s2_linked_result}"
-                            )
-                    else:
+                    try:
+                        s2_linked_result = await stage_service.run_linked_stage_procedure(
+                            task_id, "S2", payload, table_name=fms_table, app_id=fms_app_id
+                        )
                         print(
-                            "[S1 DOWNSTREAM CHAIN] S2 Linked SP SKIPPED: "
-                            f"I_SOShippingTypeU={shipping_type!r}; "
-                            "no active S2 FMS_Config condition matched."
+                            "[S1 DOWNSTREAM CHAIN] S2 Linked SP completed: "
+                            f"procedure='SP_FMS_Pack2Dispatch_S2' result={s2_linked_result}"
+                        )
+                    except Exception as s2_err:
+                        print(
+                            "[S1 DOWNSTREAM CHAIN] S2 Linked SP warning/error: "
+                            f"{s2_err}"
                         )
 
             # ====================================================================
