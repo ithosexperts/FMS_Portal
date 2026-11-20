@@ -66,6 +66,12 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         "app_id": resolved_app_id,
         "login_type": login_type,
     }
+    try:
+        from app.services.hierarchy_service import get_hierarchy_map
+        await get_hierarchy_map()
+    except Exception as hier_err:
+        print(f"[Stage Permission] Hierarchy load warning: {hier_err}")
+
     editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, perm_context)
     context["editable"] = editable
     context["can_edit"] = editable

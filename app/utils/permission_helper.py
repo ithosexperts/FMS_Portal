@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from app.auth.request_context import get_current_identity
+from app.services.hierarchy_service import is_user_in_hierarchy_sync
 
 # Actions the UI currently gates. Extend freely - callers pass a string key.
 ACTION_EDIT_CURRENT_STAGE = "edit_current_stage"
@@ -167,8 +168,15 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
                 or ""
             ).strip()
 
-            # Doer EC and Backup EC doer have Can View and Can Edit by default
-            if user_ec in (d_ec, b_ec) or d_ec.upper() == "ALL" or b_ec.upper() == "ALL":
+            # Doer EC, Backup EC doer, and their reporting hierarchy (ManagerChain)
+            # have Can View and Can Edit by default.
+            if (
+                user_ec in (d_ec, b_ec)
+                or d_ec.upper() == "ALL"
+                or b_ec.upper() == "ALL"
+                or is_user_in_hierarchy_sync(user_ec, d_ec)
+                or is_user_in_hierarchy_sync(user_ec, b_ec)
+            ):
                 return True
 
             # Temp Doer EC has rights only for I_FromDateTime to I_ToDateTime

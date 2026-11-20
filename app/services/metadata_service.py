@@ -524,11 +524,23 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
             now = datetime.now()
             allowed_app_ids = set()
             allowed_fms_names = set()
+            try:
+                from app.services.hierarchy_service import get_hierarchy_map, is_user_in_hierarchy_sync
+                await get_hierarchy_map()
+            except Exception as h_err:
+                print(f"[Metadata Service] Hierarchy map load error: {h_err}")
+
             for r in dashboard_rows:
                 d_ec = str(r.get("DOER_EMP_CODE") or "").strip()
                 b_ec = str(r.get("BACKUP_EMP_CODE") or "").strip()
                 t_ec = str(r.get("TEMP_DOER_EMP_CODE") or "").strip()
-                is_doer = (user_ec in (d_ec, b_ec) or d_ec.upper() == "ALL" or b_ec.upper() == "ALL")
+                is_doer = (
+                    user_ec in (d_ec, b_ec)
+                    or d_ec.upper() == "ALL"
+                    or b_ec.upper() == "ALL"
+                    or is_user_in_hierarchy_sync(user_ec, d_ec)
+                    or is_user_in_hierarchy_sync(user_ec, b_ec)
+                )
                 if not is_doer and user_ec == t_ec:
                     from_raw = r.get("I_FROM_DATE_TIME")
                     to_raw = r.get("I_TO_DATE_TIME")
