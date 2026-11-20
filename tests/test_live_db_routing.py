@@ -12,7 +12,12 @@ from app.auth.request_context import (
     set_current_database_target,
 )
 from app.middleware.oneportal_auth import _call_next_with_live_routing
-from app.services import dashboard_service, metadata_service, task_service
+from app.services import (
+    dashboard_service,
+    employee_availability_service,
+    metadata_service,
+    task_service,
+)
 
 
 def _clear_all_caches() -> None:
@@ -470,16 +475,28 @@ async def test_stage1_picker_board_stays_within_fms_own_database(monkeypatch):
             }
         ],
         "VM_EmployeeMaster": [
-            {"EmployeeCode": "0004", "EmployeeName": "Diwan Singh"},
-            {"EmployeeCode": "0017", "EmployeeName": "Bhupal Singh"},
+            {"EmployeeCode": "0004", "EmployeeName": "Diwan Singh", "IsEmployed": "Y"},
+            {"EmployeeCode": "0017", "EmployeeName": "Bhupal Singh", "IsEmployed": "Y"},
+            {"EmployeeCode": "0099", "EmployeeName": "Former Worker", "IsEmployed": "N"},
         ],
         "VM_Team": [
             {"TeamID": 29, "EmployeeCode": "0004", "TeamName": "SCM - PNP (Delhi)"},
             {"TeamID": 29, "EmployeeCode": "0017", "TeamName": "SCM - PNP (Delhi)"},
+            {"TeamID": 29, "EmployeeCode": "0099", "TeamName": "SCM - PNP (Delhi)"},
         ],
         "Z_AttendanceInfo": [
-            {"EmployeeCode": "0004", "AttendanceDate": "2026-11-19", "Status": "P", "InsertTS": "2026-11-19 08:00:00"},
-            {"EmployeeCode": "0017", "AttendanceDate": "2026-11-19", "Status": "A", "InsertTS": "2026-11-19 08:00:00"},
+            {
+                "EmployeeCode": "0004",
+                "AttendanceDate": employee_availability_service.get_today_ist().isoformat(),
+                "Status": "P",
+                "InsertTS": f"{employee_availability_service.get_today_ist().isoformat()} 08:00:00",
+            },
+            {
+                "EmployeeCode": "0017",
+                "AttendanceDate": employee_availability_service.get_today_ist().isoformat(),
+                "Status": "A",
+                "InsertTS": f"{employee_availability_service.get_today_ist().isoformat()} 08:00:00",
+            },
         ],
         "KPI_MasterRecord": [],
         "Z_KPI_MasterRecord": [],
@@ -540,6 +557,7 @@ async def test_stage1_picker_board_stays_within_fms_own_database(monkeypatch):
         assert by_name["Diwan Singh"]["disabled"] is False
         assert by_name["Bhupal Singh"]["status"] == "Absent"
         assert by_name["Bhupal Singh"]["disabled"] is True
+        assert "Former Worker" not in by_name
 
         # Verify table_name="Z_SalesOrder" was passed and ZERO cross-DB lookups hit API_1!
         assert recorded_stage_ctx_calls == [

@@ -1894,7 +1894,11 @@ async def _stage1_picker_board_impl(request: Request, task_id: str, stage_no: st
             try:
                 if 'stage_row' in locals() and stage_row:
                     row_loc = stage_row.get("I_Location") or stage_row.get("Location") or "Delhi"
-                picker_options = await stage1_custom_service._load_picker_options(row_loc, current_pick_id=resolved_pick_id)
+                picker_options = await stage1_custom_service._load_picker_options(
+                    row_loc,
+                    current_pick_id=resolved_pick_id,
+                    work_date=employee_availability_service.get_today_ist(),
+                )
             except Exception:
                 picker_options = []
 
@@ -2000,9 +2004,7 @@ async def _stage1_picker_save_impl(request: Request, task_id: str, stage_no: str
     try:
         custom_picker_context = await stage1_custom_service.build_stage1_custom_context(context)
         existing_pickers = list((custom_picker_context.get("picker") or {}).get("values") or [])
-        picker_work_date = employee_availability_service.resolve_work_date(
-            None, current_row=row
-        )
+        picker_work_date = employee_availability_service.get_today_ist()
         await stage1_custom_service.validate_picker_changes(
             pickers,
             existing_pickers,
@@ -2396,7 +2398,7 @@ async def _stage_form_submit_impl(
                     staged_picker_values,
                     existing_picker_values,
                     location=_pick_value_by_suffix(current_assignment_row, ("ilocation", "location")),
-                    work_date=assignment_work_date,
+                    work_date=employee_availability_service.get_today_ist(),
                     current_pick_id=_pick_value_by_suffix(current_assignment_row, ("s1pickid", "pickid"), "S1"),
                 )
     except employee_availability_service.EmployeeAssignmentDenied as exc:

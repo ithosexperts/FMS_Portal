@@ -198,7 +198,7 @@ async def save_stage(
             selected_pickers,
             existing_pickers,
             location=_row_value(context.get("row") or {}, "I_Location", "Location"),
-            work_date=work_date,
+            work_date=employee_availability_service.get_today_ist(),
             current_pick_id=_row_value(context.get("row") or {}, "S1_PickID", "PickID"),
         )
 

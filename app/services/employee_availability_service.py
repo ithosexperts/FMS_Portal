@@ -108,6 +108,19 @@ def _parse_timestamp(value: Any) -> datetime | None:
     return parsed
 
 
+def get_today_ist() -> date:
+    """Return today's date in Indian Standard Time (IST / Asia/Kolkata)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    except Exception:
+        try:
+            from datetime import timedelta
+            return datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+        except Exception:
+            return date.today()
+
+
 def resolve_work_date(
     explicit: Any = None,
     payload: dict[str, Any] | None = None,
@@ -130,7 +143,7 @@ def resolve_work_date(
             parsed = _parse_date(value)
             if parsed:
                 return parsed
-    return date.today()
+    return get_today_ist()
 
 
 def _status_code(value: Any) -> str:

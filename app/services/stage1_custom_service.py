@@ -257,6 +257,24 @@ async def _load_picker_options(
             employee_by_code[_norm(code)] = employee_row
             employee_by_name[_norm(name)] = employee_row
 
+    def _is_employed(emp_row: dict[str, Any], tm_row: dict[str, Any] | None = None) -> bool:
+        # Require IsEmployed == 'Y' when IsEmployed column exists in VM_EmployeeMaster or VM_Team
+        targets = {"isemployed", "is_employed"}
+        has_column = any(_norm(k) in targets for k in (emp_row or {}))
+        if not has_column and tm_row:
+            has_column = any(_norm(k) in targets for k in tm_row)
+        if has_column:
+            val = field_value(emp_row or {}, "IsEmployed", "is_employed", "ISEMPLOYED", "Is_Employed")
+            if val is None and tm_row:
+                val = field_value(tm_row, "IsEmployed", "is_employed", "ISEMPLOYED", "Is_Employed")
+            return str(val or "").strip().upper() in {"Y", "YES", "1", "TRUE"}
+        active_targets = {"active", "isactive", "activestatus"}
+        has_active = any(_norm(k) in active_targets for k in (emp_row or {}))
+        if has_active:
+            act = field_value(emp_row or {}, "Active", "active", "ACTIVE", "ActiveStatus", "IsActive")
+            return str(act or "").strip().upper() in {"Y", "YES", "1", "TRUE"}
+        return True
+
     chosen: list[dict[str, Any]] = []
     seen: set[str] = set()
     for team_row in team_rows or []:
@@ -268,7 +286,11 @@ async def _load_picker_options(
         employee_code = _text(field_value(team_row, "EmployeeCode", "EMPLOYEECODE", "employee_code", "Employee Code"))
         employee_row = employee_by_code.get(_norm(employee_code)) or {}
         name = _text(field_value(employee_row, "EmployeeName", "Employee Name", "Name")) or _text(field_value(team_row, "Employee Name", "EmployeeName", "Name"))
+        if not employee_row and name:
+            employee_row = employee_by_name.get(_norm(name)) or {}
         if not name:
+            continue
+        if not _is_employed(employee_row, team_row):
             continue
         key = _norm(employee_code or name)
         if key in seen:
@@ -293,19 +315,24 @@ async def _load_picker_options(
             role = _picker_role(row)
             if role and "picker" not in _norm(role):
                 continue
-            employee_row = employee_by_name.get(_norm(name))
-            code = _text(field_value(employee_row or {}, "EmployeeCode", "Employee Code"))
+            employee_row = employee_by_name.get(_norm(name)) or {}
+            if not _is_employed(employee_row, row):
+                continue
+            code = _text(field_value(employee_row, "EmployeeCode", "Employee Code"))
             key = _norm(code or name)
             if key in seen:
                 continue
             seen.add(key)
-            chosen.append({"name": name, "employee_code": code, "employee_row": employee_row or {}})
+            chosen.append({"name": name, "employee_code": code, "employee_row": employee_row})
 
     chosen.sort(key=lambda item: item["name"].casefold())
     if not chosen:
         return []
 
-    actual_work_date = employee_availability_service.resolve_work_date(work_date)
+    if work_date is not None:
+        actual_work_date = employee_availability_service._parse_date(work_date) or employee_availability_service.get_today_ist()
+    else:
+        actual_work_date = employee_availability_service.get_today_ist()
     codes = [item.get("employee_code") for item in chosen if item.get("employee_code")]
     attendance_error = False
     try:
@@ -390,7 +417,10 @@ async def validate_picker_changes(
     if not added:
         return
 
-    actual_work_date = employee_availability_service.resolve_work_date(work_date)
+    if work_date is not None:
+        actual_work_date = employee_availability_service._parse_date(work_date) or employee_availability_service.get_today_ist()
+    else:
+        actual_work_date = employee_availability_service.get_today_ist()
     options = await _load_picker_options(
         location, work_date=actual_work_date, current_pick_id=current_pick_id
     )
@@ -813,7 +843,7 @@ async def build_stage1_custom_context(stage_context: dict[str, Any]) -> dict[str
                     break
     picker_values = _parse_list(picker_value)
 
-    picker_work_date = employee_availability_service.resolve_work_date(None, current_row=row)
+    picker_work_date = employee_availability_service.get_today_ist()
     picker_options = await _load_picker_options(
         _value(row, "I_Location", "Location"),
         work_date=picker_work_date,
