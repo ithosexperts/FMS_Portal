@@ -196,8 +196,8 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
                 if _is_within_temp_doer_window(from_dt, to_dt):
                     return True
 
-    # 3. FMS_Application_Rights check for Can View (applicable for Login Type NOR and Type A)
-    if is_view_action and context.get("can_view_rights"):
+    # 3. FMS_Application_Rights / NOR check for Can View (applicable for Login Type NOR and Type A)
+    if is_view_action and (context.get("can_view_rights") or context.get("login_type") == "NOR"):
         return True
 
     # 4. Explicit permissions configured in RBAC / TM_User_Access_Master

@@ -679,6 +679,17 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
             except Exception as r_err:
                 print(f"[Metadata Service] App rights check error: {r_err}")
 
+            # All NOR applications are shown to all users, all Role IDs
+            for opt in options:
+                opt_app_id = str(opt.get("app_id") or "").strip().upper()
+                opt_fms_name = str(opt.get("fms_name") or "").strip().lower()
+                l_type = await get_app_login_type(app_id=opt_app_id, fms_name=opt_fms_name)
+                if l_type == "NOR":
+                    if opt_app_id:
+                        allowed_app_ids.add(opt_app_id)
+                    if opt_fms_name:
+                        allowed_fms_names.add(opt_fms_name)
+
             options = [
                 opt for opt in options
                 if (str(opt.get("app_id") or "").strip().upper() in allowed_app_ids)

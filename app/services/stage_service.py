@@ -80,11 +80,15 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         from app.auth.request_context import get_current_identity
         ident = get_current_identity()
         if ident and str(getattr(ident, "role_id", "") or "").strip() not in ("1", "2", "3"):
-            u_ec = str(getattr(ident, "employee_code", "") or "").strip()
-            u_id = str(getattr(ident, "user_id", "") or "").strip()
-            if u_ec or u_id:
-                rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
-                perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id, stage_no=stage_no)
+            # All NOR applications have Can View for all users, all Role IDs
+            if login_type == "NOR":
+                perm_context["can_view_rights"] = True
+            else:
+                u_ec = str(getattr(ident, "employee_code", "") or "").strip()
+                u_id = str(getattr(ident, "user_id", "") or "").strip()
+                if u_ec or u_id:
+                    rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
+                    perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id, stage_no=stage_no)
     except Exception as r_err:
         print(f"[Stage Permission] Rights check warning: {r_err}")
 
