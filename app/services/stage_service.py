@@ -75,7 +75,7 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
     except Exception as hier_err:
         print(f"[Stage Permission] Hierarchy load warning: {hier_err}")
 
-    # For non-admin roles, check TM_Application_Rights for Can View
+    # For non-admin roles, check FMS_Application_Rights for Can View
     try:
         from app.auth.request_context import get_current_identity
         ident = get_current_identity()
@@ -84,7 +84,7 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
             u_id = str(getattr(ident, "user_id", "") or "").strip()
             if u_ec or u_id:
                 rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
-                perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id)
+                perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id, stage_no=stage_no)
     except Exception as r_err:
         print(f"[Stage Permission] Rights check warning: {r_err}")
 

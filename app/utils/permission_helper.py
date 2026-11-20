@@ -196,7 +196,7 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
                 if _is_within_temp_doer_window(from_dt, to_dt):
                     return True
 
-    # 3. TM_Application_Rights check for Can View (applicable for Login Type NOR and Type A)
+    # 3. FMS_Application_Rights check for Can View (applicable for Login Type NOR and Type A)
     if is_view_action and context.get("can_view_rights"):
         return True
 

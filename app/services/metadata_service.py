@@ -317,7 +317,7 @@ _APP_RIGHTS_TTL: float = 60.0
 
 
 async def get_user_application_rights(employee_code: str, user_id: str | None = None) -> list[dict[str, Any]]:
-    """Fetch active application rights for an employee from TM_Application_Rights / TM_Application_Right."""
+    """Fetch active application rights for an employee from FMS_Application_Rights."""
     norm_ec = str(employee_code or "").strip().upper()
     if not norm_ec and not user_id:
         return []
@@ -330,11 +330,11 @@ async def get_user_application_rights(employee_code: str, user_id: str | None = 
             return data
 
     rights_rows: list[dict[str, Any]] = []
-    candidate_tables = ("TM_Application_Right", "TM_Application_Rights", "FMS_Application_Rights")
+    candidate_tables = ("FMS_Application_Rights", "TM_Application_Rights", "TM_Application_Right")
 
     for tbl in candidate_tables:
         if norm_ec:
-            for col in ("EmployeeCode", "employeecode"):
+            for col in ("EmployeeCode", "Employeecode", "EMPLOYEECODE", "employee_code"):
                 try:
                     rows = await table_api.get_table(tbl, filters={col: norm_ec})
                     if rows and isinstance(rows, list):
@@ -360,11 +360,16 @@ async def get_user_application_rights(employee_code: str, user_id: str | None = 
 def check_user_can_view_app(
     rights_rows: list[dict[str, Any]],
     app_id: str,
+    stage_no: str | None = None,
 ) -> bool:
-    """Check if rights_rows grant can_view for app_id on an active row."""
+    """Check if rights_rows grant can_view for app_id (and optional stage_no) on an active row in FMS_Application_Rights."""
     target_id = str(app_id or "").strip().upper()
     if not target_id:
         return False
+    target_stage = None
+    if stage_no:
+        target_stage = str(stage_no).strip().upper().replace("S_", "").replace("S", "")
+
     for r in rights_rows:
         if not isinstance(r, dict):
             continue
@@ -373,6 +378,11 @@ def check_user_can_view_app(
             continue
         r_app = str(r.get("APP_ID") or r.get("app_id") or r.get("AppID") or "").strip().upper()
         if r_app == target_id:
+            if target_stage:
+                r_stage_raw = str(r.get("STAGE_NO") or r.get("stage_no") or r.get("Stage_No") or "").strip().upper()
+                r_stage = r_stage_raw.replace("S_", "").replace("S", "")
+                if r_stage and r_stage not in ("ALL", "") and r_stage != target_stage:
+                    continue
             can_v = str(r.get("Can_View") or r.get("can_view") or r.get("CanView") or r.get("view") or r.get("View") or 0).strip().lower()
             if can_v in ("1", "true", "yes", "y"):
                 return True
@@ -652,7 +662,7 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
                     if r.get("FMS_NAME"):
                         allowed_fms_names.add(str(r["FMS_NAME"]).strip().lower())
 
-            # Check TM_Application_Rights for non-admin roles (Can View)
+            # Check FMS_Application_Rights for non-admin roles (Can View)
             try:
                 user_id = str(getattr(identity, "user_id", "") or "").strip()
                 user_rights = await get_user_application_rights(user_ec, user_id=user_id)
