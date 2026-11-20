@@ -196,7 +196,11 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
                 if _is_within_temp_doer_window(from_dt, to_dt):
                     return True
 
-    # 3. Explicit permissions configured in RBAC / TM_User_Access_Master
+    # 3. TM_Application_Rights check for Can View (applicable for Login Type NOR and Type A)
+    if is_view_action and context.get("can_view_rights"):
+        return True
+
+    # 4. Explicit permissions configured in RBAC / TM_User_Access_Master
     permission_keys = {str(p).strip().lower() for p in getattr(identity, "permissions", []) or []}
     candidates = {
         normalized_action,

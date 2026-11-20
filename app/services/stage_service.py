@@ -53,8 +53,10 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
     resolved_app_id = (context.get("fms") or {}).get("app_id") or app_id
     resolved_fms_name = (context.get("fms") or {}).get("fms_name")
     login_type = await metadata_service.get_app_login_type(app_id=resolved_app_id, fms_name=resolved_fms_name)
+    app_type = await metadata_service.get_app_type(app_id=resolved_app_id, fms_name=resolved_fms_name)
     if "fms" in context and isinstance(context["fms"], dict):
         context["fms"]["login_type"] = login_type
+        context["fms"]["type"] = app_type
 
     perm_context = {
         "task_id": task_id,
@@ -65,12 +67,26 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         "fms": context.get("fms") or {},
         "app_id": resolved_app_id,
         "login_type": login_type,
+        "app_type": app_type,
     }
     try:
         from app.services.hierarchy_service import get_hierarchy_map
         await get_hierarchy_map()
     except Exception as hier_err:
         print(f"[Stage Permission] Hierarchy load warning: {hier_err}")
+
+    # For non-admin roles, check TM_Application_Rights for Can View
+    try:
+        from app.auth.request_context import get_current_identity
+        ident = get_current_identity()
+        if ident and str(getattr(ident, "role_id", "") or "").strip() not in ("1", "2", "3"):
+            u_ec = str(getattr(ident, "employee_code", "") or "").strip()
+            u_id = str(getattr(ident, "user_id", "") or "").strip()
+            if u_ec or u_id:
+                rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
+                perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id)
+    except Exception as r_err:
+        print(f"[Stage Permission] Rights check warning: {r_err}")
 
     editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, perm_context)
     context["editable"] = editable

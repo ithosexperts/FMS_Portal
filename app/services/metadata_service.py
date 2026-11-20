@@ -293,6 +293,92 @@ async def get_app_login_type(app_id: str | None = None, fms_name: str | None = N
     return "NOR"
 
 
+async def get_app_type(app_id: str | None = None, fms_name: str | None = None) -> str:
+    """Resolve application TYPE ('A', 'F', etc.) from TM_Application_Master."""
+    try:
+        rows = await get_application_master()
+        target_app_id = str(app_id or "").strip().upper()
+        target_fms_name = str(fms_name or "").strip().lower()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            r_id = _pick_str(row, "APP_ID", "app_id", "AppID", "App_ID").upper()
+            r_name = _pick_str(row, "APP_NAME", "app_name", "AppName", "App_Name").lower()
+            if (target_app_id and r_id == target_app_id) or (target_fms_name and r_name == target_fms_name):
+                app_t = _pick_str(row, "TYPE", "type", "Type", "AppType", "app_type").upper()
+                return app_t or "A"
+    except Exception as exc:
+        logger.warning("Failed to resolve app type for app_id=%s fms_name=%s: %s", app_id, fms_name, exc)
+    return "A"
+
+
+_APP_RIGHTS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_APP_RIGHTS_TTL: float = 60.0
+
+
+async def get_user_application_rights(employee_code: str, user_id: str | None = None) -> list[dict[str, Any]]:
+    """Fetch active application rights for an employee from TM_Application_Rights / TM_Application_Right."""
+    norm_ec = str(employee_code or "").strip().upper()
+    if not norm_ec and not user_id:
+        return []
+
+    cache_key = f"{norm_ec}|{user_id or ''}"
+    now = time.monotonic()
+    if cache_key in _APP_RIGHTS_CACHE:
+        ts, data = _APP_RIGHTS_CACHE[cache_key]
+        if now - ts < _APP_RIGHTS_TTL:
+            return data
+
+    rights_rows: list[dict[str, Any]] = []
+    candidate_tables = ("TM_Application_Right", "TM_Application_Rights", "FMS_Application_Rights")
+
+    for tbl in candidate_tables:
+        if norm_ec:
+            for col in ("EmployeeCode", "employeecode"):
+                try:
+                    rows = await table_api.get_table(tbl, filters={col: norm_ec})
+                    if rows and isinstance(rows, list):
+                        rights_rows = rows
+                        break
+                except Exception:
+                    pass
+        if rights_rows:
+            break
+
+    if not rights_rows and user_id:
+        try:
+            rows = await table_api.get_table("TM_User_Access_Master", filters={"UserID": user_id})
+            if rows and isinstance(rows, list):
+                rights_rows = rows
+        except Exception:
+            pass
+
+    _APP_RIGHTS_CACHE[cache_key] = (now, rights_rows)
+    return rights_rows
+
+
+def check_user_can_view_app(
+    rights_rows: list[dict[str, Any]],
+    app_id: str,
+) -> bool:
+    """Check if rights_rows grant can_view for app_id on an active row."""
+    target_id = str(app_id or "").strip().upper()
+    if not target_id:
+        return False
+    for r in rights_rows:
+        if not isinstance(r, dict):
+            continue
+        active_val = str(r.get("Active") or r.get("active") or r.get("is_active") or 1).strip().lower()
+        if active_val in ("0", "false", "no", "n"):
+            continue
+        r_app = str(r.get("APP_ID") or r.get("app_id") or r.get("AppID") or "").strip().upper()
+        if r_app == target_id:
+            can_v = str(r.get("Can_View") or r.get("can_view") or r.get("CanView") or r.get("view") or r.get("View") or 0).strip().lower()
+            if can_v in ("1", "true", "yes", "y"):
+                return True
+    return False
+
+
 async def get_application_live_maps() -> tuple[dict[str, str], dict[str, str]]:
     """Build case-normalized Live lookups from TM_Application_Master for the active DB."""
     rows = await get_application_master()
@@ -565,6 +651,23 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
                         allowed_app_ids.add(str(r["APP_ID"]).strip().upper())
                     if r.get("FMS_NAME"):
                         allowed_fms_names.add(str(r["FMS_NAME"]).strip().lower())
+
+            # Check TM_Application_Rights for non-admin roles (Can View)
+            try:
+                user_id = str(getattr(identity, "user_id", "") or "").strip()
+                user_rights = await get_user_application_rights(user_ec, user_id=user_id)
+                for ur in user_rights:
+                    if not isinstance(ur, dict):
+                        continue
+                    active_val = str(ur.get("Active") or ur.get("active") or ur.get("is_active") or 1).strip().lower()
+                    if active_val in ("0", "false", "no", "n"):
+                        continue
+                    r_app = str(ur.get("APP_ID") or ur.get("app_id") or ur.get("AppID") or "").strip().upper()
+                    can_v = str(ur.get("Can_View") or ur.get("can_view") or ur.get("CanView") or ur.get("view") or ur.get("View") or 0).strip().lower()
+                    if can_v in ("1", "true", "yes", "y") and r_app:
+                        allowed_app_ids.add(r_app)
+            except Exception as r_err:
+                print(f"[Metadata Service] App rights check error: {r_err}")
 
             options = [
                 opt for opt in options
