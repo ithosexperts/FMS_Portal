@@ -167,9 +167,19 @@ def _row_value(row: dict[str, Any], *names: str) -> Any:
             return value
     return None
 
-async def save_stage(task_id: str, stage_no: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    context = await get_stage_context(task_id, stage_no)
-    if not context["editable"]:
+async def save_stage(
+    task_id: str,
+    stage_no: str,
+    payload: dict[str, Any],
+    table_name: str | None = None,
+    app_id: str | None = None,
+    primary_key: str | None = None,
+    stage_context: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    context = stage_context or await get_stage_context(
+        task_id, stage_no, table_name=table_name, app_id=app_id, primary_key=primary_key
+    )
+    if not context.get("editable"):
         raise PermissionError("This stage is not currently editable.")
 
     current_row = context.get("row") or {}
@@ -206,12 +216,13 @@ async def save_stage(task_id: str, stage_no: str, payload: dict[str, Any]) -> di
             cleaned_payload.pop(k, None)
 
     row_id = _context_row_id(context, task_id)
+    target_table = (context.get("fms") or {}).get("table_name") or table_name
     print(
         f"[Stage Save] stage={stage_no} task_id={task_id} "
         f"primary_key={context.get('primary_key')} row_id={row_id} "
-        f"fields={sorted(cleaned_payload.keys())}"
+        f"table={target_table} fields={sorted(cleaned_payload.keys())}"
     )
-    return await table_api.update_row(context["fms"]["table_name"], row_id, cleaned_payload)
+    return await table_api.update_row(target_table, row_id, cleaned_payload)
 
 
 def _flatten_procedure_result(result: dict[str, Any] | None) -> dict[str, Any]:
@@ -237,6 +248,8 @@ def _flatten_procedure_result(result: dict[str, Any] | None) -> dict[str, Any]:
 async def persist_s3_procedure_output(
     task_id: str,
     result: dict[str, Any] | None,
+    table_name: str | None = None,
+    app_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Persist SP_FMS_Pack2Dispatch_S3 output into exact S3_* columns.
 
@@ -287,17 +300,24 @@ async def persist_s3_procedure_output(
     if not payload:
         return None
 
-    context = await get_stage_context(task_id, "S3")
+    context = await get_stage_context(task_id, "S3", table_name=table_name, app_id=app_id)
     row_id = _context_row_id(context, task_id)
-    print(f"[S3 Output Mapping] RowID={row_id} fields={sorted(payload.keys())}")
-    result_update = await table_api.update_row(context["fms"]["table_name"], row_id, payload)
+    target_table = (context.get("fms") or {}).get("table_name") or table_name
+    print(f"[S3 Output Mapping] RowID={row_id} table={target_table} fields={sorted(payload.keys())}")
+    result_update = await table_api.update_row(target_table, row_id, payload)
     print(f"[S3 Output Mapping] Result={result_update}")
     return result_update
 
 
-async def run_linked_stage_procedure(task_id: str, stage_no: str, payload: dict[str, Any] | None = None) -> dict[str, Any] | None:
+async def run_linked_stage_procedure(
+    task_id: str,
+    stage_no: str,
+    payload: dict[str, Any] | None = None,
+    table_name: str | None = None,
+    app_id: str | None = None,
+) -> dict[str, Any] | None:
     """Run the FMS-linked post-save workflow for the current stage, if configured."""
-    context = await get_stage_context(task_id, stage_no)
+    context = await get_stage_context(task_id, stage_no, table_name=table_name, app_id=app_id)
     stage = context.get("stage") or {}
     proc_name = str(
         stage.get("Linked_Stored_Procedure")
@@ -354,8 +374,9 @@ async def run_linked_stage_procedure(task_id: str, stage_no: str, payload: dict[
     base_payload.setdefault("DocEntrySO", sales_order_entry)
     base_payload.setdefault("SalesOrderNo", sales_order_no)
 
+    target_table = (context.get("fms") or {}).get("table_name") or table_name
     request_payload = {
-        "table": context["fms"]["table_name"],
+        "table": target_table,
         "task_id": task_id,
         "stage_no": stage_no,
         "procedure": proc_name,
@@ -371,16 +392,19 @@ async def run_named_stage_procedure(
     stage_no: str,
     procedure_name: str,
     payload: dict[str, Any] | None = None,
+    table_name: str | None = None,
+    app_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Run a specific stored procedure in stage context regardless of linked-proc config."""
     proc_name = str(procedure_name or "").strip()
     if not proc_name:
         return None
 
-    context = await get_stage_context(task_id, stage_no)
+    context = await get_stage_context(task_id, stage_no, table_name=table_name, app_id=app_id)
     physical_row_id = _context_row_id(context, task_id)
+    target_table = (context.get("fms") or {}).get("table_name") or table_name
     request_payload = {
-        "table": context["fms"]["table_name"],
+        "table": target_table,
         "task_id": task_id,
         "stage_no": stage_no,
         "procedure": proc_name,

@@ -115,8 +115,10 @@
   </div>
 
   <!-- Main Stage Form -->
-  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" class="question-grid" data-reorderable="true" enctype="multipart/form-data">
+  <form id="stage-main-form" method="post" action="{{ routes.stage_form_route(task_id, stage_no, table_name=context.fms.table_name, app_id=context.fms.app_id) }}" class="question-grid" data-reorderable="true" enctype="multipart/form-data">
     <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+    <input type="hidden" name="table_name" value="{{ context.fms.table_name or '' }}">
+    <input type="hidden" name="fms_name" value="{{ context.fms.fms_name or '' }}">
     
     <!-- Hidden inputs for extracted read-only fields so they don't lose value on Save/Submit -->
     {% for q in top_fixed_fields %}

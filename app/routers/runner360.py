@@ -1726,7 +1726,7 @@ async def _runner360_mark_in_impl(request: Request, task_id: str, token_employee
     }
     try:
         sp_result = await stage_service.run_named_stage_procedure(
-            str(row_id), RUNNER360_STAGE_NO, "SP_FMS_ALTimeStampStatus", proc_payload
+            str(row_id), RUNNER360_STAGE_NO, "SP_FMS_ALTimeStampStatus", proc_payload, app_id=RUNNER360_APP_ID
         )
     except Exception as exc:
         print(f"[Runner360 IN] SP_FMS_ALTimeStampStatus failed for RowID {row_id}: {exc}")

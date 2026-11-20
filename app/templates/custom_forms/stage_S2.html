@@ -105,8 +105,10 @@
     </div>
   </div>
 
-  <form method="post" action="{{ routes.stage_form_route(task_id, stage_no) }}" enctype="multipart/form-data">
+  <form method="post" action="{{ routes.stage_form_route(task_id, stage_no, table_name=context.fms.table_name, app_id=context.fms.app_id) }}" enctype="multipart/form-data">
     <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+    <input type="hidden" name="table_name" value="{{ context.fms.table_name or '' }}">
+    <input type="hidden" name="fms_name" value="{{ context.fms.fms_name or '' }}">
     <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:18px;">
       <div class="question">
         <label>{{ custom_stage2.vehicle_origin.label }} <span style="color:red">*</span></label>

@@ -93,6 +93,7 @@
         <div class="readonly-field"><label>FMS Row ID</label><input type="text" name="fms_row_id" value="{{ context.row.get(context.primary_key) if context.row and context.primary_key else task_id }}" readonly></div>
       </div>
       <input type="hidden" name="app_id" value="{{ context.fms.app_id or '' }}">
+      <input type="hidden" name="table_name" value="{{ context.fms.table_name or '' }}">
       <input type="hidden" name="fms_name" value="{{ context.fms.fms_name or '' }}">
       <input type="hidden" name="stage_no_display" value="{{ context.stage.STAGE_NO or stage_no or '' }}">
       <input type="hidden" name="stage_name" value="{{ context.stage.STAGE_NAME or '' }}">

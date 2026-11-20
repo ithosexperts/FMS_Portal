@@ -1401,8 +1401,10 @@ async def stage_form_page(
         except Exception as exc:
             print(f"Embedded S1 PickID resolution failed for PickID {requested_pick_id}: {exc}")
 
+    req_app_id = str(request.query_params.get("app_id") or app_id or "").strip()
+    req_table_name = str(request.query_params.get("table_name") or "").strip()
     stage_context = await stage_service.get_stage_context(
-        task_id, stage_no, app_id=(str(app_id).strip() or None)
+        task_id, stage_no, table_name=(req_table_name or None), app_id=(req_app_id or None)
     )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
     fms_info = stage_context.get("fms") or {}
@@ -2188,11 +2190,23 @@ async def _stage1_weight_save_impl(request: Request, task_id: str, stage_no: str
     return JSONResponse({"ok": True, "row_id": row_id, "weight": f"{persisted_num:.3f}"})
 
 async def _save_stage_with_assignment_guard(
-    task_id: str, stage_no: str, payload: dict[str, Any]
+    task_id: str,
+    stage_no: str,
+    payload: dict[str, Any],
+    table_name: str | None = None,
+    app_id: str | None = None,
+    stage_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Translate shared assignment-gate failures into clear stage-route responses."""
     try:
-        return await stage_service.save_stage(task_id, stage_no, payload)
+        return await stage_service.save_stage(
+            task_id,
+            stage_no,
+            payload,
+            table_name=table_name,
+            app_id=app_id,
+            stage_context=stage_context,
+        )
     except employee_availability_service.EmployeeAssignmentDenied as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except employee_availability_service.EmployeeAvailabilityError as exc:
@@ -2202,9 +2216,9 @@ async def _save_stage_with_assignment_guard(
 @router.post("/forms/stage/{task_id}/{stage_no}", response_class=HTMLResponse)
 async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     form_data = await request.form()
-    requested_app_id = str(form_data.get("app_id") or app_id or "").strip()
-    requested_fms_name = str(form_data.get("fms_name") or "").strip()
-    requested_table_name = str(form_data.get("table_name") or "").strip()
+    requested_app_id = str(form_data.get("app_id") or request.query_params.get("app_id") or app_id or "").strip()
+    requested_fms_name = str(form_data.get("fms_name") or request.query_params.get("fms_name") or "").strip()
+    requested_table_name = str(form_data.get("table_name") or request.query_params.get("table_name") or "").strip()
     try:
         async with metadata_service.app_live_database_context(
             app_id=requested_app_id or None,
@@ -2217,6 +2231,8 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
                 stage_no=stage_no,
                 form_data=form_data,
                 requested_app_id=requested_app_id,
+                requested_table_name=requested_table_name,
+                requested_fms_name=requested_fms_name,
                 app_id=app_id,
             )
     except (ValueError, RuntimeError, ApiError, HTTPException) as exc:
@@ -2227,6 +2243,7 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
                 task_id,
                 stage_no,
                 app_id=requested_app_id,
+                table_name=requested_table_name,
                 error=err_msg,
             ),
             status_code=303,
@@ -2238,6 +2255,7 @@ async def stage_form_submit(request: Request, task_id: str, stage_no: str, app_i
                 task_id,
                 stage_no,
                 app_id=requested_app_id,
+                table_name=requested_table_name,
                 error=f"Submission error: {exc}",
             ),
             status_code=303,
@@ -2250,6 +2268,8 @@ async def _stage_form_submit_impl(
     stage_no: str,
     form_data: Any,
     requested_app_id: str,
+    requested_table_name: str = "",
+    requested_fms_name: str = "",
     app_id: str = "",
 ):
     action = str(form_data.get("_action", "save") or "save").strip().lower()
@@ -2259,7 +2279,10 @@ async def _stage_form_submit_impl(
     )
     
     stage_context = await stage_service.get_stage_context(
-        task_id, stage_no, app_id=(requested_app_id or None)
+        task_id,
+        stage_no,
+        table_name=(requested_table_name or None),
+        app_id=(requested_app_id or None),
     )
     if not stage_context.get("editable"):
         raise HTTPException(
@@ -2267,6 +2290,8 @@ async def _stage_form_submit_impl(
             detail="You do not have permission to edit or submit this stage form.",
         )
     fms_info = stage_context.get("fms", {})
+    fms_table = str(fms_info.get("table_name") or requested_table_name or "").strip() or None
+    fms_app_id = str(fms_info.get("app_id") or requested_app_id or "").strip() or None
     
     app_id = fms_info.get("app_id", "GENERAL")
     current_year = datetime.now().strftime("%Y")
@@ -2597,10 +2622,19 @@ async def _stage_form_submit_impl(
         # applicable, but never let it overwrite the explicit S2 mapping.
         generic_payload = {k: v for k, v in payload.items() if k not in s2_fields}
         if generic_payload:
-            await _save_stage_with_assignment_guard(task_id, stage_no, generic_payload)
+            await _save_stage_with_assignment_guard(
+                task_id,
+                stage_no,
+                generic_payload,
+                table_name=fms_table,
+                app_id=fms_app_id,
+                stage_context=stage_context,
+            )
 
         # Refresh the complete stage context after the direct DB update.
-        stage_context = await stage_service.get_stage_context(task_id, stage_no)
+        stage_context = await stage_service.get_stage_context(
+            task_id, stage_no, table_name=fms_table, app_id=fms_app_id
+        )
     elif str(stage_no).strip().upper() == "S3" and payload:
         s3_fields = (
             "S3_DelDocNo",
@@ -2640,11 +2674,27 @@ async def _stage_form_submit_impl(
 
         generic_payload = {k: v for k, v in payload.items() if k not in s3_fields}
         if generic_payload:
-            await _save_stage_with_assignment_guard(task_id, stage_no, generic_payload)
-        stage_context = await stage_service.get_stage_context(task_id, stage_no)
+            await _save_stage_with_assignment_guard(
+                task_id,
+                stage_no,
+                generic_payload,
+                table_name=fms_table,
+                app_id=fms_app_id,
+                stage_context=stage_context,
+            )
+        stage_context = await stage_service.get_stage_context(
+            task_id, stage_no, table_name=fms_table, app_id=fms_app_id
+        )
 
     elif payload:
-        await _save_stage_with_assignment_guard(task_id, stage_no, payload)
+        await _save_stage_with_assignment_guard(
+            task_id,
+            stage_no,
+            payload,
+            table_name=fms_table,
+            app_id=fms_app_id,
+            stage_context=stage_context,
+        )
 
     if str(stage_no).strip().upper() == "S2":
         related_row_ids = [rid for rid in await _resolve_salesorder_row_ids_by_pick_id(stage_context, task_id) if str(rid) != str(task_id)]
@@ -3120,6 +3170,8 @@ async def _stage_form_submit_impl(
                     stage_no_for_sp,
                     "SP_FMS_ALTimeStampStatus",
                     proc_payload,
+                    table_name=fms_table,
+                    app_id=fms_app_id,
                 )
 
                 print(
@@ -3499,7 +3551,7 @@ async def _stage_form_submit_impl(
                     # log the failure and continue to S3.
                     try:
                         s2_linked_result = await stage_service.run_linked_stage_procedure(
-                            task_id, "S2", payload
+                            task_id, "S2", payload, table_name=fms_table, app_id=fms_app_id
                         )
                         print(
                             "[S2 Linked SP] Completed/returned "
@@ -3524,7 +3576,9 @@ async def _stage_form_submit_impl(
 
                 # Refresh the latest row values so S3 sees everything written
                 # by the S2 linked procedure.
-                refreshed_s2_context = await stage_service.get_stage_context(task_id, "S2")
+                refreshed_s2_context = await stage_service.get_stage_context(
+                    task_id, "S2", table_name=fms_table, app_id=fms_app_id
+                )
                 refreshed_s2_row = refreshed_s2_context.get("row") or {}
 
                 s3_payload = dict(payload or {})
@@ -3561,12 +3615,16 @@ async def _stage_form_submit_impl(
                     "S3",
                     "SP_FMS_Pack2Dispatch_S3",
                     {**s3_payload, "StageNo": "S3", "I_StageNo": 3},
+                    table_name=fms_table,
+                    app_id=fms_app_id,
                 )
                 print(
                     "[S3 Linked SP] Completed successfully "
                     f"procedure='SP_FMS_Pack2Dispatch_S3' result={s3_result}"
                 )
-                await stage_service.persist_s3_procedure_output(task_id, s3_result)
+                await stage_service.persist_s3_procedure_output(
+                    task_id, s3_result, table_name=fms_table, app_id=fms_app_id
+                )
 
             else:
                 # --------------------------------------------------------
@@ -3652,7 +3710,7 @@ async def _stage_form_submit_impl(
                     )
                     try:
                         linked_proc_result = await stage_service.run_linked_stage_procedure(
-                            task_id, linked_stage_no, payload
+                            task_id, linked_stage_no, payload, table_name=fms_table, app_id=fms_app_id
                         )
                         linked_proc_succeeded = True
                         print(
@@ -3683,7 +3741,9 @@ async def _stage_form_submit_impl(
                     )
                     await asyncio.sleep(2)
 
-                    latest_s3_context = await stage_service.get_stage_context(task_id, "S3")
+                    latest_s3_context = await stage_service.get_stage_context(
+                        task_id, "S3", table_name=fms_table, app_id=fms_app_id
+                    )
                     latest_s3_row = latest_s3_context.get("row") or {}
 
                     def _s3_pick_value(row, wanted):
@@ -3751,6 +3811,8 @@ async def _stage_form_submit_impl(
                             "S4",
                             "SP_FMS_Pack2Dispatch_S4",
                             s4_payload,
+                            table_name=fms_table,
+                            app_id=fms_app_id,
                         )
                         print(
                             "[S3 DOWNSTREAM CHAIN] SP_FMS_Pack2Dispatch_S4 completed: "
@@ -3791,7 +3853,9 @@ async def _stage_form_submit_impl(
                     )
                     await asyncio.sleep(2)
 
-                    latest_s1_context = await stage_service.get_stage_context(task_id, "S1")
+                    latest_s1_context = await stage_service.get_stage_context(
+                        task_id, "S1", table_name=fms_table, app_id=fms_app_id
+                    )
                     latest_s1_row = latest_s1_context.get("row") or {}
 
                     def _pick_value_case_insensitive(row, wanted):
@@ -3846,12 +3910,16 @@ async def _stage_form_submit_impl(
                             "S3",
                             "SP_FMS_Pack2Dispatch_S3",
                             s3_payload,
+                            table_name=fms_table,
+                            app_id=fms_app_id,
                         )
                         print(
                             "[S1 DOWNSTREAM CHAIN] S3 completed: "
                             f"result={s3_result}"
                         )
-                        await stage_service.persist_s3_procedure_output(task_id, s3_result)
+                        await stage_service.persist_s3_procedure_output(
+                            task_id, s3_result, table_name=fms_table, app_id=fms_app_id
+                        )
                     except Exception as s3_proc_exc:
                         print(
                             "[S1 DOWNSTREAM CHAIN] SP_FMS_Pack2Dispatch_S3 warning: "
@@ -3862,7 +3930,9 @@ async def _stage_form_submit_impl(
                     # It runs only from the explicit Stage S3 submit flow below.
                     # Refresh the Stage-1 row after S3 so the condition is checked
                     # against the latest backend value.
-                    refreshed_after_s3 = await stage_service.get_stage_context(task_id, "S1")
+                    refreshed_after_s3 = await stage_service.get_stage_context(
+                        task_id, "S1", table_name=fms_table, app_id=fms_app_id
+                    )
                     latest_s1_row = refreshed_after_s3.get("row") or latest_s1_row
 
                     # ----------------------------------------------------
@@ -3932,7 +4002,7 @@ async def _stage_form_submit_impl(
                                 f"procedure='{s2_proc_name}'"
                             )
                             s2_linked_result = await stage_service.run_linked_stage_procedure(
-                                task_id, "S2", payload
+                                task_id, "S2", payload, table_name=fms_table, app_id=fms_app_id
                             )
                             print(
                                 "[S1 DOWNSTREAM CHAIN] S2 Linked SP completed: "
@@ -3982,6 +4052,8 @@ async def _stage_form_submit_impl(
                             stage_no_for_sp,
                             "SP_FMS_Pack2Dispatch_RowCycleStatus",
                             cycle_payload,
+                            table_name=fms_table,
+                            app_id=fms_app_id,
                         )
                         print(
                             "[FINAL ROW CYCLE] Completed: "
@@ -4030,12 +4102,14 @@ async def _stage_form_submit_impl(
         stage1_custom_service.invalidate_picker_assignment_cache()
 
     target_app_id = str(fms_info.get("app_id") or requested_app_id or "")
+    target_table_name = str(fms_table or "")
     if action in {"submit", "append"}:
         return RedirectResponse(
             route_builder.stage_form_route(
                 task_id,
                 stage_no,
                 app_id=target_app_id,
+                table_name=target_table_name,
                 saved="1",
                 appended="1",
             ),
@@ -4047,6 +4121,7 @@ async def _stage_form_submit_impl(
             task_id,
             stage_no,
             app_id=target_app_id,
+            table_name=target_table_name,
             saved="1",
         ),
         status_code=303,
@@ -4057,8 +4132,22 @@ async def _stage_form_submit_impl(
 async def stage_form_clear_responses(request: Request, task_id: str, stage_no: str, app_id: str = ""):
     # Clear & Reset is intentionally available to Guest as well as logged-in roles.
     # The action only clears this stage's editable/runtime data; planned fields remain intact.
+    form_data = await request.form()
+    req_app_id = str(form_data.get("app_id") or request.query_params.get("app_id") or app_id or "").strip()
+    req_table_name = str(form_data.get("table_name") or request.query_params.get("table_name") or "").strip()
+    req_fms_name = str(form_data.get("fms_name") or request.query_params.get("fms_name") or "").strip()
 
-    stage_context = await stage_service.get_stage_context(task_id, stage_no, app_id=(str(app_id).strip() or None))
+    async with metadata_service.app_live_database_context(
+        app_id=req_app_id or None,
+        fms_name=req_fms_name or None,
+        table_name=req_table_name or None,
+    ):
+        stage_context = await stage_service.get_stage_context(
+            task_id,
+            stage_no,
+            table_name=req_table_name or None,
+            app_id=req_app_id or None,
+        )
     clear_payload = _build_stage_clear_payload(stage_context, stage_no)
     employee_code = _get_authenticated_employee_code(request)
     _inject_update_audit_fields(clear_payload, stage_context.get("row") or {}, employee_code)
@@ -4150,21 +4239,35 @@ async def stage_form_clear_responses(request: Request, task_id: str, stage_no: s
 
 @router.post("/forms/stage/{task_id}/{stage_no}/lead-time-grant")
 async def stage_lead_time_grant_submit(request: Request, task_id: str, stage_no: str, app_id: str = ""):
-    stage_context = await stage_service.get_stage_context(task_id, stage_no, app_id=(str(app_id).strip() or None))
+    form_data = await request.form()
+    req_app_id = str(form_data.get("app_id") or request.query_params.get("app_id") or app_id or "").strip()
+    req_table_name = str(form_data.get("table_name") or request.query_params.get("table_name") or "").strip()
+    req_fms_name = str(form_data.get("fms_name") or request.query_params.get("fms_name") or "").strip()
+
+    async with metadata_service.app_live_database_context(
+        app_id=req_app_id or None,
+        fms_name=req_fms_name or None,
+        table_name=req_table_name or None,
+    ):
+        stage_context = await stage_service.get_stage_context(
+            task_id,
+            stage_no,
+            table_name=req_table_name or None,
+            app_id=req_app_id or None,
+        )
     if not stage_context.get("editable"):
         return RedirectResponse(
-            route_builder.stage_form_route(task_id, stage_no, ltg_error="Stage is not editable"),
+            route_builder.stage_form_route(task_id, stage_no, app_id=req_app_id, table_name=req_table_name, ltg_error="Stage is not editable"),
             status_code=303,
         )
 
     custom_stage1 = await stage1_custom_service.build_stage1_custom_context(stage_context)
     stage_context["custom_stage1"] = custom_stage1
 
-    form_data = await request.form()
     remarks = str(form_data.get("lead_time_grant_remarks") or "").strip()
     if not remarks:
         return RedirectResponse(
-            route_builder.stage_form_route(task_id, stage_no, ltg_error="Lead Time Grant Remarks is required"),
+            route_builder.stage_form_route(task_id, stage_no, app_id=req_app_id, table_name=req_table_name, ltg_error="Lead Time Grant Remarks is required"),
             status_code=303,
         )
     app_id_raw = str(form_data.get("app_id") or "").strip()
