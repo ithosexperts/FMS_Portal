@@ -1126,11 +1126,8 @@ async def get_dashboard_rows(
         )
     ]
 
-    # Type F Permission Enforcement for task lists and queues:
-    # Task lists and queues for a Type F stage show only the tasks the user passes A–D for.
-    # In every case the user must have VM_EmployeeMaster.IsEmployed = 'Y'.
+    # Employee status check: user must have VM_EmployeeMaster.IsEmployed = 'Y'
     from app.auth.request_context import get_current_identity
-    from app.services.hierarchy_service import is_user_in_hierarchy_sync
 
     identity = get_current_identity()
     if identity:
@@ -1143,29 +1140,6 @@ async def get_dashboard_rows(
                     break
         if is_employed is not None and is_employed not in ("Y", "1", "TRUE"):
             tasks = []
-        else:
-            user_role_id = str(getattr(identity, "role_id", "") or "").strip()
-            user_ec = str(getattr(identity, "employee_code", "") or "").strip()
-            is_admin = user_role_id in ("1", "2", "3")
-            if not is_admin:
-                type_f_allowed_tasks = []
-                for t in tasks:
-                    app_t = await metadata_service.get_app_type(app_id=t.app_id)
-                    if app_t != "F":
-                        type_f_allowed_tasks.append(t)
-                        continue
-                    kpi_doer, has_kpi = await metadata_service.get_task_kpi_doer(
-                        t.app_id, str(t.row_id_value or t.task_id), str(t.current_stage_no or "S1")
-                    )
-                    if not has_kpi or not kpi_doer:
-                        continue
-                    if kpi_doer.upper() == "ALL":
-                        type_f_allowed_tasks.append(t)
-                    elif user_ec and user_ec == kpi_doer:
-                        type_f_allowed_tasks.append(t)
-                    elif user_ec and is_user_in_hierarchy_sync(user_ec, kpi_doer):
-                        type_f_allowed_tasks.append(t)
-                tasks = type_f_allowed_tasks
 
     if status:
         tasks = [t for t in tasks if t.status.lower() == status.lower()]
