@@ -118,6 +118,12 @@ async def _dashboard_context(
     search: str | None,
     page: int = 1,
 ) -> dict:
+    try:
+        from app.services.hierarchy_service import get_hierarchy_map
+        await get_hierarchy_map()
+    except Exception:
+        pass
+
     progressive_refresh = bool(str(request.query_params.get("_progressive_ts") or "").strip())
     selected_fms_values = [str(v).strip() for v in request.query_params.getlist("fms_name") if str(v).strip()]
     if not selected_fms_values and fms_name:
@@ -619,8 +625,17 @@ async def _dashboard_context(
         ]
         section["pager_hidden_pairs"] = hidden_pairs
 
+    req_state = getattr(request, "state", None)
+    current_user_role_id = str(getattr(req_state, "role_id", "") or "").strip()
+    current_user_ec = str(getattr(req_state, "employee_code", "") or "").strip()
+    current_user_name = str(getattr(req_state, "employee_name", "") or "").strip()
+
     return {
         "request": request,
+        "current_role_id": current_user_role_id,
+        "user_role_id": current_user_role_id,
+        "user_employee_code": current_user_ec,
+        "user_employee_name": current_user_name,
         "fms_options": fms_options,
         "doer_options": doer_options,
         "stage_headers": stage_headers,
@@ -1064,8 +1079,12 @@ async def dashboard_modal(
         context["primary_key"],
     )
     
+    req_state = getattr(request, "state", None)
+    current_user_role_id = str(getattr(req_state, "role_id", "") or "").strip()
+
     return templates.TemplateResponse(request, "dashboard/_modal.html", {
         "task_id": task_id,
         "context": context,
-        "sections": sections
+        "sections": sections,
+        "current_role_id": current_user_role_id,
     })

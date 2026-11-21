@@ -44,20 +44,38 @@ async def task_details(
     full_path = os.path.join("app", "templates", "custom_forms", f"{table_name}.html")
     has_custom_form = os.path.exists(full_path)
 
+    req_state = getattr(request, "state", None)
+    current_user_role_id = str(getattr(req_state, "role_id", "") or "").strip()
+    current_user_ec = str(getattr(req_state, "employee_code", "") or "").strip()
+    current_user_name = str(getattr(req_state, "employee_name", "") or "").strip()
+
     return templates.TemplateResponse(request, "task/details.html", {
         "task_id": task_id,
         "context": context,
         "application_fields": application_fields,
         "stage_context": stage_context,
         "custom_form_template": custom_template_path if has_custom_form else None,
+        "current_role_id": current_user_role_id,
+        "user_role_id": current_user_role_id,
+        "user_employee_code": current_user_ec,
+        "user_employee_name": current_user_name,
     })
 
 
 @router.get("/task/{task_id}/timeline", response_class=HTMLResponse)
 async def task_timeline(request: Request, task_id: str):
     context = await task_service.get_task_context(task_id)
+    req_state = getattr(request, "state", None)
+    current_user_role_id = str(getattr(req_state, "role_id", "") or "").strip()
+    current_user_ec = str(getattr(req_state, "employee_code", "") or "").strip()
+    current_user_name = str(getattr(req_state, "employee_name", "") or "").strip()
     return templates.TemplateResponse(request, "task/timeline.html", {
-        "task_id": task_id, "context": context,
+        "task_id": task_id,
+        "context": context,
+        "current_role_id": current_user_role_id,
+        "user_role_id": current_user_role_id,
+        "user_employee_code": current_user_ec,
+        "user_employee_name": current_user_name,
     })
 
 
@@ -65,8 +83,18 @@ async def task_timeline(request: Request, task_id: str):
 async def task_history(request: Request, task_id: str):
     context = await task_service.get_task_context(task_id)
     completed_stages = [s for s in context["timeline"] if s["status"] == "Completed"]
+    req_state = getattr(request, "state", None)
+    current_user_role_id = str(getattr(req_state, "role_id", "") or "").strip()
+    current_user_ec = str(getattr(req_state, "employee_code", "") or "").strip()
+    current_user_name = str(getattr(req_state, "employee_name", "") or "").strip()
     return templates.TemplateResponse(request, "task/history.html", {
-        "task_id": task_id, "context": context, "completed_stages": completed_stages,
+        "task_id": task_id,
+        "context": context,
+        "completed_stages": completed_stages,
+        "current_role_id": current_user_role_id,
+        "user_role_id": current_user_role_id,
+        "user_employee_code": current_user_ec,
+        "user_employee_name": current_user_name,
     })
 
 

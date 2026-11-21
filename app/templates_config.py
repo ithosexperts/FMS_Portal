@@ -27,5 +27,5 @@ templates.env.globals["one_portal_app_window_url"] = settings.one_portal_app_win
 templates.env.globals["cases_system_app_id_production"] = settings.cases_system_app_id_production
 templates.env.globals["cases_system_app_id_test"] = settings.cases_system_app_id_test
 templates.env.globals["get_cases_system_app_id"] = settings.get_cases_system_app_id
-templates.env.globals["current_role_id"] = 1  # Simulated Admin Role for Eye Button
+templates.env.globals["current_role_id"] = ""  # Default empty; actual role_id supplied from request context
 templates.env.filters["duration"] = format_duration

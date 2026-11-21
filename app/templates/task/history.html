@@ -19,7 +19,10 @@
         {% for stage in completed_stages %}
         <tr>
           <td>
-            {% set can_open = can_access_stage(stage, request) if can_access_stage is defined else True %}
+            {% set curr_role = (user_role_id if user_role_id is defined and user_role_id else (request.state.role_id if request and request.state and request.state.role_id is defined else '')) | string | trim %}
+            {% set curr_ec = (user_employee_code if user_employee_code is defined and user_employee_code else (request.state.employee_code if request and request.state and request.state.employee_code is defined else '')) | string | trim %}
+            {% set curr_name = (user_employee_name if user_employee_name is defined and user_employee_name else (request.state.employee_name if request and request.state and request.state.employee_name is defined else '')) | string | trim %}
+            {% set can_open = can_access_stage(stage, request, curr_role, curr_ec, curr_name) if can_access_stage is defined else False %}
             {% if can_open %}
             <a href="{{ routes.stage_form_route(task_id, stage.stage_no) }}">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</a>
             {% else %}

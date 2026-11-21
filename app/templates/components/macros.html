@@ -15,8 +15,13 @@
   <span class="badge badge-{{ color }}">{{ label }}</span>
 {%- endmacro %}
 
-{% macro stage_card(stage, href) -%}
-{% set can_open = can_access_stage(stage, request) if can_access_stage is defined else True %}
+{% macro stage_card(stage, href, can_open=None) -%}
+{% if can_open is none %}
+  {% set curr_role = (user_role_id if user_role_id is defined and user_role_id else (request.state.role_id if request and request.state and request.state.role_id is defined else '')) | string | trim %}
+  {% set curr_ec = (user_employee_code if user_employee_code is defined and user_employee_code else (request.state.employee_code if request and request.state and request.state.employee_code is defined else '')) | string | trim %}
+  {% set curr_name = (user_employee_name if user_employee_name is defined and user_employee_name else (request.state.employee_name if request and request.state and request.state.employee_name is defined else '')) | string | trim %}
+  {% set can_open = can_access_stage(stage, request, curr_role, curr_ec, curr_name) if can_access_stage is defined else False %}
+{% endif %}
 {% if can_open %}
 <a class="stage-card {{ 'current' if stage.is_current }}" href="{{ href }}">
 {% else %}

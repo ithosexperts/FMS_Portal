@@ -266,7 +266,13 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
     return False
 
 
-def can_access_stage(stage_cell: Any, request: Any = None) -> bool:
+def can_access_stage(
+    stage_cell: Any,
+    request: Any = None,
+    user_role_id: Any = None,
+    user_ec: Any = None,
+    user_name: Any = None,
+) -> bool:
     """
     Check if the user viewing the dashboard has access to open/view this stage's form.
 
@@ -278,32 +284,46 @@ def can_access_stage(stage_cell: Any, request: Any = None) -> bool:
        - They are in the Doer's Manager Chain (from VM_EmployeeMaster.ManagerChain)
     3. Otherwise return False (the stage button will be rendered frozen / greyed out).
     """
-    role_id = None
-    user_ec = None
-    user_name = None
+    role_id = str(user_role_id or "").strip() if user_role_id is not None else ""
+    ec = str(user_ec or "").strip() if user_ec is not None else ""
+    name = str(user_name or "").strip() if user_name is not None else ""
 
-    if request is not None:
+    # If not explicitly provided, extract from request
+    if (not role_id or not ec) and request is not None:
         state = getattr(request, "state", None)
         if state is not None:
-            role_id = getattr(state, "role_id", None)
-            user_ec = getattr(state, "employee_code", None)
-            user_name = getattr(state, "employee_name", None)
+            if not role_id:
+                role_id = str(getattr(state, "role_id", "") or "").strip()
+            if not ec:
+                ec = str(getattr(state, "employee_code", "") or "").strip()
+            if not name:
+                name = str(getattr(state, "employee_name", "") or "").strip()
+        elif isinstance(request, dict):
+            if not role_id:
+                role_id = str(request.get("user_role_id") or request.get("current_role_id") or request.get("role_id") or "").strip()
+            if not ec:
+                ec = str(request.get("user_employee_code") or request.get("employee_code") or "").strip()
+            if not name:
+                name = str(request.get("user_employee_name") or request.get("employee_name") or "").strip()
 
-    if not role_id and not user_ec:
+    # Fall back to thread-local authenticated identity
+    if not role_id or not ec:
         identity = get_current_identity()
         if identity is not None:
-            role_id = getattr(identity, "role_id", None)
-            user_ec = getattr(identity, "employee_code", None)
-            user_name = getattr(identity, "employee_name", None)
-
-    # In local testing without auth context, permit view
-    if role_id is None and user_ec is None and user_name is None:
-        return True
+            if not role_id:
+                role_id = str(getattr(identity, "role_id", "") or "").strip()
+            if not ec:
+                ec = str(getattr(identity, "employee_code", "") or "").strip()
+            if not name:
+                name = str(getattr(identity, "employee_name", "") or "").strip()
 
     # Role 1, 2, 3 have full access
-    role_str = str(role_id or "").strip()
-    if role_str in ("1", "2", "3"):
+    if role_id in ("1", "2", "3"):
         return True
+
+    # If unauthenticated or no valid identity found, deny access
+    if not role_id and not ec and not name:
+        return False
 
     # Extract stage doer and backup doer information
     if isinstance(stage_cell, dict):
@@ -326,8 +346,8 @@ def can_access_stage(stage_cell: Any, request: Any = None) -> bool:
     if doer_str.upper() == "ALL" or doer_code_str.upper() == "ALL":
         return True
 
-    user_ec_str = str(user_ec or "").strip()
-    user_name_str = str(user_name or "").strip()
+    user_ec_str = ec
+    user_name_str = name
 
     # Match direct employee code
     if user_ec_str:
