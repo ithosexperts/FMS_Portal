@@ -161,69 +161,66 @@ async def get_dashboard_fms_options() -> list[dict[str, Any]]:
 
 
 async def get_doer_options(fms_names: list[str] | None = None) -> list[str]:
-    allowed_options = await get_dashboard_fms_options()
-    allowed_names = {
-        str(opt.get("fms_name") or "").strip().lower()
-        for opt in allowed_options
-        if str(opt.get("fms_name") or "").strip()
-    }
-    if not allowed_names:
-        return []
-    config_rows = await metadata_service.get_fms_config(fms_type=DASHBOARD_FMS_TYPE)
-    config_rows = [
-        r for r in config_rows
-        if str(r.get("FMS_NAME") or "").strip().lower() in allowed_names
-    ]
-    if fms_names:
-        selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
+    try:
+        allowed_options = await get_dashboard_fms_options()
+        allowed_names = {
+            str(opt.get("fms_name") or "").strip().lower()
+            for opt in allowed_options
+            if str(opt.get("fms_name") or "").strip()
+        }
+        if not allowed_names:
+            return []
+        config_rows = await metadata_service.get_fms_config(fms_type=DASHBOARD_FMS_TYPE)
         config_rows = [
             r for r in config_rows
-            if str(r.get("FMS_NAME") or "").strip().lower() in selected
+            if str(r.get("FMS_NAME") or "").strip().lower() in allowed_names
         ]
-    doers = {str(row["DOER"]).strip() for row in config_rows if row.get("DOER") and str(row["DOER"]).strip()}
+        if fms_names:
+            selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
+            config_rows = [
+                r for r in config_rows
+                if str(r.get("FMS_NAME") or "").strip().lower() in selected
+            ]
+        doers = {str(row["DOER"]).strip() for row in config_rows if row.get("DOER") and str(row["DOER"]).strip()}
 
-    target_options = [
-        opt for opt in allowed_options
-        if str(opt.get("fms_name") or "").strip().lower() in allowed_names
-    ]
-    if fms_names:
-        selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
         target_options = [
-            opt for opt in target_options
-            if str(opt.get("fms_name") or "").strip().lower() in selected
+            opt for opt in allowed_options
+            if str(opt.get("fms_name") or "").strip().lower() in allowed_names
         ]
+        if fms_names:
+            selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
+            target_options = [
+                opt for opt in target_options
+                if str(opt.get("fms_name") or "").strip().lower() in selected
+            ]
 
-    for opt in target_options:
-        tbl = opt.get("table_name")
-        if not tbl:
-            continue
-        found_in_cache = False
-        for (cache_key, pages) in _PAGE_CACHE.items():
-            if f"|{tbl}|" in cache_key:
-                found_in_cache = True
-                for page_entry in pages.values():
-                    page_rows = page_entry.get("rows") or []
-                    for r in page_rows:
-                        for k, v in r.items():
-                            knorm = "".join(ch for ch in str(k).lower() if ch.isalnum())
-                            if (knorm.endswith("doer") or knorm.endswith("doername") or knorm.endswith("picker") or knorm.endswith("runner")) and v:
-                                v_str = str(v).strip()
-                                if v_str and v_str.lower() not in ("none", "null", "-", "all"):
-                                    doers.add(v_str)
-        if not found_in_cache:
-            try:
-                first_rows, _, _ = await _fetch_dashboard_api_page(tbl, filters=None, page=1, page_size=50)
-                for r in first_rows:
-                    for k, v in r.items():
-                        knorm = "".join(ch for ch in str(k).lower() if ch.isalnum())
-                        if (knorm.endswith("doer") or knorm.endswith("doername") or knorm.endswith("picker") or knorm.endswith("runner")) and v:
-                            v_str = str(v).strip()
-                            if v_str and v_str.lower() not in ("none", "null", "-", "all"):
-                                doers.add(v_str)
-            except Exception:
-                pass
+        for opt in target_options:
+            tbl = opt.get("table_name")
+            if not tbl:
+                continue
+            for (cache_key, pages) in list(_PAGE_CACHE.items()):
+                if f"|{tbl}|" in cache_key and isinstance(pages, dict):
+                    for page_entry in pages.values():
+                        page_rows = []
+                        if isinstance(page_entry, (tuple, list)) and len(page_entry) > 0:
+                            page_rows = page_entry[0]
+                        elif isinstance(page_entry, dict):
+                            page_rows = page_entry.get("rows") or []
+                        if isinstance(page_rows, list):
+                            for r in page_rows:
+                                if isinstance(r, dict):
+                                    for k, v in r.items():
+                                        knorm = "".join(ch for ch in str(k).lower() if ch.isalnum())
+                                        if (knorm.endswith("doer") or knorm.endswith("doername") or knorm.endswith("picker") or knorm.endswith("runner")) and v:
+                                            v_str = str(v).strip()
+                                            if v_str and v_str.lower() not in ("none", "null", "-", "all"):
+                                                doers.add(v_str)
 
-    return sorted(d for d in doers if d)
+        return sorted(d for d in doers if d)
+    except Exception as exc:
+        logger = logging.getLogger("fms_portal.dashboard")
+        logger.warning("Error fetching doer options: %s", exc)
+        return []
 
 
 async def _fetch_dashboard_api_page(
@@ -1341,7 +1338,10 @@ def _build_task_summary(
 
     if current:
         stage_no, stage_name = current.get("STAGE_NO"), current.get("STAGE_NAME")
-        current_timeline_stage = next((t for t in timeline if str(t.get("stage_no")) == str(stage_no)), None)
+        current_timeline_stage = next(
+            (t for t in (timeline or []) if isinstance(t, dict) and str(t.get("stage_no") or "").strip().lower() == str(stage_no or "").strip().lower()),
+            None
+        )
         doer = (
             current_timeline_stage.get("doer")
             if current_timeline_stage and _has_value(current_timeline_stage.get("doer"))
@@ -1364,7 +1364,10 @@ def _build_task_summary(
             # first configured stage instead of jumping to the final stage.
             reference = stages[0]
         stage_no, stage_name = reference.get("STAGE_NO"), reference.get("STAGE_NAME")
-        ref_timeline_stage = next((t for t in timeline if str(t.get("stage_no")) == str(stage_no)), None)
+        ref_timeline_stage = next(
+            (t for t in (timeline or []) if isinstance(t, dict) and str(t.get("stage_no") or "").strip().lower() == str(stage_no or "").strip().lower()),
+            None
+        )
         doer = (
             ref_timeline_stage.get("doer")
             if ref_timeline_stage and _has_value(ref_timeline_stage.get("doer"))

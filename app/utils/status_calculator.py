@@ -137,6 +137,11 @@ def _resolve_stage_doer_info(stage: dict[str, Any], task_row: dict[str, Any]) ->
     Stage Doer MUST be resolved from the linked task table row first (e.g. S1_Doer, S2_Doer),
     and only fall back to FMS_Config if not found.
     """
+    if not isinstance(stage, dict):
+        return None, None
+    if not isinstance(task_row, dict):
+        return (stage.get("DOER") or stage.get("DOER_EMP_CODE"), stage.get("DOER_EMP_CODE"))
+
     stage_no = str(stage.get("STAGE_NO") or "").strip()
     stage_prefix = _normalize(stage_no)
     s_num = "".join(ch for ch in stage_no if ch.isdigit())
@@ -236,6 +241,8 @@ def _resolve_stage_doer_info(stage: dict[str, Any], task_row: dict[str, Any]) ->
 
 def build_timeline(stage_configs: list[dict[str, Any]], task_row: dict[str, Any]) -> list[dict[str, Any]]:
     """Full ordered stage-by-stage timeline for the Task Details page."""
+    if not isinstance(task_row, dict):
+        task_row = {}
     now = datetime.now()
     current = get_current_stage(stage_configs, task_row)
     current_no = current.get("STAGE_NO") if current else None
