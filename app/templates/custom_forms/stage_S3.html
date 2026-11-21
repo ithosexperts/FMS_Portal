@@ -9,6 +9,11 @@
 {%- endmacro %}
 
 {% block content %}
+{% if saved or appended %}
+<div class="filter-chip alert-success-banner" style="margin-bottom:14px; padding:12px 18px; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:6px; font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px;">
+  <span style="font-size:16px;">✓</span> <span>Successfully submit &mdash; stage data and attachments have been appended at backend.</span>
+</div>
+{% endif %}
 {% if cleared %}
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">S3 Packing Slip, Delay Time, Actual Timestamp and Task Status cleared. All other Stage 3 values were kept unchanged.</div>
 {% endif %}
@@ -127,8 +132,17 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
       <button type="button" class="btn" id="open-s1-picknpack-s3" data-s1-url="/forms/stage/{{ task_id }}/S1?embedded=1">S1 PickNPack Form</button>
       {% if not custom_stage3.s3_locked %}
+        <div id="submit-progress-container-s3" style="display:none; width:100%; margin-top:14px; margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:5px;">
+            <span id="submit-progress-status-s3">Uploading files and appending to backend...</span>
+            <span id="submit-progress-percent-s3">0%</span>
+          </div>
+          <div style="width:100%; height:8px; background:var(--bg-surface-secondary, #e9ecef); border-radius:4px; overflow:hidden;">
+            <div id="submit-progress-bar-s3" style="width:0%; height:100%; background:var(--color-primary, #007bff); border-radius:4px; transition:width 0.4s ease;"></div>
+          </div>
+        </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <button type="submit" name="_action" value="save" class="btn">Save Progress</button>
+          <button type="submit" name="_action" value="save" id="btn-save-s3" class="btn">Save Progress</button>
           <button type="submit" name="_action" value="submit" class="btn btn-primary" id="s3-submit-btn" disabled aria-disabled="true">Submit Stage</button>
         </div>
         <div id="s3-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">S3 Del Doc NO and S3 Del Line NO are fetched from backend. Attach at least one Packing Slip to enable Submit Stage.</div>
@@ -277,12 +291,53 @@
   if (s3Form) {
     s3Form.addEventListener('submit', (event) => {
       const submitter = event.submitter;
-      if (!submitter || submitter.value !== 'submit') return;
-      updateSubmitState();
-      if (submitBtn && submitBtn.disabled) {
-        event.preventDefault();
-        alert('Please ensure backend S3 Del Doc NO / S3 Del Line NO are available and attach at least one Packing Slip before submitting.');
+      if (submitter && submitter.value === 'submit') {
+        updateSubmitState();
+        if (submitBtn && submitBtn.disabled) {
+          event.preventDefault();
+          alert('Please ensure backend S3 Del Doc NO / S3 Del Line NO are available and attach at least one Packing Slip before submitting.');
+          return;
+        }
       }
+      const progressContainer = document.getElementById("submit-progress-container-s3");
+      const progressBar = document.getElementById("submit-progress-bar-s3");
+      const progressPercent = document.getElementById("submit-progress-percent-s3");
+      const progressStatus = document.getElementById("submit-progress-status-s3");
+      const saveBtn = document.getElementById("btn-save-s3");
+
+      if (progressContainer && progressBar) {
+        progressContainer.style.display = "block";
+        let percent = 15;
+        progressBar.style.width = percent + "%";
+        if (progressPercent) progressPercent.textContent = percent + "%";
+        const timer = setInterval(() => {
+          if (percent < 90) {
+            percent += Math.floor(Math.random() * 15) + 5;
+            if (percent > 90) percent = 90;
+            progressBar.style.width = percent + "%";
+            if (progressPercent) progressPercent.textContent = percent + "%";
+            if (percent > 60 && progressStatus) {
+              progressStatus.textContent = "Appending to backend database...";
+            }
+          } else {
+            clearInterval(timer);
+          }
+        }, 350);
+      }
+
+      setTimeout(() => {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitBtn.textContent = "Submitting...";
+        }
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.style.opacity = "0.6";
+          saveBtn.style.cursor = "not-allowed";
+        }
+      }, 10);
     });
   }
 

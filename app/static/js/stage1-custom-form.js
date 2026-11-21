@@ -1160,8 +1160,49 @@
       updateSubmitState();
     });
 
-    form.addEventListener("submit", () => {
+    form.addEventListener("submit", (e) => {
       syncBatchPayload();
+
+      const progressContainer = document.getElementById("submit-progress-container");
+      const progressBar = document.getElementById("submit-progress-bar");
+      const progressPercent = document.getElementById("submit-progress-percent");
+      const progressStatus = document.getElementById("submit-progress-status");
+      const submitBtn = document.getElementById("btn-submit-stage");
+      const saveBtn = document.getElementById("btn-save-stage");
+
+      if (progressContainer && progressBar) {
+        progressContainer.style.display = "block";
+        let percent = 15;
+        progressBar.style.width = percent + "%";
+        if (progressPercent) progressPercent.textContent = percent + "%";
+        const timer = setInterval(() => {
+          if (percent < 90) {
+            percent += Math.floor(Math.random() * 15) + 5;
+            if (percent > 90) percent = 90;
+            progressBar.style.width = percent + "%";
+            if (progressPercent) progressPercent.textContent = percent + "%";
+            if (percent > 60 && progressStatus) {
+              progressStatus.textContent = "Appending to backend database...";
+            }
+          } else {
+            clearInterval(timer);
+          }
+        }, 350);
+      }
+
+      setTimeout(() => {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.6";
+          submitBtn.style.cursor = "not-allowed";
+          submitBtn.textContent = "Submitting...";
+        }
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.style.opacity = "0.6";
+          saveBtn.style.cursor = "not-allowed";
+        }
+      }, 10);
     });
   }
 

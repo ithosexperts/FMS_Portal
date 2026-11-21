@@ -15,6 +15,11 @@
 </style>
 
 {% block content %}
+{% if saved or appended %}
+<div class="filter-chip alert-success-banner" style="margin-bottom:14px; padding:12px 18px; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:6px; font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px;">
+  <span style="font-size:16px;">✓</span> <span>Successfully submit &mdash; stage data and attachments have been appended at backend.</span>
+</div>
+{% endif %}
 {% if cleared %}
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
 {% endif %}
@@ -257,8 +262,19 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
       <button type="button" class="btn" id="open-s1-picknpack" data-s1-url="/forms/stage/{{ task_id }}/S1?embedded=1">S1 PickNPack Form</button>
       {% if not custom_stage2.s2_locked %}
-      <button type="submit" name="_action" value="save" class="btn">Save Progress</button>
-      <button type="submit" name="_action" value="submit" class="btn btn-primary s2-submit-btn" disabled aria-disabled="true">Submit Stage</button>
+      <div id="submit-progress-container-s2" style="display:none; width:100%; margin-top:14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:5px;">
+          <span id="submit-progress-status-s2">Uploading files and appending to backend...</span>
+          <span id="submit-progress-percent-s2">0%</span>
+        </div>
+        <div style="width:100%; height:8px; background:var(--bg-surface-secondary, #e9ecef); border-radius:4px; overflow:hidden;">
+          <div id="submit-progress-bar-s2" style="width:0%; height:100%; background:var(--color-primary, #007bff); border-radius:4px; transition:width 0.4s ease;"></div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; margin-left:auto;">
+        <button type="submit" name="_action" value="save" id="btn-save-s2" class="btn">Save Progress</button>
+        <button type="submit" name="_action" value="submit" id="btn-submit-s2" class="btn btn-primary s2-submit-btn" disabled aria-disabled="true">Submit Stage</button>
+      </div>
       <div class="s2-submit-hint" style="width:100%;text-align:right;font-size:12px;color:var(--text-secondary);">Fill the required Stage 2 driver, vehicle, dispatch, trip expense, remarks and loading-image fields to enable Submit Stage.</div>
       {% else %}
       <div style="font-size:12px;color:var(--text-secondary);align-self:center;">Stage 2 is completed and the submitted values are read-only.</div>
@@ -496,12 +512,53 @@
   if (s2Form) {
     s2Form.addEventListener('submit', (event) => {
       const submitter = event.submitter;
-      if (!submitter || submitter.value !== 'submit') return;
-      updateS2SubmitState();
-      if (s2SubmitBtn && s2SubmitBtn.disabled) {
-        event.preventDefault();
-        alert('Please fill all Stage 2 required fields (including Trip Expense), use a 10-digit Driver Mobile No, and attach at least one Loading Image before submitting.');
+      if (submitter && submitter.value === 'submit') {
+        updateS2SubmitState();
+        if (s2SubmitBtn && s2SubmitBtn.disabled) {
+          event.preventDefault();
+          alert('Please fill all Stage 2 required fields (including Trip Expense), use a 10-digit Driver Mobile No, and attach at least one Loading Image before submitting.');
+          return;
+        }
       }
+      const progressContainer = document.getElementById("submit-progress-container-s2");
+      const progressBar = document.getElementById("submit-progress-bar-s2");
+      const progressPercent = document.getElementById("submit-progress-percent-s2");
+      const progressStatus = document.getElementById("submit-progress-status-s2");
+      const saveBtn = document.getElementById("btn-save-s2");
+
+      if (progressContainer && progressBar) {
+        progressContainer.style.display = "block";
+        let percent = 15;
+        progressBar.style.width = percent + "%";
+        if (progressPercent) progressPercent.textContent = percent + "%";
+        const timer = setInterval(() => {
+          if (percent < 90) {
+            percent += Math.floor(Math.random() * 15) + 5;
+            if (percent > 90) percent = 90;
+            progressBar.style.width = percent + "%";
+            if (progressPercent) progressPercent.textContent = percent + "%";
+            if (percent > 60 && progressStatus) {
+              progressStatus.textContent = "Appending to backend database...";
+            }
+          } else {
+            clearInterval(timer);
+          }
+        }, 350);
+      }
+
+      setTimeout(() => {
+        if (s2SubmitBtn) {
+          s2SubmitBtn.disabled = true;
+          s2SubmitBtn.style.opacity = "0.6";
+          s2SubmitBtn.style.cursor = "not-allowed";
+          s2SubmitBtn.textContent = "Submitting...";
+        }
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.style.opacity = "0.6";
+          saveBtn.style.cursor = "not-allowed";
+        }
+      }, 10);
     });
   }
 

@@ -58,6 +58,11 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         context["fms"]["login_type"] = login_type
         context["fms"]["type"] = app_type
 
+    kpi_doer_code = None
+    has_kpi_row = False
+    if app_type == "F":
+        kpi_doer_code, has_kpi_row = await metadata_service.get_task_kpi_doer(resolved_app_id, task_id, stage_no)
+
     perm_context = {
         "task_id": task_id,
         "stage_no": stage_no,
@@ -68,6 +73,8 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         "app_id": resolved_app_id,
         "login_type": login_type,
         "app_type": app_type,
+        "kpi_doer_code": kpi_doer_code,
+        "has_kpi_row": has_kpi_row,
     }
     try:
         from app.services.hierarchy_service import get_hierarchy_map
@@ -75,22 +82,26 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
     except Exception as hier_err:
         print(f"[Stage Permission] Hierarchy load warning: {hier_err}")
 
-    # For non-admin roles, check FMS_Application_Rights for Can View
-    try:
-        from app.auth.request_context import get_current_identity
-        ident = get_current_identity()
-        if ident and str(getattr(ident, "role_id", "") or "").strip() not in ("1", "2", "3"):
-            # All NOR applications have Can View for all users, all Role IDs
-            if login_type == "NOR":
-                perm_context["can_view_rights"] = True
-            else:
-                u_ec = str(getattr(ident, "employee_code", "") or "").strip()
-                u_id = str(getattr(ident, "user_id", "") or "").strip()
-                if u_ec or u_id:
-                    rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
-                    perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id, stage_no=stage_no)
-    except Exception as r_err:
-        print(f"[Stage Permission] Rights check warning: {r_err}")
+    # For non-admin roles:
+    # If app_type == 'F': Can_View and Can_Edit in FMS_Application_Rights are IGNORED.
+    # View/Edit come only from Rules A-D.
+    # If app_type != 'F': check FMS_Application_Rights for Can View.
+    if app_type != "F":
+        try:
+            from app.auth.request_context import get_current_identity
+            ident = get_current_identity()
+            if ident and str(getattr(ident, "role_id", "") or "").strip() not in ("1", "2", "3"):
+                # All NOR applications have Can View for all users, all Role IDs
+                if login_type == "NOR":
+                    perm_context["can_view_rights"] = True
+                else:
+                    u_ec = str(getattr(ident, "employee_code", "") or "").strip()
+                    u_id = str(getattr(ident, "user_id", "") or "").strip()
+                    if u_ec or u_id:
+                        rights = await metadata_service.get_user_application_rights(u_ec, user_id=u_id)
+                        perm_context["can_view_rights"] = metadata_service.check_user_can_view_app(rights, resolved_app_id, stage_no=stage_no)
+        except Exception as r_err:
+            print(f"[Stage Permission] Rights check warning: {r_err}")
 
     editable = is_current and can(ACTION_EDIT_CURRENT_STAGE, perm_context)
     context["editable"] = editable

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -163,6 +164,10 @@ def _extract_permissions(rows: list[dict[str, Any]]) -> set[str]:
     return permissions
 
 
+_AUTH_SESSION_CACHE: dict[str, tuple[float, AuthenticatedIdentity]] = {}
+_AUTH_CACHE_TTL = 120.0  # seconds
+
+
 class OnePortalAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # The DB target is accepted only from a verified, signed FMS SSO cookie.
@@ -241,6 +246,35 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
             if enforce_auth:
                 return JSONResponse(status_code=401, content={"detail": "Invalid token structure"})
             return await call_next(request)
+
+        now_mono = time.monotonic()
+        cached_entry = _AUTH_SESSION_CACHE.get(session_id)
+        if cached_entry and (now_mono - cached_entry[0]) < _AUTH_CACHE_TTL:
+            identity = cached_entry[1]
+            request.state.session_id = session_id
+            request.state.employee_code = identity.employee_code
+            request.state.employee_name = identity.employee_name
+            request.state.role_id = identity.role_id
+            request.state.role_name = identity.role_name
+            request.state.department = identity.department
+            request.state.position = identity.position
+            request.state.email = identity.email
+            request.state.mobile = identity.mobile
+            request.state.user_id = identity.user_id
+            request.state.permissions = identity.permissions
+
+            identity_token = set_current_identity(identity)
+            bearer_token_token = set_current_bearer_token(token)
+
+            try:
+                response = await call_next(request)
+            finally:
+                reset_current_identity(identity_token)
+                reset_current_bearer_token(bearer_token_token)
+
+            if token and token_source != "sso_cookie":
+                _set_session_cookie(response, token)
+            return response
 
         try:
             session_rows = await table_api.get_table("TM_Login_Sessions", filters={"session_id": session_id})
@@ -330,6 +364,8 @@ class OnePortalAuthMiddleware(BaseHTTPMiddleware):
             permissions=permissions,
             raw_employee=employee_row,
         )
+
+        _AUTH_SESSION_CACHE[session_id] = (time.monotonic(), identity)
 
         request.state.session_id = session_id
         request.state.employee_code = identity.employee_code

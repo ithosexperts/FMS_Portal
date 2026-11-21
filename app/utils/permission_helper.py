@@ -72,6 +72,18 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
         # Auth is not configured for this environment.
         return True
 
+    # In every case the user must have VM_EmployeeMaster.IsEmployed = 'Y'.
+    # Any user where IsEmployed is 'N' (or not 'Y') is denied all access.
+    raw_employee = getattr(identity, "raw_employee", {}) or {}
+    is_employed = None
+    if isinstance(raw_employee, dict):
+        for k in ("IsEmployed", "is_employed", "ISEMPLOYED", "Active", "active", "ActiveStatus", "activestatus"):
+            if k in raw_employee and raw_employee[k] is not None:
+                is_employed = str(raw_employee[k]).strip().upper()
+                break
+    if is_employed is not None and is_employed not in ("Y", "1", "TRUE"):
+        return False
+
     user_role_id = str(getattr(identity, "role_id", "") or "").strip()
     user_ec = str(getattr(identity, "employee_code", "") or "").strip()
 
@@ -100,6 +112,14 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
         or normalized_action.startswith("can_view")
     )
 
+    # Resolve application TYPE ('F', 'A', etc.)
+    app_type = str(
+        context.get("app_type")
+        or (context.get("fms") or {}).get("type")
+        or context.get("Type")
+        or ""
+    ).strip().upper()
+
     # Resolve application LOGIN_TYPE from context
     raw_lt = (
         context.get("login_type")
@@ -109,98 +129,84 @@ def can(action: str, context: dict[str, Any] | None = None) -> bool:
         or ""
     )
     is_sso = str(raw_lt).strip().upper() == "SSO"
+    is_admin = user_role_id in ("1", "2", "3")
 
+    # =========================================================================
+    # TYPE F APPLICATIONS (TM_Application_Master.Type = 'F')
+    # Permissions are decided PER TASK, never per stage, and NEVER from FMS_Config.
+    # Can_View and Can_Edit in FMS_Application_Rights are IGNORED.
+    # View/Edit come only from Rules A-D:
+    #   A. Assigned doer: user EC == DoerCode in Z_KPI_MasterRecord
+    #   B. Manager chain: user EC appears in ManagerChain of DoerCode
+    #   C. Admin role: RoleID IN (1, 2, 3) (with IsEmployed = 'Y')
+    #   D. ALL: task's DoerCode is 'ALL' (any case)
+    # A task with no row in Z_KPI_MasterRecord (stage not yet planned) is accessible
+    # ONLY under Rule C (Admin).
+    # =========================================================================
+    if app_type == "F":
+        if is_view_action or is_edit_action:
+            # Rule C: Admin role (RoleID IN (1, 2, 3) and IsEmployed = 'Y')
+            if is_admin:
+                return True
+
+            # If task has no row in Z_KPI_MasterRecord (stage not yet planned), only Rule C has access.
+            has_kpi_row = context.get("has_kpi_row", True)
+            if not has_kpi_row:
+                return False
+
+            doer_code = str(context.get("kpi_doer_code") or context.get("doer_code") or "").strip()
+            if not doer_code:
+                # No doer code assigned on KPI row -> only Admin (Rule C) has access
+                return False
+
+            # Rule D: Task's DoerCode is 'ALL' (any case) -> open to every active employee
+            if doer_code.upper() == "ALL":
+                return True
+
+            # Rule A: Assigned doer (match on employee codes only, never on names)
+            if user_ec and user_ec == doer_code:
+                return True
+
+            # Rule B: Manager chain (user EC appears in VM_EmployeeMaster.ManagerChain of DoerCode)
+            if user_ec and is_user_in_hierarchy_sync(user_ec, doer_code):
+                return True
+
+            # In Type F, Can_View and Can_Edit in FMS_Application_Rights are IGNORED
+            return False
+
+        # Other rights on Type F (Can_Add, Can_Delete, Can_Export, Can_Approve,
+        # Can_Reassign, Can_Close, Can_Reopen) still come from FMS_Application_Rights / permissions.
+        permission_keys = {str(p).strip().lower() for p in getattr(identity, "permissions", []) or []}
+        candidates = {
+            normalized_action,
+            normalized_action.replace("_", ""),
+            f"can_{normalized_action}",
+            f"can{normalized_action.replace('_', '')}",
+        }
+        if any(candidate in permission_keys for candidate in candidates):
+            return True
+        return False
+
+    # =========================================================================
+    # TYPE A & NOR APPLICATIONS
+    # =========================================================================
     # 1. Role ID 1, 2, and 3:
     # If Application Login type is SSO -> Can View and Can Edit by default.
     # If NOR -> only Can View by default.
-    if user_role_id in ("1", "2", "3"):
+    if is_admin:
         if is_view_action:
             return True
         if is_edit_action:
             if is_sso:
                 return True
-            # If NOR, check if user is the assigned doer below before denying edit.
         elif not is_edit_action:
             return True
 
-    # 2. Check Doer EC, Backup EC doer, Temp doer EC:
-    # "we will Give Doer EC , Back up EC doer Can view and Can edit rights by deafult of that app and its stage forms
-    #  and Temp doer EC will have rights to it only for I_FromDateTime to I_ToDateTime date&Time the Permission should be there"
-    if user_ec:
-        stages_to_check = []
-        if context.get("stage") and isinstance(context["stage"], dict):
-            stages_to_check.append(context["stage"])
-        if context.get("current_stage") and isinstance(context["current_stage"], dict):
-            stages_to_check.append(context["current_stage"])
-        if context.get("stage_configs") and isinstance(context["stage_configs"], list):
-            stages_to_check.extend([s for s in context["stage_configs"] if isinstance(s, dict)])
-        if context.get("fms") and isinstance(context["fms"], dict):
-            stages_to_check.append(context["fms"])
-            if isinstance(context["fms"].get("stages"), list):
-                stages_to_check.extend([s for s in context["fms"]["stages"] if isinstance(s, dict)])
-            if isinstance(context["fms"].get("stage_configs"), list):
-                stages_to_check.extend([s for s in context["fms"]["stage_configs"] if isinstance(s, dict)])
-
-        for stg in stages_to_check:
-            d_ec = str(
-                stg.get("DOER_EMP_CODE")
-                or stg.get("Doer_EC")
-                or stg.get("doer_ec")
-                or stg.get("DOER_EC")
-                or stg.get("DoerEC")
-                or ""
-            ).strip()
-            b_ec = str(
-                stg.get("BACKUP_EMP_CODE")
-                or stg.get("BackupDoer_EC")
-                or stg.get("Backup_Doer_EC")
-                or stg.get("backup_doer_ec")
-                or stg.get("BackupDoerEC")
-                or stg.get("backup_ec")
-                or ""
-            ).strip()
-            t_ec = str(
-                stg.get("TEMP_DOER_EMP_CODE")
-                or stg.get("TempDoer_EC")
-                or stg.get("Temp_Doer_EC")
-                or stg.get("temp_doer_ec")
-                or stg.get("TempDoerEC")
-                or ""
-            ).strip()
-
-            # Doer EC, Backup EC doer, and their reporting hierarchy (ManagerChain)
-            # have Can View and Can Edit by default.
-            if (
-                user_ec in (d_ec, b_ec)
-                or d_ec.upper() == "ALL"
-                or b_ec.upper() == "ALL"
-                or is_user_in_hierarchy_sync(user_ec, d_ec)
-                or is_user_in_hierarchy_sync(user_ec, b_ec)
-            ):
-                return True
-
-            # Temp Doer EC has rights only for I_FromDateTime to I_ToDateTime
-            if user_ec == t_ec:
-                from_dt = (
-                    stg.get("I_FROM_DATE_TIME")
-                    or stg.get("I_FromDateTime")
-                    or stg.get("from_date_time")
-                    or stg.get("fromdatetime")
-                )
-                to_dt = (
-                    stg.get("I_TO_DATE_TIME")
-                    or stg.get("I_ToDateTime")
-                    or stg.get("to_date_time")
-                    or stg.get("todatetime")
-                )
-                if _is_within_temp_doer_window(from_dt, to_dt):
-                    return True
-
-    # 3. FMS_Application_Rights / NOR check for Can View (applicable for Login Type NOR and Type A)
+    # 2. Check FMS_Application_Rights / NOR check for Can View
     if is_view_action and (context.get("can_view_rights") or context.get("login_type") == "NOR"):
         return True
 
-    # 4. Explicit permissions configured in RBAC / TM_User_Access_Master
+    # 3. Explicit permissions configured in RBAC / TM_User_Access_Master
     permission_keys = {str(p).strip().lower() for p in getattr(identity, "permissions", []) or []}
     candidates = {
         normalized_action,

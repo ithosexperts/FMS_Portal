@@ -35,8 +35,10 @@
   </form>
 </div>
 {% endif %}
-{% if appended %}
-<div class="filter-chip" style="margin-bottom:12px; background:var(--color-info-bg); color:var(--color-info);">Batch rows appended to server.</div>
+{% if appended or saved %}
+<div class="filter-chip alert-success-banner" style="margin-bottom:14px; padding:12px 18px; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:6px; font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px;">
+  <span style="font-size:16px;">✓</span> <span>Successfully submit &mdash; stage data and attachments have been appended at backend.</span>
+</div>
 {% endif %}
 {% if ltg_saved %}
 <div class="filter-chip" style="margin-bottom:12px; background:var(--color-success-bg); color:var(--color-success);">Lead Time Extention saved successfully.</div>
@@ -351,7 +353,16 @@
         <input type="hidden" name="__existing_attachment_urls_{{ pack_image_1.field }}" value="{{ image1_url }}" />
         {% if custom_stage1.stage_locked %}
           {% if image1_url %}
-          <button type="button" class="btn btn-sm attachment-view-btn" data-urls="{{ image1_url }}" data-title="{{ pack_image_1.caption }}">View</button>
+          <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            {% for single_url in image1_url.split(',') %}
+              {% set clean_url = single_url.strip() %}
+              {% if clean_url %}
+              <a href="{{ clean_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:6px; background:#e8f0fe; color:#1a73e8; border:1px solid #c2e7ff; font-weight:600; text-decoration:none; padding:5px 12px; border-radius:4px;" title="Open {{ clean_url }}">
+                <span>🔗 Open Packing Img1 Attachment{% if image1_url.split(',')|length > 1 %} #{{ loop.index }}{% endif %}</span>
+              </a>
+              {% endif %}
+            {% endfor %}
+          </div>
           {% else %}
           <input type="text" value="No attachment" readonly />
           {% endif %}
@@ -363,7 +374,16 @@
           </div>
           <div id="pack-image-1-list" class="ltg-attachment-list" aria-live="polite"></div>
           {% if image1_url %}
-          <button type="button" class="btn btn-sm attachment-view-btn" data-urls="{{ image1_url }}" data-title="{{ pack_image_1.caption }}" style="margin-top:6px;">View Existing</button>
+          <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            {% for single_url in image1_url.split(',') %}
+              {% set clean_url = single_url.strip() %}
+              {% if clean_url %}
+              <a href="{{ clean_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:inline-flex; align-items:center; gap:6px; background:#e8f0fe; color:#1a73e8; border:1px solid #c2e7ff; font-weight:600; text-decoration:none; padding:5px 12px; border-radius:4px;" title="Open {{ clean_url }}">
+                <span>🔗 Open Packing Img1 Attachment{% if image1_url.split(',')|length > 1 %} #{{ loop.index }}{% endif %}</span>
+              </a>
+              {% endif %}
+            {% endfor %}
+          </div>
           {% endif %}
         {% endif %}
       </div>
@@ -372,6 +392,15 @@
     </div>
 
     {% if not custom_stage1.stage_locked %}
+    <div id="submit-progress-container" style="display:none; width:100%; margin-top:14px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:5px;">
+        <span id="submit-progress-status">Uploading files and appending to backend...</span>
+        <span id="submit-progress-percent">0%</span>
+      </div>
+      <div style="width:100%; height:8px; background:var(--bg-surface-secondary, #e9ecef); border-radius:4px; overflow:hidden;">
+        <div id="submit-progress-bar" style="width:0%; height:100%; background:var(--color-primary, #007bff); border-radius:4px; transition:width 0.4s ease;"></div>
+      </div>
+    </div>
     <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 14px;">
       <button type="submit" name="_action" value="save" id="btn-save-stage" class="btn" formnovalidate>Save Progress</button>
       <button type="submit" name="_action" value="submit" id="btn-submit-stage" class="btn btn-primary">Submit Stage</button>

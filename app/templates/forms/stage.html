@@ -8,8 +8,10 @@
 {% endblock %}
 
 {% block content %}
-{% if saved %}
-<div class="filter-chip" style="margin-bottom:16px; background:var(--color-success-bg); color:var(--color-success);">&#10003; Saved successfully</div>
+{% if saved or appended %}
+<div class="filter-chip alert-success-banner" style="margin-bottom:16px; padding:12px 18px; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:6px; font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px;">
+  <span style="font-size:16px;">✓</span> <span>Successfully submit &mdash; stage data and attachments have been appended at backend.</span>
+</div>
 {% endif %}
 {% if cleared %}
 <div class="filter-chip" style="margin-bottom:16px; background:var(--color-info-bg); color:var(--color-info);">Responses cleared. Form reopened.</div>
@@ -133,6 +135,17 @@
     {% endfor %}
 
     {% if context.editable %}
+    <!-- Submit Progress Bar Container -->
+    <div id="submit-progress-container" style="grid-column: 1 / -1; display:none; width:100%; margin-top:14px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:5px;">
+        <span id="submit-progress-status">Uploading files and appending to backend...</span>
+        <span id="submit-progress-percent">0%</span>
+      </div>
+      <div style="width:100%; height:8px; background:var(--bg-surface-secondary, #e9ecef); border-radius:4px; overflow:hidden;">
+        <div id="submit-progress-bar" style="width:0%; height:100%; background:var(--color-primary, #007bff); border-radius:4px; transition:width 0.4s ease;"></div>
+      </div>
+    </div>
+
     <!-- Form Actions (Cancel, Save, Submit) -->
     <div style="grid-column: 1 / -1; display:flex; justify-content: flex-end; gap:10px; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
       <button type="button" class="btn btn-ghost" onclick="window.parent !== window ? window.parent.closeStageModal() : history.back()">Cancel</button>
@@ -181,15 +194,44 @@ document.addEventListener("DOMContentLoaded", () => {
         form.addEventListener("input", validateForm);
         form.addEventListener("change", validateForm);
 
-        // Prevent Double Submission
-        form.addEventListener("submit", () => {
+        // Prevent Double Submission & Show Progress
+        form.addEventListener("submit", (e) => {
+            const progressContainer = document.getElementById("submit-progress-container");
+            const progressBar = document.getElementById("submit-progress-bar");
+            const progressPercent = document.getElementById("submit-progress-percent");
+            const progressStatus = document.getElementById("submit-progress-status");
+
+            if (progressContainer && progressBar) {
+                progressContainer.style.display = "block";
+                let percent = 15;
+                progressBar.style.width = percent + "%";
+                if (progressPercent) progressPercent.textContent = percent + "%";
+                const timer = setInterval(() => {
+                    if (percent < 90) {
+                        percent += Math.floor(Math.random() * 15) + 5;
+                        if (percent > 90) percent = 90;
+                        progressBar.style.width = percent + "%";
+                        if (progressPercent) progressPercent.textContent = percent + "%";
+                        if (percent > 60 && progressStatus) {
+                            progressStatus.textContent = "Appending to backend database...";
+                        }
+                    } else {
+                        clearInterval(timer);
+                    }
+                }, 350);
+            }
+
             setTimeout(() => {
                 if (submitBtn) {
                     submitBtn.disabled = true;
+                    submitBtn.style.opacity = "0.6";
+                    submitBtn.style.cursor = "not-allowed";
                     submitBtn.innerHTML = "Submitting...";
                 }
                 if (saveBtn) {
                     saveBtn.disabled = true;
+                    saveBtn.style.opacity = "0.6";
+                    saveBtn.style.cursor = "not-allowed";
                 }
             }, 10);
         });

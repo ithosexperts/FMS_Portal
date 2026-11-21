@@ -50,39 +50,61 @@ async def get_row(table_name: str, row_id: Any) -> dict[str, Any] | None:
     get_table (table_gateway) and filter exactly to ensure data maps correctly.
     """
     from app.services.metadata_service import resolve_primary_key
+
+    def _get_ci(row_dict: dict, col_name: str) -> Any:
+        col_lower = str(col_name).strip().lower()
+        for k, v in row_dict.items():
+            if str(k).strip().lower() == col_lower:
+                return v
+        return None
+
+    target = str(row_id).strip().lower()
     
     try:
         pk = await resolve_primary_key(table_name)
         # 1. Attempt to fetch with the PK as a filter
         rows = await get_table(table_name, filters={pk: row_id})
         
-        target = str(row_id).strip().lower()
-        
-        # Check exact PK match in the returned rows
+        # Check case-insensitive PK match in the returned rows
         for row in rows:
-            if str(row.get(pk, "")).strip().lower() == target:
+            val = _get_ci(row, pk)
+            if val is not None and str(val).strip().lower() == target:
                 return row
-                
-        # 2. If API ignored the filter (returned everything) or returned empty, 
-        # fetch all without filter as a fallback measure
-        if len(rows) <= 1:
-            rows = await get_table(table_name)
-            
+
+        # Check if any column in returned filtered rows matches target
         for row in rows:
-            if str(row.get(pk, "")).strip().lower() == target:
-                return row
-                
-        # 3. Final fallback: scan any column for the row_id
-        for row in rows:
-            if target in [str(v).strip().lower() for v in row.values() if v is not None]:
-                return row
+            for v in row.values():
+                if v is not None and str(v).strip().lower() == target:
+                    return row
+
+        # If primary key filter returned nothing, try other common PK filter names
+        if not rows:
+            for alt_pk in ("RowID", "ID", "PK", "TaskID", "DocNum"):
+                if alt_pk.lower() != pk.lower():
+                    alt_rows = await get_table(table_name, filters={alt_pk: row_id})
+                    for row in alt_rows:
+                        val = _get_ci(row, alt_pk)
+                        if val is not None and str(val).strip().lower() == target:
+                            return row
+                        for v in row.values():
+                            if v is not None and str(v).strip().lower() == target:
+                                return row
+                    if alt_rows:
+                        break
     except Exception:
-        # If resolve_primary_key fails, fallback to simple get_table scan
+        pass
+
+    # Fallback to simple get_table scan only if targeted queries fail
+    try:
         rows = await get_table(table_name)
-        target = str(row_id).strip().lower()
         for row in rows:
-            if target in [str(v).strip().lower() for v in row.values() if v is not None]:
-                return row
+            for v in row.values():
+                if v is not None and str(v).strip().lower() == target:
+                    return row
+    except Exception:
+        pass
+
+    return {}
                 
     return None
 

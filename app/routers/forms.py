@@ -405,6 +405,9 @@ async def _build_stage456_custom_context(stage_context: dict[str, Any], stage_no
         context["unpacked_field_name"] = "S5_MaterialUnpacked"
         context["unpacked_caption"] = _publish_label(publish_names, "S5_MaterialUnpacked", "Material Unpacked")
         for item in await _load_pack_dispatch_lines_for_stage456(stage_context):
+            pl_ts_item = _row_value_ci(item, "S5_PLTimeStamp") or _row_value_ci(item, "PLTimeStamp") or _row_value_ci(item, "PlannedTimestamp")
+            if is_blank_for_form(pl_ts_item):
+                continue
             row_id = _to_text(_row_value_ci(item, "RowID") or _row_value_ci(item, "ID") or _row_value_ci(item, "PK"))
             if not row_id:
                 continue
@@ -1406,6 +1409,11 @@ async def stage_form_page(
     stage_context = await stage_service.get_stage_context(
         task_id, stage_no, table_name=(req_table_name or None), app_id=(req_app_id or None)
     )
+    if not stage_context.get("can_view"):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this task.",
+        )
     table_name = str((stage_context.get("fms") or {}).get("table_name") or "")
     fms_info = stage_context.get("fms") or {}
     fms_table = str(fms_info.get("table_name") or table_name or "").strip()
@@ -2511,6 +2519,9 @@ async def _stage_form_submit_impl(
         missing_weight_lines = []
         doc_weight = str(payload.get("S1_WeightKgs") or form_data.get("S1_WeightKgs") or "").strip()
         for sales_row in related_rows_for_weight:
+            pl_ts = _pick_value_by_suffix(sales_row, ("s1pltimestamp", "pltimestamp", "plannedtimestamp", "pl_timestamp", "s1pltime"), "S1")
+            if is_blank_for_form(pl_ts):
+                continue
             sales_rid = _to_text(_row_value_ci(sales_row, "RowID"))
             line_no = _to_text(_pick_value_by_suffix(sales_row, ("ilinenum", "linenum")))
             weight_value = _pick_value_by_suffix(sales_row, ("s1pickidweightkgs",), "S1")

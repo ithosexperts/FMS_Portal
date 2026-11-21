@@ -24,9 +24,10 @@ BATCH_TABLE = os.getenv("PICK_N_PACK_BATCH_TABLE", "Z_SOPickNpackBatchDetails").
 SALES_ORDER_TABLE = "Z_SalesOrder"
 PICKER_LOCATION_TEAM_MAP = {"delhi": "29", "noida": "30"}
 
-_CACHE_TTL_SECONDS = 5.0
+_CACHE_TTL_SECONDS = 120.0
 _sales_order_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _picker_options_cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
+_picker_masters_cache: dict[str, tuple[float, list[dict[str, Any]], list[dict[str, Any]]]] = {}
 
 
 def _norm(value: Any) -> str:
@@ -231,13 +232,27 @@ async def _load_picker_options(
         # If location not specified or unknown, include both SCM PNP teams so picker list is never empty
         target_team_ids.update({"29", "30"})
 
-    try:
-        employee_rows = await table_api.get_table("VM_EmployeeMaster")
-        team_rows = await table_api.get_table("VM_Team")
-    except Exception as exc:
-        print(f"[S1 PICKER] Failed to load picker masters: {type(exc).__name__}")
-        employee_rows = []
-        team_rows = []
+    cache_scope = get_active_api_base()
+    now = time.monotonic()
+    cached_masters = _picker_masters_cache.get(cache_scope)
+    if cached_masters and (now - cached_masters[0]) < _CACHE_TTL_SECONDS:
+        employee_rows, team_rows = cached_masters[1], cached_masters[2]
+    else:
+        try:
+            import asyncio
+            emp_res, team_res = await asyncio.gather(
+                table_api.get_table("VM_EmployeeMaster"),
+                table_api.get_table("VM_Team"),
+                return_exceptions=True,
+            )
+            employee_rows = emp_res if isinstance(emp_res, list) else []
+            team_rows = team_res if isinstance(team_res, list) else []
+            if employee_rows or team_rows:
+                _picker_masters_cache[cache_scope] = (now, employee_rows, team_rows)
+        except Exception as exc:
+            print(f"[S1 PICKER] Failed to load picker masters: {type(exc).__name__}")
+            employee_rows = []
+            team_rows = []
 
     def field_value(row: dict[str, Any], *names: str) -> Any:
         targets = {_norm(name) for name in names}
@@ -683,8 +698,14 @@ async def _build_batch_groups(
         batch_status = _normalize_batch_status(
             _value(batch, "BatchStatus", "Batch_Status", "Status")
         )
-        if batch_status != target_batch_status_norm:
-            continue
+        submission = _value(batch, "S1_Submission", "Submission")
+        is_submitted_batch = _norm(submission) in {"1", "yes", "true", "y", "packed"}
+        if not is_blank(stage_actual):
+            if batch_status != target_batch_status_norm and not is_submitted_batch:
+                continue
+        else:
+            if batch_status != target_batch_status_norm:
+                continue
 
         batch_doc = _normalize_join_key(_value(batch, "DocNum", "I_DocNum", "SalesOrderNo"))
         if batch_doc and wanted_doc and batch_doc != wanted_doc:
@@ -705,6 +726,16 @@ async def _build_batch_groups(
     have_weight = False
 
     for sales_row in sales_rows:
+        # Without Planned (e.g. S1_PLTimeStamp), do not show that row and its summary row above
+        pl_ts = _value(
+            sales_row,
+            "S1_PLTimeStamp", "PLTimeStamp", "S1_PlannedTimestamp",
+            "PlannedTimestamp", "PL_TimeStamp", "S1_PLTime"
+        )
+        if is_blank(pl_ts):
+            print(f"[S1 Batch] Skipping unplanned sales row {_row_id(sales_row)} line={_line_number(sales_row)} (no S1_PLTimeStamp)")
+            continue
+
         line = _line_number(sales_row)
         if not line:
             # Keep rows without a line number grouped separately.

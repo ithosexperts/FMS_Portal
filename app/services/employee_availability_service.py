@@ -8,10 +8,26 @@ records fail closed for new assignments.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, time, timezone
+import time
+from datetime import date, datetime, time as dt_time, timezone
 from typing import Any, Iterable
 
 from app.api import table_api
+from app.api.client import get_active_api_base
+
+_TABLE_CACHE: dict[tuple[str, str], tuple[float, list[dict[str, Any]]]] = {}
+
+async def _get_table_cached(table_name: str, ttl: float = 60.0) -> list[dict[str, Any]]:
+    scope = get_active_api_base()
+    cache_key = (scope, table_name)
+    now = time.monotonic()
+    cached = _TABLE_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < ttl:
+        return cached[1]
+    rows = await table_api.get_table(table_name)
+    if rows:
+        _TABLE_CACHE[cache_key] = (now, rows)
+    return rows
 
 ATTENDANCE_TABLE = "Z_AttendanceInfo"
 ATTENDANCE_ABSENT = "A"
@@ -338,7 +354,7 @@ async def resolve_employee_code(value: Any, *, employee_rows: list[dict[str, Any
         return ""
     if employee_rows is None:
         try:
-            employee_rows = await table_api.get_table("VM_EmployeeMaster")
+            employee_rows = await _get_table_cached("VM_EmployeeMaster")
         except Exception as exc:
             raise EmployeeAvailabilityError("Employee master could not be read for attendance validation; assignment blocked.") from exc
     identity_map, name_map = employee_identity_maps(employee_rows or [])
@@ -447,7 +463,7 @@ async def validate_new_assignment_changes(
 
     actual_date = resolve_work_date(work_date, payload, row)
     try:
-        employee_rows_raw = await table_api.get_table("VM_EmployeeMaster")
+        employee_rows_raw = await _get_table_cached("VM_EmployeeMaster")
     except Exception as exc:
         raise EmployeeAvailabilityError(
             "Employee master could not be read for attendance validation; assignment blocked."
@@ -469,7 +485,7 @@ async def validate_new_assignment_changes(
             # Resolve an internal driver by FL_Drivers.user_id -> FL_Trips.driver_id
             # style identity, then FL_Drivers.employee_id -> VM_EmployeeMaster ID.
             try:
-                drivers = await table_api.get_table("FL_Drivers")
+                drivers = await _get_table_cached("FL_Drivers")
             except Exception as exc:
                 raise EmployeeAvailabilityError(
                     "Driver identity could not be verified for attendance; assignment blocked."
@@ -518,7 +534,7 @@ async def get_busy_employee_codes(employee_rows: list[dict[str, Any]] | None = N
     """
     if employee_rows is None:
         try:
-            employee_rows = await table_api.get_table("VM_EmployeeMaster")
+            employee_rows = await _get_table_cached("VM_EmployeeMaster")
         except Exception as exc:
             raise EmployeeAvailabilityError("Employee master could not be read for Busy validation.") from exc
     employee_rows = [row for row in (employee_rows or []) if isinstance(row, dict)]
@@ -592,8 +608,8 @@ async def get_busy_employee_codes(employee_rows: list[dict[str, Any]] | None = N
             busy.add(resolved_key)
 
     try:
-        drivers = await table_api.get_table("FL_Drivers")
-        trips = await table_api.get_table("FL_Trips")
+        drivers = await _get_table_cached("FL_Drivers")
+        trips = await _get_table_cached("FL_Trips")
     except Exception as exc:
         raise EmployeeAvailabilityError("Active trip status could not be verified; assignment blocked.") from exc
 

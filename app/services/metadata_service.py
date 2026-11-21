@@ -28,8 +28,8 @@ logger = logging.getLogger("fms_portal.metadata")
 # Configuration/metadata changes are infrequent compared with form reads.
 # Keep a short in-process cache so every form does not repeatedly read the
 # same FMS_Config / TM_Form_Settings / INFORMATION_SCHEMA data.
-_CACHE_TTL = 15.0
-_METADATA_TTL = 60.0
+_CACHE_TTL = 300.0
+_METADATA_TTL = 300.0
 _cache: dict[tuple, tuple[float, Any]] = {}
 _cache_locks: dict[tuple, asyncio.Lock] = {}
 
@@ -317,7 +317,10 @@ _APP_RIGHTS_TTL: float = 60.0
 
 
 async def get_user_application_rights(employee_code: str, user_id: str | None = None) -> list[dict[str, Any]]:
-    """Fetch active application rights for an employee from FMS_Application_Rights."""
+    """Fetch active application rights for an employee from FMS_Application_Rights.
+    Legacy fallback to TM_Application_Rights / TM_Application_Right has been removed.
+    Raises RuntimeError if FMS_Application_Rights cannot be read.
+    """
     norm_ec = str(employee_code or "").strip().upper()
     if not norm_ec and not user_id:
         return []
@@ -330,20 +333,21 @@ async def get_user_application_rights(employee_code: str, user_id: str | None = 
             return data
 
     rights_rows: list[dict[str, Any]] = []
-    candidate_tables = ("FMS_Application_Rights", "TM_Application_Rights", "TM_Application_Right")
+    tbl = "FMS_Application_Rights"
+    last_err = None
 
-    for tbl in candidate_tables:
-        if norm_ec:
-            for col in ("EmployeeCode", "Employeecode", "EMPLOYEECODE", "employee_code"):
-                try:
-                    rows = await table_api.get_table(tbl, filters={col: norm_ec})
-                    if rows and isinstance(rows, list):
-                        rights_rows = rows
-                        break
-                except Exception:
-                    pass
-        if rights_rows:
-            break
+    if norm_ec:
+        for col in ("EmployeeCode", "Employeecode", "EMPLOYEECODE", "employee_code"):
+            try:
+                rows = await table_api.get_table(tbl, filters={col: norm_ec})
+                if rows and isinstance(rows, list):
+                    rights_rows = rows
+                    break
+            except Exception as exc:
+                last_err = exc
+
+    if not rights_rows and last_err is not None:
+        raise RuntimeError(f"FMS_Application_Rights could not be read: {last_err}") from last_err
 
     if not rights_rows and user_id:
         try:
@@ -355,6 +359,53 @@ async def get_user_application_rights(employee_code: str, user_id: str | None = 
 
     _APP_RIGHTS_CACHE[cache_key] = (now, rights_rows)
     return rights_rows
+
+
+async def get_task_kpi_doer(app_id: str, row_id: str, stage_no: str) -> tuple[str | None, bool]:
+    """Look up DoerCode from Z_KPI_MasterRecord for a specific task and stage.
+    Returns (doer_code, has_kpi_row).
+    If no row exists in Z_KPI_MasterRecord (stage not yet planned), returns (None, False).
+    """
+    app_id_clean = str(app_id or "").strip()
+    row_id_clean = str(row_id or "").strip()
+    stg_clean = str(stage_no or "").strip().upper()
+    stage_num = stg_clean.replace("STAGE", "").replace("S", "").strip()
+
+    candidate_keys = [
+        f"{app_id_clean}_{row_id_clean}_S{stage_num}",
+        f"{app_id_clean}_{row_id_clean}_{stage_num}",
+        f"{app_id_clean}_{row_id_clean}_{stg_clean}",
+    ]
+    for k_key in candidate_keys:
+        try:
+            rows = await table_api.get_table("Z_KPI_MasterRecord", filters={"KPIRecordKey": k_key})
+            if rows and isinstance(rows, list):
+                for r in rows:
+                    if isinstance(r, dict):
+                        dc = r.get("DoerCode") or r.get("doer_code") or r.get("DOERCODE") or r.get("Doer_Code")
+                        if dc is not None:
+                            return str(dc).strip(), True
+                        return "", True
+        except Exception:
+            pass
+
+    try:
+        rows = await table_api.get_table("Z_KPI_MasterRecord", filters={"AppID": app_id_clean, "RowID": row_id_clean})
+        if not rows:
+            rows = await table_api.get_table("Z_KPI_MasterRecord", filters={"APP_ID": app_id_clean, "RowID": row_id_clean})
+        if rows and isinstance(rows, list):
+            for r in rows:
+                if isinstance(r, dict):
+                    r_stg = str(r.get("StageNo") or r.get("stage_no") or r.get("Stage_No") or "").strip().upper().replace("STAGE", "").replace("S", "")
+                    if r_stg == stage_num or not stage_num:
+                        dc = r.get("DoerCode") or r.get("doer_code") or r.get("DOERCODE") or r.get("Doer_Code")
+                        if dc is not None:
+                            return str(dc).strip(), True
+                        return "", True
+    except Exception:
+        pass
+
+    return None, False
 
 
 def check_user_can_view_app(
