@@ -180,8 +180,50 @@ async def get_doer_options(fms_names: list[str] | None = None) -> list[str]:
             r for r in config_rows
             if str(r.get("FMS_NAME") or "").strip().lower() in selected
         ]
-    doers = {row["DOER"] for row in config_rows if row.get("DOER")}
-    return sorted(doers)
+    doers = {str(row["DOER"]).strip() for row in config_rows if row.get("DOER") and str(row["DOER"]).strip()}
+
+    target_options = [
+        opt for opt in allowed_options
+        if str(opt.get("fms_name") or "").strip().lower() in allowed_names
+    ]
+    if fms_names:
+        selected = {str(name).strip().lower() for name in fms_names if str(name).strip()}
+        target_options = [
+            opt for opt in target_options
+            if str(opt.get("fms_name") or "").strip().lower() in selected
+        ]
+
+    for opt in target_options:
+        tbl = opt.get("table_name")
+        if not tbl:
+            continue
+        found_in_cache = False
+        for (cache_key, pages) in _PAGE_CACHE.items():
+            if f"|{tbl}|" in cache_key:
+                found_in_cache = True
+                for page_entry in pages.values():
+                    page_rows = page_entry.get("rows") or []
+                    for r in page_rows:
+                        for k, v in r.items():
+                            knorm = "".join(ch for ch in str(k).lower() if ch.isalnum())
+                            if (knorm.endswith("doer") or knorm.endswith("doername") or knorm.endswith("picker") or knorm.endswith("runner")) and v:
+                                v_str = str(v).strip()
+                                if v_str and v_str.lower() not in ("none", "null", "-", "all"):
+                                    doers.add(v_str)
+        if not found_in_cache:
+            try:
+                first_rows, _, _ = await _fetch_dashboard_api_page(tbl, filters=None, page=1, page_size=50)
+                for r in first_rows:
+                    for k, v in r.items():
+                        knorm = "".join(ch for ch in str(k).lower() if ch.isalnum())
+                        if (knorm.endswith("doer") or knorm.endswith("doername") or knorm.endswith("picker") or knorm.endswith("runner")) and v:
+                            v_str = str(v).strip()
+                            if v_str and v_str.lower() not in ("none", "null", "-", "all"):
+                                doers.add(v_str)
+            except Exception:
+                pass
+
+    return sorted(d for d in doers if d)
 
 
 async def _fetch_dashboard_api_page(
@@ -899,7 +941,14 @@ async def get_dashboard_rows(
             tasks = [t for t in tasks if t.status.lower() == status.lower()]
         if doers:
             selected_doers = {str(d).strip().lower() for d in doers if str(d).strip()}
-            tasks = [t for t in tasks if (t.assigned_doer or "").strip().lower() in selected_doers]
+            tasks = [
+                t for t in tasks
+                if (t.assigned_doer or "").strip().lower() in selected_doers
+                or any(
+                    str(st.get("doer") or "").strip().lower() in selected_doers
+                    for st in (t.timeline or [])
+                )
+            ]
         if search_text:
             needle = str(search_text).strip().lower()
             if needle:
@@ -1125,7 +1174,14 @@ async def get_dashboard_rows(
         tasks = [t for t in tasks if t.status.lower() == status.lower()]
     if doers:
         selected_doers = {str(d).strip().lower() for d in doers if str(d).strip()}
-        tasks = [t for t in tasks if (t.assigned_doer or "").lower() in selected_doers]
+        tasks = [
+            t for t in tasks
+            if (t.assigned_doer or "").lower() in selected_doers
+            or any(
+                str(st.get("doer") or "").strip().lower() in selected_doers
+                for st in (t.timeline or [])
+            )
+        ]
 
     if search_text:
         needle = str(search_text).strip().lower()
@@ -1284,7 +1340,13 @@ def _build_task_summary(
             timeline_stage["is_current"] = False
 
     if current:
-        stage_no, stage_name, doer = current.get("STAGE_NO"), current.get("STAGE_NAME"), current.get("DOER")
+        stage_no, stage_name = current.get("STAGE_NO"), current.get("STAGE_NAME")
+        current_timeline_stage = next((t for t in timeline if str(t.get("stage_no")) == str(stage_no)), None)
+        doer = (
+            current_timeline_stage.get("doer")
+            if current_timeline_stage and _has_value(current_timeline_stage.get("doer"))
+            else current.get("DOER")
+        )
         delay = calculate_delay_minutes(_row_value(row, current.get("PLANNED_COLUMN")), _row_value(row, current.get("ACTUAL_COLUMN")))
     elif stages and has_any_planned:
         if status == "Completed":
@@ -1301,7 +1363,13 @@ def _build_task_summary(
             # When there is no active planned+actual gap yet, point to the
             # first configured stage instead of jumping to the final stage.
             reference = stages[0]
-        stage_no, stage_name, doer = reference.get("STAGE_NO"), reference.get("STAGE_NAME"), reference.get("DOER")
+        stage_no, stage_name = reference.get("STAGE_NO"), reference.get("STAGE_NAME")
+        ref_timeline_stage = next((t for t in timeline if str(t.get("stage_no")) == str(stage_no)), None)
+        doer = (
+            ref_timeline_stage.get("doer")
+            if ref_timeline_stage and _has_value(ref_timeline_stage.get("doer"))
+            else reference.get("DOER")
+        )
         delay = 0
     else:
         stage_no = stage_name = doer = None

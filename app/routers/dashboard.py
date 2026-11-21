@@ -410,6 +410,10 @@ async def _dashboard_context(
                 filtered = [
                     t for t in filtered
                     if str(getattr(t, "assigned_doer", "") or "").strip().lower() in selected_doer_set
+                    or any(
+                        str(st.get("doer") or "").strip().lower() in selected_doer_set
+                        for st in (getattr(t, "timeline", None) or [])
+                    )
                 ]
 
             if section_search and not skip_search:

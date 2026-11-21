@@ -13,6 +13,7 @@
   }
   .matrix-table tbody tr.dashboard-row-cancelled .stage-status,
   .matrix-table tbody tr.dashboard-row-cancelled .stage-time,
+  .matrix-table tbody tr.dashboard-row-cancelled .stage-doer,
   .matrix-table tbody tr.dashboard-row-cancelled .task-id-link { color: #6b7280 !important; }
 </style>
 
@@ -95,6 +96,16 @@
             {%- endif %}
         </span>
     </div>
+
+    {% if stage_cell.doer %}
+    <div class="stage-doer" style="margin-top: 3px; font-size: 11px; font-weight: 600; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; margin-left: auto; margin-right: auto;" title="{{ stage_cell.doer }}">
+        {{ stage_cell.doer }}
+    </div>
+    {% else %}
+    <div class="stage-doer" style="margin-top: 3px; font-size: 11px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; margin-left: auto; margin-right: auto;" title="No doer assigned">
+        -
+    </div>
+    {% endif %}
 
     {% if stage_cell.status == 'In Progress' %}
         <div class="stage-time">{{ stage_cell.delay_minutes | duration }}</div>

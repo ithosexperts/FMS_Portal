@@ -131,6 +131,109 @@ def calculate_stage_status(planned: Any, actual: Any, doer: Any = None, now: dat
     return STATUS_IN_PROGRESS
 
 
+def _resolve_stage_doer_info(stage: dict[str, Any], task_row: dict[str, Any]) -> tuple[str | None, str | None]:
+    """
+    Resolve the Doer name and Employee Code for a specific stage.
+    Stage Doer MUST be resolved from the linked task table row first (e.g. S1_Doer, S2_Doer),
+    and only fall back to FMS_Config if not found.
+    """
+    stage_no = str(stage.get("STAGE_NO") or "").strip()
+    stage_prefix = _normalize(stage_no)
+    s_num = "".join(ch for ch in stage_no if ch.isdigit())
+
+    # 1. Direct candidates from the linked table row for this stage number
+    direct_name_keys: list[str] = []
+    direct_code_keys: list[str] = []
+    if s_num:
+        direct_name_keys.extend([
+            f"S{s_num}_Doer",
+            f"S{s_num}_Doer_Name",
+            f"S{s_num}_DoerName",
+            f"S{s_num}_Picker",
+            f"S{s_num}_Runner",
+            f"S{s_num}_AssignedTo",
+            f"Stage{s_num}_Doer",
+            f"Stage{s_num}_Doer_Name",
+            f"Stage{s_num}_DoerName",
+        ])
+        direct_code_keys.extend([
+            f"S{s_num}_DoerEmpCode",
+            f"S{s_num}_Doer_Emp_Code",
+            f"S{s_num}_Doer_EC",
+            f"S{s_num}_DoerEC",
+            f"S{s_num}_DoerCode",
+            f"Stage{s_num}_DoerEmpCode",
+            f"Stage{s_num}_Doer_EC",
+            f"Stage{s_num}_DoerCode",
+        ])
+    if stage_no:
+        direct_name_keys.extend([
+            f"{stage_no}_Doer",
+            f"{stage_no}_Doer_Name",
+            f"{stage_no}_DoerName",
+        ])
+        direct_code_keys.extend([
+            f"{stage_no}_DoerEmpCode",
+            f"{stage_no}_Doer_EC",
+            f"{stage_no}_DoerCode",
+        ])
+
+    row_doer_name = None
+    for k in direct_name_keys:
+        val = _row_value(task_row, k)
+        if not is_blank(val) and str(val).strip().casefold() not in {"null", "none", "-"}:
+            row_doer_name = str(val).strip()
+            break
+
+    row_doer_code = None
+    for k in direct_code_keys:
+        val = _row_value(task_row, k)
+        if not is_blank(val) and str(val).strip().casefold() not in {"null", "none", "-"}:
+            row_doer_code = str(val).strip()
+            break
+
+    # 2. Suffix search if direct match not found
+    if not row_doer_name:
+        doer_key = _find_best_key_by_suffix(
+            task_row,
+            stage_prefix,
+            ("doer", "doername", "doer_name", "picker", "runner", "assignedto", "assignedemployee"),
+        )
+        if doer_key:
+            val = _row_value(task_row, doer_key)
+            if not is_blank(val) and str(val).strip().casefold() not in {"null", "none", "-"}:
+                row_doer_name = str(val).strip()
+
+    if not row_doer_code:
+        doer_code_key = _find_best_key_by_suffix(
+            task_row,
+            stage_prefix,
+            ("doerempcode", "doer_emp_code", "doerec", "doer_ec", "doercode", "employeecode"),
+        )
+        if doer_code_key:
+            val = _row_value(task_row, doer_code_key)
+            if not is_blank(val) and str(val).strip().casefold() not in {"null", "none", "-"}:
+                row_doer_code = str(val).strip()
+
+    # Priority: Linked table row first, fall back to FMS_Config ONLY if not present
+    final_doer = (
+        row_doer_name
+        if row_doer_name
+        else (
+            row_doer_code
+            if row_doer_code
+            else (stage.get("DOER") or stage.get("DOER_EMP_CODE"))
+        )
+    )
+    final_doer_code = (
+        row_doer_code
+        if row_doer_code
+        else stage.get("DOER_EMP_CODE")
+    )
+
+    return final_doer, final_doer_code
+
+
 def build_timeline(stage_configs: list[dict[str, Any]], task_row: dict[str, Any]) -> list[dict[str, Any]]:
     """Full ordered stage-by-stage timeline for the Task Details page."""
     now = datetime.now()
@@ -140,12 +243,13 @@ def build_timeline(stage_configs: list[dict[str, Any]], task_row: dict[str, Any]
     timeline = []
     any_planned = False
     for stage in sorted_stages(stage_configs):
+        stage_doer, stage_doer_code = _resolve_stage_doer_info(stage, task_row)
         if not is_stage_visible(stage, task_row):
             timeline.append({
                 "stage_no": stage.get("STAGE_NO"),
                 "stage_name": stage.get("STAGE_NAME"),
-                "doer": None,
-                "doer_emp_code": stage.get("DOER_EMP_CODE"),
+                "doer": stage_doer,
+                "doer_emp_code": stage_doer_code,
                 "backup_doer": stage.get("BACKUP_DOER"),
                 "backup_emp_code": stage.get("BACKUP_EMP_CODE"),
                 "planned": None,
@@ -163,17 +267,8 @@ def build_timeline(stage_configs: list[dict[str, Any]], task_row: dict[str, Any]
         if not is_blank(planned):
             any_planned = True
         stage_no = str(stage.get("STAGE_NO") or "")
-        stage_prefix = _normalize(stage_no)
-        doer_key = _find_best_key_by_suffix(task_row, stage_prefix, ("doer",))
-        doer_code_key = _find_best_key_by_suffix(task_row, stage_prefix, ("doerempcode",))
-        doer = (
-            stage.get("DOER")
-            or stage.get("DOER_EMP_CODE")
-            or _row_value(task_row, doer_key)
-            or _row_value(task_row, doer_code_key)
-        )
         
-        status = calculate_stage_status(planned, actual, doer, now)
+        status = calculate_stage_status(planned, actual, stage_doer, now)
 
         # Pack to Dispatch S3 completion is also explicitly represented by
         # S3_TaskStatus / S3_ALTimeStamp. Keep the dashboard stage status in
@@ -202,8 +297,8 @@ def build_timeline(stage_configs: list[dict[str, Any]], task_row: dict[str, Any]
         timeline.append({
             "stage_no": stage.get("STAGE_NO"),
             "stage_name": stage.get("STAGE_NAME"),
-            "doer": doer,
-            "doer_emp_code": stage.get("DOER_EMP_CODE"),
+            "doer": stage_doer,
+            "doer_emp_code": stage_doer_code,
             "backup_doer": stage.get("BACKUP_DOER"),
             "backup_emp_code": stage.get("BACKUP_EMP_CODE"),
             "planned": planned,

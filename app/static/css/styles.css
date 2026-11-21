@@ -816,6 +816,18 @@ table.data-table { width: 100%; border-collapse: collapse; min-width: 860px; }
 }
 
 .stage-cell .stage-status { font-weight: 700; }
+.stage-cell .stage-doer {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+  margin-left: auto;
+  margin-right: auto;
+}
 .stage-cell .stage-time { margin-top: 3px; font-size: 11.5px; color: #5f6368; }
 
 .stage-cell.stage-green { background: #e8f7ef; }
