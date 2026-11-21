@@ -16,6 +16,7 @@ from app.api import task_api
 from app.api.metadata_api import get_metadata
 from app.services import form_service, task_service, employee_availability_service, metadata_service
 from app.utils.permission_helper import ACTION_EDIT_CURRENT_STAGE, can
+from app.utils.status_calculator import _resolve_stage_doer_info
 
 
 class StageNotFoundError(Exception):
@@ -63,6 +64,8 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
     if app_type == "F":
         kpi_doer_code, has_kpi_row = await metadata_service.get_task_kpi_doer(resolved_app_id, task_id, stage_no)
 
+    stage_doer, stage_doer_code = _resolve_stage_doer_info(stage, context.get("row") or {})
+
     perm_context = {
         "task_id": task_id,
         "stage_no": stage_no,
@@ -75,6 +78,9 @@ async def get_stage_context(task_id: str, stage_no: str, table_name: str | None 
         "app_type": app_type,
         "kpi_doer_code": kpi_doer_code,
         "has_kpi_row": has_kpi_row,
+        "stage_doer": stage_doer,
+        "stage_doer_code": stage_doer_code,
+        "doer_code": stage_doer_code or stage_doer,
     }
     try:
         from app.services.hierarchy_service import get_hierarchy_map

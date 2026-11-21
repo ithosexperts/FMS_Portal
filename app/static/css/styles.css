@@ -838,6 +838,27 @@ table.data-table { width: 100%; border-collapse: collapse; min-width: 860px; }
 
 .task-id-link { font-weight: 700; }
 
+.stage-btn-frozen {
+  padding: 2px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 50px;
+  background: #e5e7eb !important;
+  border: 1px solid #d1d5db !important;
+  color: #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.stage-card-frozen {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  border-color: #d1d5db !important;
+  background: #f9fafb !important;
+}
+
 .empty-state {
   padding: 48px 20px;
   text-align: center;

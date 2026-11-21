@@ -16,7 +16,12 @@
 {%- endmacro %}
 
 {% macro stage_card(stage, href) -%}
+{% set can_open = can_access_stage(stage, request) if can_access_stage is defined else True %}
+{% if can_open %}
 <a class="stage-card {{ 'current' if stage.is_current }}" href="{{ href }}">
+{% else %}
+<div class="stage-card stage-card-frozen {{ 'current' if stage.is_current }}" style="opacity: 0.6; cursor: not-allowed; pointer-events: none;" title="Form frozen - restricted to doer and management">
+{% endif %}
   <span class="stage-card__dot {{ stage.color }}"></span>
   <span class="stage-card__body">
     <span class="stage-card__title">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</span>
@@ -42,7 +47,11 @@
     </span>
   </span>
   <span class="badge badge-{{ stage.color }}">{{ 'Planned' if stage.status == 'In Progress' else 'Pending' if stage.status == 'Delayed' else (stage.status or '-') }}</span>
+{% if can_open %}
 </a>
+{% else %}
+</div>
+{% endif %}
 {%- endmacro %}
 
 {% macro question_control(q, form_prefix='') -%}

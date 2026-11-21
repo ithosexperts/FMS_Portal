@@ -23,6 +23,7 @@ _CACHE_TTL_SECONDS = 60.0
 
 # Mapping: normalized_doer_code -> set of normalized manager employee codes
 _MANAGER_CHAINS_CACHE: dict[str, set[str]] = {}
+_NAME_TO_EC_CACHE: dict[str, str] = {}
 
 
 def _norm_ec(code: Any) -> str:
@@ -70,7 +71,7 @@ def _pick_case_insensitive(row: dict[str, Any], *candidates: str) -> Any:
 
 async def get_hierarchy_map() -> dict[str, set[str]]:
     """Return cached dictionary of normalized employee_code -> set of manager codes."""
-    global _CACHE_TIMESTAMP, _MANAGER_CHAINS_CACHE
+    global _CACHE_TIMESTAMP, _MANAGER_CHAINS_CACHE, _NAME_TO_EC_CACHE
     now = time.monotonic()
     if _MANAGER_CHAINS_CACHE and (now - _CACHE_TIMESTAMP) < _CACHE_TTL_SECONDS:
         return _MANAGER_CHAINS_CACHE
@@ -86,6 +87,7 @@ async def get_hierarchy_map() -> dict[str, set[str]]:
             return _MANAGER_CHAINS_CACHE
 
         new_map: dict[str, set[str]] = {}
+        new_name_map: dict[str, str] = {}
         parent_map: dict[str, str] = {}
 
         for row in rows or []:
@@ -95,6 +97,15 @@ async def get_hierarchy_map() -> dict[str, set[str]]:
             norm_ec = _norm_ec(ec)
             if not norm_ec:
                 continue
+
+            emp_name = _pick_case_insensitive(row, "EmployeeName", "Employee_Name", "Name", "empname", "emp_name")
+            if emp_name:
+                name_str = str(emp_name).strip()
+                if name_str:
+                    new_name_map[name_str.lower()] = norm_ec
+                    clean_name = "".join(ch for ch in name_str.lower() if ch.isalnum())
+                    if clean_name:
+                        new_name_map[clean_name] = norm_ec
 
             # Check ManagerChain column
             chain_raw = _pick_case_insensitive(
@@ -139,14 +150,55 @@ async def get_hierarchy_map() -> dict[str, set[str]]:
                     curr = parent_map.get(curr, "")
 
         _MANAGER_CHAINS_CACHE = new_map
+        _NAME_TO_EC_CACHE = new_name_map
         _CACHE_TIMESTAMP = time.monotonic()
         return _MANAGER_CHAINS_CACHE
 
 
-def is_user_in_hierarchy_sync(user_ec: str, doer_ec: str) -> bool:
-    """Synchronous check if user_ec is in the hierarchy of doer_ec using the cache."""
-    user_vars = _code_variants(user_ec)
-    doer_vars = _code_variants(doer_ec)
+def resolve_employee_code(identifier: Any) -> str:
+    """Resolve an employee code from either an employee code or an employee name."""
+    if identifier is None:
+        return ""
+    val = str(identifier).strip()
+    if not val or val.upper() in ("NONE", "NULL", "-", ""):
+        return ""
+    norm = _norm_ec(val)
+    if norm in _MANAGER_CHAINS_CACHE or norm.isdigit():
+        return norm
+    lowered = val.lower()
+    if lowered in _NAME_TO_EC_CACHE:
+        return _NAME_TO_EC_CACHE[lowered]
+    clean = "".join(ch for ch in lowered if ch.isalnum())
+    if clean in _NAME_TO_EC_CACHE:
+        return _NAME_TO_EC_CACHE[clean]
+    return norm
+
+
+def is_user_in_hierarchy_sync(user_ec: str, doer_identifier: str) -> bool:
+    """Synchronous check if user_ec is in the hierarchy of doer_identifier using the cache."""
+    if not user_ec or not doer_identifier:
+        return False
+
+    clean_user = str(user_ec).strip()
+    clean_doer = str(doer_identifier).strip()
+
+    if clean_doer.upper() == "ALL":
+        return True
+
+    # Direct name/string equality check
+    if clean_user.lower() == clean_doer.lower():
+        return True
+    u_clean = "".join(ch for ch in clean_user.lower() if ch.isalnum())
+    d_clean = "".join(ch for ch in clean_doer.lower() if ch.isalnum())
+    if u_clean and u_clean == d_clean:
+        return True
+
+    resolved_user_ec = resolve_employee_code(user_ec)
+    resolved_doer_ec = resolve_employee_code(doer_identifier)
+
+    user_vars = _code_variants(resolved_user_ec) or _code_variants(user_ec)
+    doer_vars = _code_variants(resolved_doer_ec) or _code_variants(doer_identifier)
+
     if not user_vars or not doer_vars:
         return False
     if bool(user_vars & doer_vars):
@@ -161,20 +213,23 @@ def is_user_in_hierarchy_sync(user_ec: str, doer_ec: str) -> bool:
     return False
 
 
-async def is_user_in_hierarchy(user_ec: str, doer_ec: str) -> bool:
-    """Check if user_ec is in the hierarchy of doer_ec (loading cache if needed)."""
-    user_vars = _code_variants(user_ec)
-    doer_vars = _code_variants(doer_ec)
-    if not user_vars or not doer_vars:
+async def is_user_in_hierarchy(user_ec: str, doer_identifier: str) -> bool:
+    """Check if user_ec is in the hierarchy of doer_identifier (loading cache if needed)."""
+    if not user_ec or not doer_identifier:
         return False
-    if bool(user_vars & doer_vars):
-        return True
-    if any(dv.upper() == "ALL" for dv in doer_vars):
+
+    clean_user = str(user_ec).strip()
+    clean_doer = str(doer_identifier).strip()
+
+    if clean_doer.upper() == "ALL":
         return True
 
-    hierarchy_map = await get_hierarchy_map()
-    for dv in doer_vars:
-        managers = hierarchy_map.get(dv, set())
-        if bool(user_vars & managers):
-            return True
-    return False
+    if clean_user.lower() == clean_doer.lower():
+        return True
+    u_clean = "".join(ch for ch in clean_user.lower() if ch.isalnum())
+    d_clean = "".join(ch for ch in clean_doer.lower() if ch.isalnum())
+    if u_clean and u_clean == d_clean:
+        return True
+
+    await get_hierarchy_map()
+    return is_user_in_hierarchy_sync(user_ec, doer_identifier)

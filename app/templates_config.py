@@ -10,12 +10,14 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.utils import route_builder
 from app.utils.delay_calculator import format_duration
+from app.utils.permission_helper import can_access_stage
 from app.utils.status_calculator import STATUS_COLORS
 
 templates = Jinja2Templates(directory="app/templates")
 
 templates.env.globals["routes"] = route_builder
 templates.env.globals["status_colors"] = STATUS_COLORS
+templates.env.globals["can_access_stage"] = can_access_stage
 templates.env.globals["app_name"] = settings.app_name
 templates.env.globals["environment"] = settings.environment
 templates.env.globals["is_production"] = settings.is_production

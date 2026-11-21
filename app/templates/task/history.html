@@ -18,7 +18,14 @@
       <tbody>
         {% for stage in completed_stages %}
         <tr>
-          <td><a href="{{ routes.stage_form_route(task_id, stage.stage_no) }}">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</a></td>
+          <td>
+            {% set can_open = can_access_stage(stage, request) if can_access_stage is defined else True %}
+            {% if can_open %}
+            <a href="{{ routes.stage_form_route(task_id, stage.stage_no) }}">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</a>
+            {% else %}
+            <span class="stage-btn-frozen" style="padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; background: #e5e7eb; border: 1px solid #d1d5db; color: #9ca3af; cursor: not-allowed; opacity: 0.6; display: inline-block;" title="Form frozen - restricted to doer and management">{{ stage.stage_no }} &middot; {{ stage.stage_name }}</span>
+            {% endif %}
+          </td>
           <td>{{ stage.doer or '-' }}</td>
           <td>{{ stage.planned or '-' }}</td>
           <td>{{ stage.actual or '-' }}</td>
