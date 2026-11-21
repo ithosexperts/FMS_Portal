@@ -1,0 +1,417 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 6 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 7 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 8 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+6 0 obj
+<< /Length 12517 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 0.910 0.940 1.000 rg 40.00 799.89 190.54 15.00 re f Q
+q 0.100 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 46.00 803.89 Tm (ARCHITECTURAL PERMISSION SPECIFICATION) Tj ET Q
+q 0.950 0.920 1.000 rg 236.54 799.89 122.31 15.00 re f Q
+q 0.450 0.150 0.800 rg BT /F2 7.5 Tf 1 0 0 1 242.54 803.89 Tm (TYPE F APPLICATIONS \(FMS\)) Tj ET Q
+q 0.920 0.980 0.940 rg 364.85 799.89 85.40 15.00 re f Q
+q 0.100 0.550 0.250 rg BT /F2 7.5 Tf 1 0 0 1 370.85 803.89 Tm (DATE: 21-NOV-2026) Tj ET Q
+q 0.080 0.150 0.350 rg BT /F2 15.0 Tf 1 0 0 1 40.00 785.89 Tm (Type F Permission Model Overhaul & Net-Change Summary) Tj ET Q
+q 0.150 0.450 0.900 rg 40.00 778.89 515.28 1.20 re f Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 764.89 Tm (Official architectural specification and net-change document recording the deprecation of stage-level FMS_Config permissions) Tj ET Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 752.39 Tm (and the full deployment of the task-level Z_KPI_MasterRecord permission model across One_Portal and FMS_Portal, including) Tj ET Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 739.89 Tm (complete acceptance test results.) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 703.39 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 709.39 Tm (Specification Field) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 145.00 709.39 Tm (Current Value) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 305.00 709.39 Tm (Target Architectural Scope) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 405.00 709.39 Tm (Implementation Outcome) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 687.19 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 694.39 Tm (FMS_Portal Commit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 694.39 Tm (b031ec5 \(replacing db67e49\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 694.39 Tm (Target Application Type) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 694.39 Tm (Type 'F' \(FMS Process Portals\)) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 670.99 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 678.19 Tm (One_Portal Commit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 678.19 Tm (b0839c2 \(replacing ef187c6\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 678.19 Tm (Authoritative Source) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 405.00 678.19 Tm (Z_KPI_MasterRecord \(Task Level\)) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 654.79 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 661.99 Tm (Employee Filter) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 661.99 Tm (VM_EmployeeMaster.IsEmployed = 'Y') Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 661.99 Tm (Rights Canonicalization) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 661.99 Tm (FMS_Application_Rights Only) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 638.59 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 645.79 Tm (Acceptance Suite) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 645.79 Tm (10 Production Test Cases) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 645.79 Tm (Test Suite Result) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 645.79 Tm (10 / 10 Tests Passed \(100%\)) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 608.59 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 608.59 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 613.59 Tm (1. Summary of Changes: The Old Rule vs The New Rule) Tj ET Q
+q 0.880 0.920 0.990 rg 494.61 609.59 60.93 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 500.61 613.59 Tm (OLD VS NEW) Tj ET Q
+q 0.990 0.950 0.950 rg 0.80 w 0.820 0.880 0.950 RG 40.00 548.99 515.28 51.60 re B Q
+q 0.750 0.150 0.150 rg 40.00 548.99 3.50 51.60 re f Q
+q 0.750 0.150 0.150 rg BT /F2 8.5 Tf 1 0 0 1 54.00 586.59 Tm (THE OLD RULE IN ONE LINE \(COMMITS db67e49 & ef187c6\) - DEPRECATED) Tj ET Q
+q 0.750 0.150 0.150 rg 55.00 576.09 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 573.59 Tm (Old Rule: Granted View and Edit access per stage to any employee who matched DOER_EC or BACKUP_EMP_CODE in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 561.79 Tm (FMS_Config plus their ManagerChain, with fallback to legacy TM_Application_Rights / TM_Application_Right.) Tj ET Q
+q 0.940 0.980 0.950 rg 0.80 w 0.820 0.880 0.950 RG 40.00 475.59 515.28 63.40 re B Q
+q 0.120 0.550 0.250 rg 40.00 475.59 3.50 63.40 re f Q
+q 0.120 0.550 0.250 rg BT /F2 8.5 Tf 1 0 0 1 54.00 524.99 Tm (THE NEW RULE IN ONE LINE \(COMMITS b031ec5 & b0839c2\) - AUTHORITATIVE) Tj ET Q
+q 0.120 0.550 0.250 rg 55.00 514.49 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 511.99 Tm (New Rule: Permissions are decided per task \(never per stage, never from FMS_Config\) based strictly on) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 500.19 Tm (Z_KPI_MasterRecord.DoerCode \(Rules Aâ€“D\) where user has VM_EmployeeMaster.IsEmployed = 'Y', ignoring) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 488.39 Tm (FMS_Application_Rights Can_View/Can_Edit, and using FMS_Application_Rights exclusively without legacy fallbacks.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 443.59 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 443.59 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 448.59 Tm (2. The 3 Fatal Flaws of the Old Permission Rule) Tj ET Q
+q 0.880 0.920 0.990 rg 485.01 444.59 71.22 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 491.01 448.59 Tm (WHY CHANGED) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 438.09 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 435.59 Tm (Flaw 1: Cross-Condition Doer Collision: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 219.88 435.59 Tm (A single stage can have multiple conditions with different doers \(e.g., Pack to Dispatch) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 423.79 Tm (S1: Delhi = 0017, Noida = 0011\). Under the old stage-level rule, Delhi doer 0017 could open and edit Noida doer 0011's tasks, and) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 411.99 Tm (vice versa. Doers must never touch each other's tasks.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 402.69 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 400.19 Tm (Flaw 2: Temp Doer Exclusion: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 179.99 400.19 Tm (When a primary doer goes on leave, the stage procedure writes the temporary doer's employee) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 388.39 Tm (code into the task's KPI record. The old FMS_Config rule did not reliably grant task-level access to the temp doer during his leave) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 376.59 Tm (window.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 367.29 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 364.79 Tm (Flaw 3: Backup Doer Policy Violation: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 211.35 364.79 Tm (By company policy, Backup Doer is informational only. The old rule mistakenly granted) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 352.99 Tm (View + Edit rights to any employee configured as a backup doer.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 319.19 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 319.19 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 324.19 Tm (3. The New Type F Permission Architecture \(Rules Aâ€“D\)) Tj ET Q
+q 0.880 0.920 0.990 rg 483.41 320.19 72.93 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 489.41 324.19 Tm (ARCHITECTURE) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 311.19 Tm (For all Type F applications \(TM_Application_Master.Type = 'F'\), FMS_Config is used ONLY by stage stored procedures to decide task) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 299.39 Tm (assignment. The portal NEVER reads FMS_Config for permissions. A user may View and Edit a specific task \(one record, one stage\)) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 287.59 Tm (if and only if they satisfy VM_EmployeeMaster.IsEmployed = 'Y' AND at least one of Rules Aâ€“D:) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 257.79 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 263.79 Tm (Rule Code) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 140.00 263.79 Tm (Condition Definition) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 285.00 263.79 Tm (Evaluation Mechanism) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 440.00 263.79 Tm (Access Granted) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 221.19 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 248.79 Tm (Rule A: Assigned Doer) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 248.79 Tm (User's EmployeeCode ==) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 238.59 Tm (DoerCode on that task's row) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 228.39 Tm (in Z_KPI_MasterRecord.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 248.79 Tm (Lookup row by KPIRecordKey =) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 238.59 Tm (AppID_RowID_StageNo \(covers temp) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 228.39 Tm (doers automatically\).) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 248.79 Tm (View + Edit Allowed) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 184.59 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 212.19 Tm (Rule B: Manager Chain) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 212.19 Tm (User's EmployeeCode appears in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 201.99 Tm (VM_EmployeeMaster.ManagerChain) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 191.79 Tm (of DoerCode.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 212.19 Tm (Evaluates comma-separated manager) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 201.99 Tm (codes via is_user_in_hierarchy_sync) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 191.79 Tm (helper.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 212.19 Tm (View + Edit Allowed) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 147.99 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 175.59 Tm (Rule C: Admin Role) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 175.59 Tm (User has) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 165.39 Tm (VM_EmployeeMaster.RoleID IN \(1, 2,) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 140.00 155.19 Tm (3\) and IsEmployed = 'Y'.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 175.59 Tm (Default administrative oversight granted) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 165.39 Tm (globally to system administrators.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 175.59 Tm (View + Edit Allowed) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 111.39 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 138.99 Tm (Rule D: ALL Doer) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 138.99 Tm (The task's DoerCode in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 128.79 Tm (Z_KPI_MasterRecord is 'ALL') Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 140.00 118.59 Tm (\(case-insensitive\).) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 138.99 Tm (Stage is designated as an open task) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 128.79 Tm (accessible to any active employee.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 138.99 Tm (View + Edit Allowed) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 1 of 3) Tj ET Q
+endstream
+endobj
+7 0 obj
+<< /Length 12633 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 0.960 0.970 0.990 rg 0.80 w 0.820 0.880 0.950 RG 40.00 632.29 515.28 169.60 re B Q
+q 0.150 0.250 0.550 rg 40.00 632.29 3.50 169.60 re f Q
+q 0.150 0.250 0.550 rg BT /F2 8.5 Tf 1 0 0 1 54.00 787.89 Tm (HARD RULES & ENFORCEMENT POLICIES) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 777.39 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 774.89 Tm (Match on Employee Codes Only: Always match on employee codes, never on names \(Z_SalesOrder doer columns hold names) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 763.09 Tm (and must not be used for permissions\).) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 753.79 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 751.29 Tm (Unplanned Task Lockdown: A task with no row in Z_KPI_MasterRecord \(stage not yet planned\) is accessible ONLY under Rule) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 739.49 Tm (C \(Admin\). Non-admins are denied.) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 730.19 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 727.69 Tm (Server-Side Enforcement: Enforced both on GET \(opening form\) and POST \(saving/submitting form\). Direct POST requests) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 715.89 Tm (without permission return HTTP 403 Forbidden.) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 706.59 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 704.09 Tm (Task Queue Filtering: Dashboard queues and task lists for Type F applications display ONLY tasks passing Rules Aâ€“D.) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 694.79 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 692.29 Tm (FMS_Application_Rights: Can_View and Can_Edit in FMS_Application_Rights are IGNORED for Type F. Other rights) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 680.49 Tm (\(Can_Add, Can_Delete, Can_Export, Can_Approve, etc.\) remain intact. Legacy fallback to TM_Application_Rights is purged.) Tj ET Q
+q 0.150 0.250 0.550 rg 55.00 671.19 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 668.69 Tm (UI Freezing in One Portal: In the FMS_Application_Rights table & modal form in One Portal, the 'Can View' and 'Can Edit') Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 656.89 Tm (checkboxes and grid badges are frozen/locked for Type F applications, with an informative notice indicating that View/Edit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 645.09 Tm (rights are governed dynamically per task via Z_KPI_MasterRecord.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 600.29 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 600.29 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 605.29 Tm (4. Files Changed Across Both Repositories) Tj ET Q
+q 0.880 0.920 0.990 rg 492.61 601.29 63.07 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 498.61 605.29 Tm (NET CHANGE) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 574.29 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 580.29 Tm (Repository) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 145.00 580.29 Tm (File Path) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 300.00 580.29 Tm (Nature of Engineering Modifications) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 440.00 580.29 Tm (Commit Hash) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 537.69 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 565.29 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 565.29 Tm (app/utils/permission_helper.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 565.29 Tm (Enforced IsEmployed='Y', Type F) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 555.09 Tm (Rules A-D, ignored) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 544.89 Tm (FMS_App_Rights View/Edit.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 565.29 Tm (b031ec5) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 501.09 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 528.69 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 528.69 Tm (app/services/stage_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 528.69 Tm (Added get_task_kpi_doer lookup) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 518.49 Tm (and passed kpi_doer_code into) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 508.29 Tm (perm_context.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 528.69 Tm (b031ec5) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 464.49 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 492.09 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 492.09 Tm (app/services/metadata_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 492.09 Tm (Purged TM_Application_Rights) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 481.89 Tm (fallback; added get_task_kpi_doer) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 471.69 Tm (helper.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 492.09 Tm (b031ec5) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 427.89 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 455.49 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 455.49 Tm (app/services/dashboard_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 455.49 Tm (Filtered dashboard task queues for) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 445.29 Tm (Type F apps to tasks passing Rules) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 435.09 Tm (A-D.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 455.49 Tm (b031ec5) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 391.29 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 418.89 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 418.89 Tm (app/routers/forms.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 418.89 Tm (Enforced server-side 403 on GET) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 408.69 Tm (and POST if user fails permission) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 398.49 Tm (checks.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 418.89 Tm (b031ec5) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 354.69 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 382.29 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 382.29 Tm (app/services/stage1_custom_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 382.29 Tm (Skipped unplanned sales lines \(no) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 372.09 Tm (S1_PLTimeStamp\) and cached) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 361.89 Tm (masters.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 382.29 Tm (b031ec5) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 318.09 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 345.69 Tm (FMS_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 345.69 Tm (app/templates/forms/*.html) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 345.69 Tm (Added submit progress bar, button) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 335.49 Tm (greying, and success submit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 325.29 Tm (banners.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 345.69 Tm (b031ec5) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 281.49 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 309.09 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 309.09 Tm (ONEPORTAL/app/routers/portal.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 309.09 Tm (Purged FMS_Config doer checks) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 298.89 Tm (and legacy TM_Application_Rights) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 288.69 Tm (fallback.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 309.09 Tm (b0839c2) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 244.89 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 272.49 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 272.49 Tm (ONEPORTAL/app/routers/sso_launch.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 272.49 Tm (Removed FMS_Config backup doer) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 262.29 Tm (checks; used) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 252.09 Tm (FMS_Application_Rights only.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 272.49 Tm (b0839c2) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 218.49 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 235.89 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 235.89 Tm (ONEPORTAL/app/services/dashboard_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 235.89 Tm (Removed FMS_Config loop &) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 225.69 Tm (cleaned IndentationError.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 235.89 Tm (4591f8b) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 181.89 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 209.49 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 209.49 Tm (ONEPORTAL/app/static/js/master_forms/fms_application_rights_form.js) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 209.49 Tm (Freezed Can View & Can Edit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 199.29 Tm (checkboxes and added Type F) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 189.09 Tm (notice.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 209.49 Tm (b2159f1) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 145.29 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 172.89 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 172.89 Tm (ONEPORTAL/app/static/js/master_forms/master_form_actions.js) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 172.89 Tm (Set Can_View and Can_Edit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 162.69 Tm (payload values to 0 for Type F on) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 152.49 Tm (save.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 172.89 Tm (b2159f1) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 108.69 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 136.29 Tm (One_Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 145.00 136.29 Tm (ONEPORTAL/app/static/js/masters.js) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 136.29 Tm (Added window.isAppTypeF helper) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 126.09 Tm (and FREEZED lock badges in data) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 300.00 115.89 Tm (grid.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 440.00 136.29 Tm (b2159f1) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 78.69 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 78.69 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 83.69 Tm (5. Full Acceptance Test Suite \(Pack to Dispatch, Stage 1\)) Tj ET Q
+q 0.880 0.920 0.990 rg 486.20 79.69 69.95 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 492.20 83.69 Tm (TEST RESULTS) Tj ET Q
+q 0.200 0.250 0.320 rg BT /F1 8.2 Tf 1 0 0 1 40.00 70.69 Tm (Setup: S1 Delhi doer = 0017 \(Bhupal\), S1 Noida doer = 0011 \(Mohan\). Task X = S1 task whose Z_KPI_MasterRecord.DoerCode =) Tj ET Q
+q 0.200 0.250 0.320 rg BT /F1 8.2 Tf 1 0 0 1 40.00 59.19 Tm ('0011'.) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 2 of 3) Tj ET Q
+endstream
+endobj
+8 0 obj
+<< /Length 7253 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 783.89 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 789.89 Tm (#) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 80.00 789.89 Tm (User Profile / Role) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 220.00 789.89 Tm (Expected Result) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 335.00 789.89 Tm (Observed System Behavior & Verification) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 495.00 789.89 Tm (Status) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 747.29 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 774.89 Tm (1) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 774.89 Tm (0011 \(Assigned Doer\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 774.89 Tm (View + Edit Allowed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 774.89 Tm (Rule A matched: user EC == task) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 764.69 Tm (DoerCode \('0011'\). Form opened &) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 754.49 Tm (editable.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 774.89 Tm (PASS) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 720.89 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 738.29 Tm (2) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 738.29 Tm (0017 \(Other Condition Doer\)) Tj ET Q
+q 0.750 0.120 0.120 rg BT /F2 7.8 Tf 1 0 0 1 220.00 738.29 Tm (DENIED) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 738.29 Tm (Rule A-D failed: 0017 != 0011, not in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 728.09 Tm (chain, not admin. Form access blocked.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 738.29 Tm (PASS) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 694.49 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 711.89 Tm (3) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 711.89 Tm (Manager in 0011 ManagerChain) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 711.89 Tm (View + Edit Allowed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 711.89 Tm (Rule B matched: manager EC in 0011) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 701.69 Tm (ManagerChain. View & edit permitted.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 711.89 Tm (PASS) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 668.09 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 685.49 Tm (4) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 685.49 Tm (Backup Doer \(not in chain\)) Tj ET Q
+q 0.750 0.120 0.120 rg BT /F2 7.8 Tf 1 0 0 1 220.00 685.49 Tm (DENIED) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 685.49 Tm (FMS_Config not read; Backup is) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 675.29 Tm (informational only. Access denied.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 685.49 Tm (PASS) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 641.69 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 659.09 Tm (5) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 659.09 Tm (Temp Doer \(Task DoerCode\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 659.09 Tm (Allowed on task) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 659.09 Tm (Rule A matched: SP wrote temp doer EC) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 648.89 Tm (into KPI DoerCode. Access allowed.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 659.09 Tm (PASS) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 615.29 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 632.69 Tm (6) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 632.69 Tm (Role 1-3 User \(IsEmployed='Y'\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 632.69 Tm (Allowed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 632.69 Tm (Rule C matched: Admin role with active) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 622.49 Tm (employment status. Access granted.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 632.69 Tm (PASS) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 588.89 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 606.29 Tm (7) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 606.29 Tm (Role 1-3 User \(IsEmployed='N'\)) Tj ET Q
+q 0.750 0.120 0.120 rg BT /F2 7.8 Tf 1 0 0 1 220.00 606.29 Tm (DENIED) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 606.29 Tm (Hard Rule: IsEmployed != 'Y' overrides) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 596.09 Tm (role. Access strictly denied.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 606.29 Tm (PASS) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 562.49 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 579.89 Tm (8) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 579.89 Tm (Non-admin with Can_View right) Tj ET Q
+q 0.750 0.120 0.120 rg BT /F2 7.8 Tf 1 0 0 1 220.00 579.89 Tm (DENIED on task X) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 579.89 Tm (FMS_Application_Rights Can_View) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 569.69 Tm (ignored for Type F. Access denied.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 579.89 Tm (PASS) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 536.09 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 553.49 Tm (9) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 553.49 Tm (Task with DoerCode = 'ALL') Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 553.49 Tm (All Active Allowed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 553.49 Tm (Rule D matched: DoerCode == 'ALL'.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 543.29 Tm (Every active employee permitted.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 553.49 Tm (PASS) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 509.69 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 527.09 Tm (10) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 80.00 527.09 Tm (Direct POST save by 0017) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 220.00 527.09 Tm (Rejected with 403) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 527.09 Tm (Server-side check: editable is False.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 335.00 516.89 Tm (Server returned HTTP 403 Forbidden.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 495.00 527.09 Tm (PASS) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 3 of 3) Tj ET Q
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
+endobj
+12 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+13 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000133 00000 n 
+0000000318 00000 n 
+0000000503 00000 n 
+0000000688 00000 n 
+0000013258 00000 n 
+0000025944 00000 n 
+0000033249 00000 n 
+0000033319 00000 n 
+0000033395 00000 n 
+0000033474 00000 n 
+0000033543 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+33617
+%%EOF

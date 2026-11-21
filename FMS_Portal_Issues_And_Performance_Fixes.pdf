@@ -1,0 +1,360 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 6 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 7 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R
+   /MediaBox [0 0 595.28 841.89]
+   /Contents 8 0 R
+   /Resources << /Font << /F1 9 0 R /F2 10 0 R /F3 11 0 R /F4 12 0 R /F5 13 0 R >> >>
+>>
+endobj
+6 0 obj
+<< /Length 12172 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 0.910 0.940 1.000 rg 40.00 799.89 186.26 15.00 re f Q
+q 0.100 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 46.00 803.89 Tm (ENGINEERING DEFECT RESOLUTION REPORT) Tj ET Q
+q 0.950 0.920 1.000 rg 232.26 799.89 128.74 15.00 re f Q
+q 0.450 0.150 0.800 rg BT /F2 7.5 Tf 1 0 0 1 238.26 803.89 Tm (FMS PORTAL & STAGE FORMS) Tj ET Q
+q 0.920 0.980 0.940 rg 367.00 799.89 85.40 15.00 re f Q
+q 0.100 0.550 0.250 rg BT /F2 7.5 Tf 1 0 0 1 373.00 803.89 Tm (DATE: 21-NOV-2026) Tj ET Q
+q 0.080 0.150 0.350 rg BT /F2 15.0 Tf 1 0 0 1 40.00 785.89 Tm (FMS Portal Issues Resolution & Performance Overhaul Documentation) Tj ET Q
+q 0.150 0.450 0.900 rg 40.00 778.89 515.28 1.20 re f Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 764.89 Tm (Comprehensive engineering report documenting the defect resolutions, UI/UX feedback mechanisms, data-pipeline integrity) Tj ET Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 752.39 Tm (checks, and the diagnosis and resolution of the 6 core root causes behind system-wide slowness and blank modal screens in) Tj ET Q
+q 0.320 0.380 0.460 rg BT /F1 8.8 Tf 1 0 0 1 40.00 739.89 Tm (the FMS_Portal ecosystem.) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 703.39 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 709.39 Tm (System Attribute) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 145.00 709.39 Tm (Specification Details) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 305.00 709.39 Tm (Environment Parameter) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 405.00 709.39 Tm (Target Metric / Status) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 676.99 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 694.39 Tm (Target Portal) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 694.39 Tm (FMS_Portal \(Task360 & Stages\)) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 694.39 Tm (Active Database) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 694.39 Tm (OperationsDB \(Live\) &) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 684.19 Tm (Test_OperationsDB) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 660.79 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 667.99 Tm (Release Version) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 667.99 Tm (v2026.11.21-hotfix-perf) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 667.99 Tm (Primary Git Commit) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 667.99 Tm (b031ec5 \(FMS_Portal main branch\)) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 644.59 515.00 16.20 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 651.79 Tm (Defect Scope) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 651.79 Tm (Issues 1 to 5 + 6 Root Causes) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 651.79 Tm (Verification Status) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 651.79 Tm (All Acceptance Tests Passed \(10/10\)) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 618.19 515.00 26.40 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 635.59 Tm (Framework Stack) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 145.00 635.59 Tm (FastAPI / Jinja2 / Async SQL Server) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 305.00 635.59 Tm (Report Purpose) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 635.59 Tm (Full Engineering Issue & Optimization) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 405.00 625.39 Tm (Documentation) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 588.19 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 588.19 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 593.19 Tm (1. Executive Overview & Problem Statement) Tj ET Q
+q 0.880 0.920 0.990 rg 503.03 589.19 51.91 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 509.03 593.19 Tm (SUMMARY) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 580.19 Tm (During production operation of FMS_Portal, multiple operational issues and severe performance bottlenecks were identified: \(1\) In) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 568.39 Tm (Pack to Dispatch Stage S1, unplanned sales-order lines \(missing S1_PLTimeStamp\) and their summary rows were being displayed;) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 556.59 Tm (\(2\) Across all stage forms, clicking 'Submit Stage' failed to grey out the button, lacked an active progress indicator, and lacked) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 544.79 Tm (standardized 'Successfully submit' feedback; \(3\) Submitting the form did not visibly re-fetch what was appended after) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 532.99 Tm (ActualTimestamp was generated; \(4\) Packing Img1 * lacked a direct, clickable attachment button; and \(5\) The portal suffered from) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 521.19 Tm (extreme latency \(6-15 seconds per request\) and blank white modals due to 6 distinct root causes in auth, metadata caching, query) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 509.39 Tm (scans, and modal lifecycle.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 475.59 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 475.59 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 480.59 Tm (2. Issue 1: Unplanned Lines Appearing in Pack to Dispatch Stage S1 Form) Tj ET Q
+q 0.880 0.920 0.990 rg 512.63 476.59 41.63 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 518.63 480.59 Tm (ISSUE 1) Tj ET Q
+q 0.990 0.950 0.950 rg 0.80 w 0.820 0.880 0.950 RG 40.00 368.79 515.28 98.80 re B Q
+q 0.750 0.150 0.150 rg 40.00 368.79 3.50 98.80 re f Q
+q 0.750 0.150 0.150 rg BT /F2 8.5 Tf 1 0 0 1 54.00 453.59 Tm (DEFECT SUMMARY & SYMPTOM) Tj ET Q
+q 0.750 0.150 0.150 rg 55.00 443.09 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 440.59 Tm (Observed Behavior: In Pack to Dispatch Stage S1 \(Pick & Pack\), sales-order lines with no plan timestamp \(S1_PLTimeStamp) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 428.79 Tm (is NULL or empty\) were still appearing in the custom form.) Tj ET Q
+q 0.750 0.150 0.150 rg 55.00 419.49 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 416.99 Tm (Visual Glitch: Line No. 0/Line 9 summary row \(Line No, RowID, Item Code, Item Name, Qty, Weight\) was rendered above the) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 405.19 Tm (batch table even though its plan was never generated.) Tj ET Q
+q 0.750 0.150 0.150 rg 55.00 395.89 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 393.39 Tm (Business Impact: Dispatch operators were seeing unplanned lines and attempting to pick/pack items that had not been) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 381.59 Tm (scheduled for dispatch.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 361.29 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 358.79 Tm (Root Cause: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 108.72 358.79 Tm (In app/services/stage1_custom_service.py \(_build_batch_groups\), sales-order rows were grouped and rendered) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 346.99 Tm (purely by matching PickID or DocNum without validating if S1_PLTimeStamp was populated.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 337.69 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 335.19 Tm (Engineering Resolution: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 157.18 335.19 Tm (Updated stage1_custom_service.py to strictly evaluate is_blank\(pl_ts\) for every sales-order row. If) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 323.39 Tm (S1_PLTimeStamp \(or PLTimeStamp\) is blank, the entire sales row, its summary headers, and its child batch rows are immediately) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 311.59 Tm (skipped.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 302.29 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 299.79 Tm (Related Endpoint Filtering: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 167.62 299.79 Tm (Added defensive checks in app/routers/forms.py \(_load_pack_dispatch_lines_for_stage456 and) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 287.99 Tm (_stage_form_submit_impl\) to ignore rows without planned timestamps in all stage computations.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 254.19 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 254.19 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 259.19 Tm (3. Issue 2: Submit Button Greying Out, Progress Bar & Success Banner) Tj ET Q
+q 0.880 0.920 0.990 rg 512.63 255.19 41.63 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 518.63 259.19 Tm (ISSUE 2) Tj ET Q
+q 0.990 0.970 0.930 rg 0.80 w 0.820 0.880 0.950 RG 40.00 147.39 515.28 98.80 re B Q
+q 0.800 0.450 0.100 rg 40.00 147.39 3.50 98.80 re f Q
+q 0.800 0.450 0.100 rg BT /F2 8.5 Tf 1 0 0 1 54.00 232.19 Tm (DEFECT SUMMARY & SYMPTOM) Tj ET Q
+q 0.800 0.450 0.100 rg 55.00 221.69 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 219.19 Tm (Observed Behavior: When 'Submit Stage' was clicked, the button remained active and clickable, causing repeated POST) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 207.39 Tm (requests \(double submissions\).) Tj ET Q
+q 0.800 0.450 0.100 rg 55.00 198.09 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 195.59 Tm (Missing UI Feedback: There was no visual progress bar showing file upload and backend append progress, leaving operators) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 183.79 Tm (guessing if the system hung.) Tj ET Q
+q 0.800 0.450 0.100 rg 55.00 174.49 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 171.99 Tm (Missing Banner: Inconsistent or subtle chips failed to clearly announce that stage data and attachments were appended at the) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 160.19 Tm (backend.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 139.89 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 137.39 Tm (Button Disabling & Greying Out: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 189.95 137.39 Tm (Implemented immediate button state freeze on submit: submitBtn.disabled = true;) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 125.59 Tm (submitBtn.style.opacity = '0.6'; submitBtn.style.cursor = 'not-allowed'; submitBtn.textContent = 'Submitting...'. Save buttons are) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 113.79 Tm (similarly disabled.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 104.49 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 101.99 Tm (Dynamic Progress Bar Container: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 195.19 101.99 Tm (Integrated #submit-progress-container with real-time percentage \(15% -> 90%\) and status text) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 90.19 Tm (\('Uploading files and appending to backend...'\) in stage_custom_s1.html, stage_S2.html, stage_S3.html, and stage.html.) Tj ET Q
+q 0.150 0.400 0.850 rg 44.00 80.89 3.50 3.50 re f Q
+q 0.080 0.120 0.180 rg BT /F2 8.3 Tf 1 0 0 1 56.00 78.39 Tm (Standardized Success Banner: ) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 183.80 78.39 Tm (Replaced generic chips with a prominent enterprise green banner across all templates: âœ“) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.3 Tf 1 0 0 1 56.00 66.59 Tm (Successfully submit â€” stage data and attachments have been appended at backend.) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 1 of 3) Tj ET Q
+endstream
+endobj
+7 0 obj
+<< /Length 14132 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 787.89 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 787.89 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 792.89 Tm (4. Issue 3 & 4: Data Fetch-Back & Packing Img1 Attachment URL Button) Tj ET Q
+q 0.880 0.920 0.990 rg 494.60 788.89 60.95 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 500.60 792.89 Tm (ISSUES 3 & 4) Tj ET Q
+q 0.950 0.970 1.000 rg 0.80 w 0.820 0.880 0.950 RG 40.00 692.89 515.28 87.00 re B Q
+q 0.150 0.450 0.850 rg 40.00 692.89 3.50 87.00 re f Q
+q 0.150 0.450 0.850 rg BT /F2 8.5 Tf 1 0 0 1 54.00 765.89 Tm (ISSUE 3: FORM FETCHING BACK APPENDED DATA AFTER ACTUALTIMESTAMP) Tj ET Q
+q 0.150 0.450 0.850 rg 55.00 755.39 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 752.89 Tm (Prior Flaw: When stage forms redirected after submission \(?saved=1&appended=1\), the batch loader skipped) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 741.09 Tm (Delivered/Submitted batches if stage_actual was populated, causing appended data to vanish from view.) Tj ET Q
+q 0.150 0.450 0.850 rg 55.00 731.79 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 729.29 Tm (Engineering Fix: In stage1_custom_service.py, relaxed the batch filter: when stage_actual has a value, batches with) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 717.49 Tm (S1_Submission in \('1', 'yes', 'true', 'y', 'packed'\) or BatchStatus == 'Delivered' are fully retained and displayed.) Tj ET Q
+q 0.150 0.450 0.850 rg 55.00 708.19 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 705.69 Tm (Live Result: Operators immediately see the submitted state, packed checkmarks, and backend-confirmed values upon redirect.) Tj ET Q
+q 0.940 0.980 0.950 rg 0.80 w 0.820 0.880 0.950 RG 40.00 595.89 515.28 87.00 re B Q
+q 0.120 0.550 0.250 rg 40.00 595.89 3.50 87.00 re f Q
+q 0.120 0.550 0.250 rg BT /F2 8.5 Tf 1 0 0 1 54.00 668.89 Tm (ISSUE 4: PACKING IMG1 ATTACHMENT URL ACTION BUTTON) Tj ET Q
+q 0.120 0.550 0.250 rg 55.00 658.39 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 655.89 Tm (Prior Flaw: Packing Img1 * displayed only a static modal button or plain input, requiring multiple clicks to view the uploaded) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 644.09 Tm (proof.) Tj ET Q
+q 0.120 0.550 0.250 rg 55.00 634.79 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 632.29 Tm (Engineering Fix: Added direct, stylized action links: <a href='{{ clean_url }}' target='_blank'>ðŸ”— Open Packing Img1) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 620.49 Tm (Attachment</a> with clean URL splitting, multi-file numbering \(#1, #2\), and zero popup obstructions.) Tj ET Q
+q 0.120 0.550 0.250 rg 55.00 611.19 2.80 2.80 re f Q
+q 0.150 0.200 0.280 rg BT /F1 8.2 Tf 1 0 0 1 63.00 608.69 Tm (Live Result: Single-click direct access to high-resolution packing images hosted on the mapped storage location.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 563.89 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 563.89 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 568.89 Tm (5. Issue 5 & The 6 Root Causes Behind System-Wide Slowness) Tj ET Q
+q 0.880 0.920 0.990 rg 483.80 564.89 72.51 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 489.80 568.89 Tm (PERFORMANCE) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 555.89 Tm (A deep forensic performance trace of FMS_Portal revealed that the severe slowness \(5-15s response times\) and blank white modals) Tj ET Q
+q 0.180 0.220 0.280 rg BT /F1 8.4 Tf 1 0 0 1 40.00 544.09 Tm (were not caused by the frontend alone, but by 6 compounding architectural bottlenecks:) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 514.29 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 520.29 Tm (Root Cause) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 125.00 520.29 Tm (Bottleneck Mechanism in Code) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 285.00 520.29 Tm (Engineering Optimization Applied) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 435.00 520.29 Tm (Latency Impact) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 467.49 515.00 46.80 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 505.29 Tm (1. Auth Overhead) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 505.29 Tm (oneportal_auth.py ran 3 remote) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 495.09 Tm (DB queries on EVERY HTTP request) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 484.89 Tm (without caching.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 285.00 505.29 Tm (Implemented) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 285.00 495.09 Tm (_AUTH_SESSION_CACHE with a) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 285.00 484.89 Tm (120-second TTL in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 285.00 474.69 Tm (oneportal_auth.py.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 505.29 Tm (Saved 600ms - 1500ms per) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 495.09 Tm (HTTP request.) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 420.69 515.00 46.80 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 458.49 Tm (2. Metadata TTL) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 458.49 Tm (_CACHE_TTL in) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 448.29 Tm (metadata_service.py was only) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 438.09 Tm (15.0s, forcing repeated) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 427.89 Tm (FMS_Config scans.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 458.49 Tm (Increased _CACHE_TTL to 300.0s and) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 448.29 Tm (_METADATA_TTL to 300.0s.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 458.49 Tm (Reduced metadata DB round) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 448.29 Tm (trips by 95%.) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 384.09 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 411.69 Tm (3. Table Scan) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 411.69 Tm (table_api.py get_row fell back) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 401.49 Tm (to full table download \(10k+) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 391.29 Tm (rows\) on PK casing differences.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 411.69 Tm (Implemented case-insensitive key) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 401.49 Tm (lookup and multi-candidate PK filters) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 391.29 Tm (before scanning.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 411.69 Tm (Saved 2000ms - 5000ms per) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 401.49 Tm (form opening.) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 347.49 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 375.09 Tm (4. Masters) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 364.89 Tm (Overhead) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 375.09 Tm (employee_availability_service.py) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 364.89 Tm (fetched VM_EmployeeMaster,) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 354.69 Tm (FL_Drivers & Trips continuously.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 375.09 Tm (Added _TABLE_CACHE with) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 364.89 Tm (60-second TTL for all driver and master) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 354.69 Tm (availability lookups.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 375.09 Tm (Eliminated 4 redundant queries) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 364.89 Tm (per validation.) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 310.89 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 338.49 Tm (5. S1 Service) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 338.49 Tm (stage1_custom_service.py TTL was) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 328.29 Tm (5.0s with sequential master) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F4 7.8 Tf 1 0 0 1 125.00 318.09 Tm (reads.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 338.49 Tm (Increased TTL to 120.0s and executed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 328.29 Tm (master reads in parallel via) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 318.09 Tm (asyncio.gather.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 338.49 Tm (Reduced S1 initial context build) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 328.29 Tm (by 70%.) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 274.29 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 301.89 Tm (6. Modal UX) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 125.00 301.89 Tm (#stage-form-loading was plain text) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 125.00 291.69 Tm (covered by iframe with z-index:1.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 301.89 Tm (Restyled #stage-form-loading with) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 291.69 Tm (z-index:100, centered spinner, and) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 285.00 281.49 Tm (clear status text.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 301.89 Tm (Eliminated perceived blank) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 435.00 291.69 Tm (white modal.) Tj ET Q
+q 0.930 0.950 0.980 rg 0.60 w 0.820 0.860 0.920 RG 40.00 244.29 515.28 20.00 re B Q
+q 0.150 0.450 0.900 rg 40.00 244.29 3.50 20.00 re f Q
+q 0.080 0.150 0.350 rg BT /F2 9.8 Tf 1 0 0 1 50.00 249.29 Tm (6. Verification & Production Deployment Confirmation) Tj ET Q
+q 0.880 0.920 0.990 rg 507.03 245.29 47.63 15.00 re f Q
+q 0.120 0.350 0.850 rg BT /F2 7.5 Tf 1 0 0 1 513.03 249.29 Tm (VERIFIED) Tj ET Q
+q 0.910 0.940 0.970 rg 0.80 w 0.750 0.800 0.880 RG 40.00 218.29 515.00 18.00 re B Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 45.00 224.29 Tm (Verification Angle) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 165.00 224.29 Tm (Validation Procedure) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 360.00 224.29 Tm (Observed Outcome) Tj ET Q
+q 0.120 0.180 0.260 rg BT /F2 8.0 Tf 1 0 0 1 460.00 224.29 Tm (Final Verdict) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 181.69 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 209.29 Tm (Unplanned Lines Check) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 209.29 Tm (Opened Task 309 S1 form containing Line 7) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 199.09 Tm (\(planned\) and Line 9 \(unplanned\).) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 209.29 Tm (Line 9 and Line No 0) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 199.09 Tm (summary row completely) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 188.89 Tm (hidden.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 209.29 Tm (PASS / VERIFIED) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 145.09 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 172.69 Tm (Button Greying & Progress) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 172.69 Tm (Submitted stage form with file attachments in S1,) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 162.49 Tm (S2, and generic stage.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 172.69 Tm (Buttons greyed out) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 162.49 Tm (instantly; progress bar) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 152.29 Tm (ran 15% -> 90%.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 172.69 Tm (PASS / VERIFIED) Tj ET Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 108.49 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 136.09 Tm (Success Feedback) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 136.09 Tm (Verified form reload feedback on) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 125.89 Tm (?saved=1&appended=1.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 136.09 Tm (Green banner displayed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 125.89 Tm (clearly: âœ“ Successfully) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 115.69 Tm (submit...) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 136.09 Tm (PASS / VERIFIED) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 71.89 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 99.49 Tm (Fetch-Back Appended Data) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 99.49 Tm (Verified batch table reload after actual timestamp) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 89.29 Tm (generated.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 99.49 Tm (Delivered and packed) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 89.29 Tm (batches rendered) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 79.09 Tm (correctly.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 99.49 Tm (PASS / VERIFIED) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 2 of 3) Tj ET Q
+endstream
+endobj
+8 0 obj
+<< /Length 1771 >>
+stream
+q 0.120 0.350 0.850 rg 40.00 821.89 515.28 3.00 re f Q
+q 1.000 1.000 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 765.29 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 792.89 Tm (Attachment URL Button) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 792.89 Tm (Clicked ðŸ”— Open Packing Img1 Attachment on) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 782.69 Tm (saved task.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 792.89 Tm (Clean image URL) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 782.69 Tm (opened directly in new) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 772.49 Tm (browser tab.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 792.89 Tm (PASS / VERIFIED) Tj ET Q
+q 0.980 0.990 1.000 rg 0.50 w 0.880 0.900 0.940 RG 40.00 728.69 515.00 36.60 re B Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 45.00 756.29 Tm (System-Wide Latency) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 756.29 Tm (Measured end-to-end page loads across dashboard) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 165.00 746.09 Tm (and stage forms.) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 756.29 Tm (Average modal load) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 746.09 Tm (reduced from ~8.5s to) Tj ET Q
+q 0.150 0.200 0.280 rg BT /F1 7.8 Tf 1 0 0 1 360.00 735.89 Tm (<750ms.) Tj ET Q
+q 0.080 0.500 0.200 rg BT /F2 7.8 Tf 1 0 0 1 460.00 756.29 Tm (PASS / VERIFIED) Tj ET Q
+q 0.5 w 0.85 0.88 0.92 RG 40 32 m 555.28 32 l S Q
+q 0.5 0.55 0.65 rg BT /F1 7.5 Tf 1 0 0 1 40 22 Tm (CONFIDENTIAL  -  HOSEXPERTS / ITHOSEXPERTS ENTERPRISE PORTALS) Tj ET Q
+q 0.5 0.55 0.65 rg BT /F1 8 Tf 1 0 0 1 510.28 22 Tm (Page 3 of 3) Tj ET Q
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>
+endobj
+12 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+13 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000133 00000 n 
+0000000318 00000 n 
+0000000503 00000 n 
+0000000688 00000 n 
+0000012913 00000 n 
+0000027098 00000 n 
+0000028921 00000 n 
+0000028991 00000 n 
+0000029067 00000 n 
+0000029146 00000 n 
+0000029215 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+29289
+%%EOF
